@@ -1,0 +1,356 @@
+{
+  "actions": [],
+  "allow_rename": 1,
+  "autoname": "format:ICW-{workflow_name}-{#####}",
+  "creation": "2024-01-01 00:00:00.000000",
+  "default_view": "List",
+  "doctype": "DocType",
+  "editable_grid": 1,
+  "engine": "InnoDB",
+  "field_order": [
+    "workflow_section",
+    "workflow_name",
+    "workflow_description",
+    "enabled",
+    "column_break_4",
+    "source_company",
+    "target_company",
+    "auto_approve",
+    "document_settings_section",
+    "document_type",
+    "approval_required",
+    "approval_levels",
+    "column_break_9",
+    "escalation_enabled",
+    "escalation_hours",
+    "max_escalation_level",
+    "approver_mapping_section",
+    "approver_mappings",
+    "notification_settings_section",
+    "email_notifications",
+    "sms_notifications",
+    "in_app_notifications",
+    "column_break_15",
+    "notification_template",
+    "reminder_frequency",
+    "reminder_count",
+    "advanced_settings_section",
+    "conditional_approval",
+    "approval_conditions",
+    "bypass_conditions",
+    "column_break_21",
+    "parallel_approval",
+    "sequential_approval",
+    "delegation_allowed",
+    "audit_section",
+    "created_by_user",
+    "last_modified_by",
+    "column_break_27",
+    "total_approvals",
+    "pending_approvals",
+    "workflow_status"
+  ],
+  "fields": [
+    {
+      "fieldname": "workflow_section",
+      "fieldtype": "Section Break",
+      "label": "Workflow Configuration"
+    },
+    {
+      "fieldname": "workflow_name",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Workflow Name",
+      "reqd": 1
+    },
+    {
+      "fieldname": "workflow_description",
+      "fieldtype": "Small Text",
+      "label": "Workflow Description"
+    },
+    {
+      "default": 1,
+      "fieldname": "enabled",
+      "fieldtype": "Check",
+      "in_list_view": 1,
+      "label": "Enabled"
+    },
+    {
+      "fieldname": "column_break_4",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "source_company",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Source Company",
+      "options": "Company",
+      "reqd": 1
+    },
+    {
+      "fieldname": "target_company",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Target Company",
+      "options": "Company",
+      "reqd": 1
+    },
+    {
+      "default": 0,
+      "fieldname": "auto_approve",
+      "fieldtype": "Check",
+      "label": "Auto Approve"
+    },
+    {
+      "fieldname": "document_settings_section",
+      "fieldtype": "Section Break",
+      "label": "Document Settings"
+    },
+   {
+      "fieldname": "source_document_type",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Source Document Type",
+      "options": "DocType",
+      "reqd": 1,
+      "description": "The document type that initiates the workflow (e.g., Sales Order)"
+    },
+    {
+      "fieldname": "target_document_type",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Target Document Type",
+      "options": "DocType",
+      "reqd": 1,
+      "description": "The document type that will be created upon approval (e.g., Purchase Order)"
+    },
+    {
+      "default": 1,
+      "fieldname": "approval_required",
+      "fieldtype": "Check",
+      "label": "Approval Required"
+    },
+    {
+      "default": 1,
+      "depends_on": "approval_required",
+      "fieldname": "approval_levels",
+      "fieldtype": "Int",
+      "label": "Number of Approval Levels"
+    },
+    {
+      "fieldname": "column_break_9",
+      "fieldtype": "Column Break"
+    },
+    {
+      "default": 0,
+      "fieldname": "escalation_enabled",
+      "fieldtype": "Check",
+      "label": "Enable Escalation"
+    },
+    {
+      "default": 24,
+      "depends_on": "escalation_enabled",
+      "fieldname": "escalation_hours",
+      "fieldtype": "Int",
+      "label": "Escalation Hours"
+    },
+    {
+      "default": 3,
+      "depends_on": "escalation_enabled",
+      "fieldname": "max_escalation_level",
+      "fieldtype": "Int",
+      "label": "Max Escalation Level"
+    },
+    {
+      "fieldname": "approver_mapping_section",
+      "fieldtype": "Section Break",
+      "label": "Approver Mapping"
+    },
+    {
+      "fieldname": "approver_mappings",
+      "fieldtype": "Table",
+      "label": "Approver Mappings",
+      "options": "Inter Company Workflow Approver",
+      "reqd": 1
+    },
+    {
+      "fieldname": "notification_settings_section",
+      "fieldtype": "Section Break",
+      "label": "Notification Settings"
+    },
+    {
+      "default": 1,
+      "fieldname": "email_notifications",
+      "fieldtype": "Check",
+      "label": "Email Notifications"
+    },
+    {
+      "default": 0,
+      "fieldname": "sms_notifications",
+      "fieldtype": "Check",
+      "label": "SMS Notifications"
+    },
+    {
+      "default": 1,
+      "fieldname": "in_app_notifications",
+      "fieldtype": "Check",
+      "label": "In-App Notifications"
+    },
+    {
+      "fieldname": "column_break_15",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "notification_template",
+      "fieldtype": "Link",
+      "label": "Notification Template",
+      "options": "Email Template"
+    },
+    {
+      "default": "Daily",
+      "fieldname": "reminder_frequency",
+      "fieldtype": "Select",
+      "label": "Reminder Frequency",
+      "options": "Hourly\nDaily\nWeekly\nNone"
+    },
+    {
+      "default": 3,
+      "fieldname": "reminder_count",
+      "fieldtype": "Int",
+      "label": "Maximum Reminders"
+    },
+    {
+      "fieldname": "advanced_settings_section",
+      "fieldtype": "Section Break",
+      "label": "Advanced Settings"
+    },
+    {
+      "default": 0,
+      "fieldname": "conditional_approval",
+      "fieldtype": "Check",
+      "label": "Conditional Approval"
+    },
+    {
+      "depends_on": "conditional_approval",
+      "fieldname": "approval_conditions",
+      "fieldtype": "Code",
+      "label": "Approval Conditions",
+      "options": "Python"
+    },
+    {
+      "fieldname": "bypass_conditions",
+      "fieldtype": "Code",
+      "label": "Bypass Conditions",
+      "options": "Python"
+    },
+    {
+      "fieldname": "column_break_21",
+      "fieldtype": "Column Break"
+    },
+    {
+      "default": 0,
+      "fieldname": "parallel_approval",
+      "fieldtype": "Check",
+      "label": "Parallel Approval"
+    },
+    {
+      "default": 1,
+      "fieldname": "sequential_approval",
+      "fieldtype": "Check",
+      "label": "Sequential Approval"
+    },
+    {
+      "default": 1,
+      "fieldname": "delegation_allowed",
+      "fieldtype": "Check",
+      "label": "Delegation Allowed"
+    },
+    {
+      "fieldname": "audit_section",
+      "fieldtype": "Section Break",
+      "label": "Audit Information"
+    },
+    {
+      "fieldname": "created_by_user",
+      "fieldtype": "Link",
+      "label": "Created By",
+      "options": "User",
+      "read_only": 1
+    },
+    {
+      "fieldname": "last_modified_by",
+      "fieldtype": "Link",
+      "label": "Last Modified By",
+      "options": "User",
+      "read_only": 1
+    },
+    {
+      "fieldname": "column_break_27",
+      "fieldtype": "Column Break"
+    },
+    {
+      "default": 0,
+      "fieldname": "total_approvals",
+      "fieldtype": "Int",
+      "label": "Total Approvals",
+      "read_only": 1
+    },
+    {
+      "default": 0,
+      "fieldname": "pending_approvals",
+      "fieldtype": "Int",
+      "label": "Pending Approvals",
+      "read_only": 1
+    },
+    {
+      "default": "Active",
+      "fieldname": "workflow_status",
+      "fieldtype": "Select",
+      "label": "Workflow Status",
+      "options": "Active\nInactive\nSuspended",
+      "read_only": 1
+    }
+  ],
+  "index_web_pages_for_search": 1,
+  "links": [],
+  "modified": "2024-01-01 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Inter Company Transactions",
+  "name": "Inter Company Workflow",
+  "naming_rule": "Expression",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    },
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "Workflow Manager",
+      "share": 1,
+      "write": 1
+    },
+    {
+      "read": 1,
+      "role": "All"
+    }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": [],
+  "track_changes": 1
+}

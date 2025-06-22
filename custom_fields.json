@@ -1,0 +1,106 @@
+{
+  "Customer Group": [
+    {
+      "fieldname": "custom_company",
+      "label": "Custom Company",
+      "fieldtype": "Link",
+      "options": "Company",
+      "insert_after": "parent_customer_group",
+      "description": "Company this customer group belongs to"
+    }
+  ],
+  "Supplier Group": [
+    {
+      "fieldname": "custom_company",
+      "label": "Custom Company",
+      "fieldtype": "Link",
+      "options": "Company",
+      "insert_after": "parent_supplier_group",
+      "description": "Company this supplier group belongs to"
+    }
+  ],
+  "Customer": [
+    {
+      "fieldname": "ic_customer_group",
+      "label": "Inter Company Customer Group",
+      "fieldtype": "Link",
+      "options": "Customer Group",
+      "insert_after": "customer_group",
+      "description": "Used for mapping customers between companies"
+    }
+  ],
+  "Supplier": [
+    {
+      "fieldname": "ic_supplier_group",
+      "label": "Inter Company Supplier Group",
+      "fieldtype": "Link",
+      "options": "Supplier Group",
+      "insert_after": "supplier_group",
+      "description": "Used for mapping suppliers between companies"
+    }
+  ],
+  "Sales Order": [
+    {
+      "fieldname": "intercompany_target_company",
+      "label": "Inter Company Target",
+      "fieldtype": "Link",
+      "options": "Company",
+      "insert_after": "company",
+      "description": "Select the target company for inter-company transaction",
+      "depends_on": "eval:doc.docstatus===0",
+      "mandatory_depends_on": "eval:doc.docstatus===0",
+      "read_only_depends_on": "eval:doc.docstatus===1",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "fetch_if_empty": 1
+    }
+  ],
+  "Purchase Order": [
+    {
+      "fieldname": "intercompany_target_company",
+      "label": "Inter Company Target",
+      "fieldtype": "Link",
+      "options": "Company",
+      "insert_after": "company",
+      "description": "Select the target company for inter-company transaction",
+      "depends_on": "eval:doc.docstatus===0",
+      "mandatory_depends_on": "eval:doc.docstatus===0",
+      "read_only_depends_on": "eval:doc.docstatus===1",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "fetch_if_empty": 1
+    }
+  ],
+  "Journal Entry": [
+    {
+      "fieldname": "intercompany_target_company",
+      "label": "Inter Company Target",
+      "fieldtype": "Link",
+      "options": "Company",
+      "insert_after": "company",
+      "description": "Select the target company for inter-company transaction",
+      "depends_on": "eval:doc.docstatus===0",
+      "mandatory_depends_on": "eval:doc.docstatus===0",
+      "read_only_depends_on": "eval:doc.docstatus===1",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "fetch_if_empty": 1
+    }
+  ],
+  "Payment Entry": [
+    {
+      "fieldname": "intercompany_target_company",
+      "label": "Inter Company Target",
+      "fieldtype": "Link",
+      "options": "Company",
+      "insert_after": "company",
+      "description": "Select the target company for inter-company transaction",
+      "depends_on": "eval:doc.docstatus===0",
+      "mandatory_depends_on": "eval:doc.docstatus===0",
+      "read_only_depends_on": "eval:doc.docstatus===1",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "fetch_if_empty": 1
+    }
+  ]
+}

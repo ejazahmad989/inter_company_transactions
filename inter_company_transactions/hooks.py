@@ -1,39 +1,43 @@
+# -*- coding: utf-8 -*-
+from __future__ import unicode_literals
+
 app_name = "inter_company_transactions"
-app_title = "inter comapany transactions"
-app_publisher = "inter"
-app_description = "inter"
-app_email = "ayp.cmc024@gmail.com"
-app_license = "mit"
+app_title = "Inter Company Transactions"
+app_publisher = "Your Company"
+app_description = "A custom app for handling inter-company transactions with workflow and theme management"
+app_icon = "octicon octicon-git-compare"
+app_color = "blue"
+app_email = "your@example.com"
+app_license = "MIT"
 
-# Apps
-# ------------------
 
-# required_apps = []
 
-# Each item in the list will be shown as an app in the apps page
-# add_to_apps_screen = [
-# 	{
-# 		"name": "inter_company_transactions",
-# 		"logo": "/assets/inter_company_transactions/logo.png",
-# 		"title": "inter comapany transactions",
-# 		"route": "/inter_company_transactions",
-# 		"has_permission": "inter_company_transactions.api.permission.has_app_permission"
-# 	}
-# ]
+# Desk assets (backend)
+app_include_css = [
+    "/assets/inter_company_transactions/css/enhanced_themes.css",
+    "/assets/inter_company_transactions/css/inter_company_transactions.css",
+    "/assets/inter_company_transactions/css/theme_manager.css",
+    "/assets/inter_company_transactions/css/quickbooks_theme.css"
+]
 
-# Includes in <head>
-# ------------------
+app_include_js = [
+    "/assets/inter_company_transactions/js/backdate_permission.js",
+    "/assets/inter_company_transactions/js/enhanced_workflow.js",
+    "/assets/inter_company_transactions/js/inter_company_transaction_map.js",
+    "/assets/inter_company_transactions/js/theme_manager.js",
+    "/assets/enhanced_theme_manager/js/custom_login.js"
+]
 
 # include js, css files in header of desk.html
-# app_include_css = "/assets/inter_company_transactions/css/inter_company_transactions.css"
-# app_include_js = "/assets/inter_company_transactions/js/inter_company_transactions.js"
+# app_include_css = "/assets/test/css/test.css"
+# app_include_js = "/assets/test/js/test.js"
 
 # include js, css files in header of web template
-# web_include_css = "/assets/inter_company_transactions/css/inter_company_transactions.css"
-# web_include_js = "/assets/inter_company_transactions/js/inter_company_transactions.js"
+# web_include_css = "/assets/test/css/test.css"
+# web_include_js = "/assets/test/js/test.js"
 
 # include custom scss in every website theme (without file extension ".scss")
-# website_theme_scss = "inter_company_transactions/public/scss/website"
+# website_theme_scss = "test/public/scss/website"
 
 # include js, css files in header of web form
 # webform_include_js = {"doctype": "public/js/doctype.js"}
@@ -48,197 +52,336 @@ app_license = "mit"
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
 
-# Svg Icons
-# ------------------
-# include app icons in desk
-# app_include_icons = "inter_company_transactions/public/icons.svg"
 
-# Home Pages
-# ----------
+# Fixtures - This ensures all doctypes and custom fields are preserved during migrations
+fixtures = [
+    # DocTypes - All custom doctypes
+    {
+        "doctype": "DocType",
+        "filters": [
+            ["name", "in", [
+                "Role Replication",
+                "Intercompany Transaction Link",
+                "Intercompany Linked Company", 
+                "Intercompany Transaction Type",
+                "Inter Company Document Reference",
+                "Theme Manager",
+                "Theme Manager Company",
+                "Theme Manager User",
+                "Theme Manager Role",
+                "Enhanced Theme Manager",
+                "Inter Company Workflow",
+                "Inter Company Workflow Approver",
+                "Workflow Approval Request",
+                "Workflow Approval History",
+                "Notification Settings"
+             
+            ]]
+        ]
+    },
+    # Custom Fields - All inter-company related fields
+    {
+        "doctype": "Custom Field",
+        "filters": [
+            ["fieldname", "in", [
+                "intercompany_linked_doc_doctype",
+                "intercompany_linked_doc_name",
+                "intercompany_linked_company",
+                "intercompany_target_company",
+                "ic_customer_group",
+                "ic_supplier_group",
+                "Form",
+                "custom_company"
+            ]]
+        ]
+    },
+    # Property Setter for custom field properties
+    {
+        "doctype": "Property Setter",
+        "filters": [
+            ["doc_type", "in", [
+                "Sales Order",
+                "Purchase Order", 
+                "Journal Entry",
+                "Payment Entry",
+                "Customer",
+                "Supplier",
+                "Customer Group",
+                "Supplier Group"
+            ]]
+        ]
+    },
+    # Email Templates for workflow notifications
+    {
+        "doctype": "Email Template",
+        "filters": [
+            ["name", "in", [
+                "approval_request_email",
+                "approval_approved_email", 
+                "approval_rejected_email",
+                "escalation_email"
+            ]]
+        ]
+    },
+    # Print Formats if any
+    {
+        "doctype": "Print Format",
+        "filters": [
+            ["doc_type", "in", [
+                "Workflow Approval Request",
+                "Inter Company Workflow"
+            ]]
+        ]
+    },
+    # Roles
+    {
+        "doctype": "Role",
+        "filters": [
+            ["name", "in", [
+                "Workflow Manager",
+                "Approver",
+                "Theme Administrator"
+            ]]
+        ]
+    }
+]
 
-# application home page (will override Website Settings)
-# home_page = "login"
+scheduler_events = {
+    "hourly": [
+        "inter_company_transactions.workflow.send_approval_reminders",
+        "inter_company_transactions.workflow.process_escalations"
+    ],
+    "daily": [
+        "inter_company_transactions.workflow.cleanup_old_notifications"
+    ]
+}
 
-# website user home page (by Role)
-# role_home_page = {
-# 	"Role": "home_page"
-# }
+# Document Events - Enhanced with workflow integration
+doc_events = {
+    "Sales Order": {
+        "on_submit": [
+            "inter_company_transactions.workflow.create_workflow_request",
+            "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
+            #"inter_company_transactions.workflow.create_approval_request_if_required"
+        ],
+        "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
+        "validate": "inter_company_transactions.date_validation_hooks.validate_backdate",
+        "before_insert": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
+        "before_save": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
+        "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
+        # "validate": "inter_company_transactions.doctype.backdate_permission.backdate_permission.validate_posting_date"
+    },
+    "Purchase Order": {
+        "on_submit": [ 
+            "inter_company_transactions.workflow.create_workflow_request",
+            "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
+            
+            #"inter_company_transactions.workflow.create_approval_request_if_required"
+        ],
+        "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
+        "before_insert": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
+        "before_save":   "inter_company_transactions.date_control.date_validator.validate_transaction_date",
+        "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
+        #"validate":  "inter_company_transactions.date_validation_hooks.validate_backdate"
+        # "validate": "inter_company_transactions.doctype.backdate_permission.backdate_permission.validate_posting_date"
+    },
+    "Journal Entry": {
+        "on_submit": [
+            "inter_company_transactions.workflow.create_workflow_request",
+            "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
 
-# Generators
-# ----------
+            # "inter_company_transactions.workflow.create_approval_request_if_required"
+        ],
+        "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
+       # "validate": "inter_company_transactions.date_validation_hooks.validate_backdate"
+       # "validate": "inter_company_transactions.doctype.backdate_permission.backdate_permission.validate_posting_date"
+        "before_insert": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
+        "before_save":   "inter_company_transactions.date_control.date_validator.validate_transaction_date",
+        "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
 
-# automatically create page for each record of this doctype
-# website_generators = ["Web Page"]
+    },
+    "Payment Entry": {
+        "on_submit": [
+            "inter_company_transactions.workflow.create_workflow_request",
+            "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
 
-# Jinja
-# ----------
+            #"inter_company_transactions.workflow.create_approval_request_if_required"
+        ],
+        "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
+        "before_insert": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
+        "before_save":   "inter_company_transactions.date_control.date_validator.validate_transaction_date",
+        "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
+        #"validate": "inter_company_transactions.date_validation_hooks.validate_backdate"
+        # "validate": "inter_company_transactions.doctype.backdate_permission.backdate_permission.validate_posting_date"
+    },
+    "Sales Invoice": {
+          "validate": "inter_company_transactions.date_validation_hooks.validate_backdate",
+          "before_insert": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
+          "before_save":   "inter_company_transactions.date_control.date_validator.validate_transaction_date",
+          "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
 
-# add methods and filters to jinja environment
-# jinja = {
-# 	"methods": "inter_company_transactions.utils.jinja_methods",
-# 	"filters": "inter_company_transactions.utils.jinja_filters"
-# }
+          # "validate": "inter_company_transactions.doctype.backdate_permission.backdate_permission.validate_posting_date"
+    },
+    "Purchase Invoice": {
+          "validate": "inter_company_transactions.date_validation_hooks.validate_backdate",
+          "before_insert": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
+          "before_save":   "inter_company_transactions.date_control.date_validator.validate_transaction_date",
+          "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
 
-# Installation
-# ------------
+          # "validate": "inter_company_transactions.doctype.backdate_permission.backdate_permission.validate_posting_date"
+    },
+    "Delivery Note": {
+          "validate": "inter_company_transactions.date_validation_hooks.validate_backdate",
+          "before_insert": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
+          "before_save":   "inter_company_transactions.date_control.date_validator.validate_transaction_date",
+          "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
 
-# before_install = "inter_company_transactions.install.before_install"
-# after_install = "inter_company_transactions.install.after_install"
+       # "validate": "inter_company_transactions.doctype.backdate_permission.backdate_permission.validate_posting_date"
+    },
+    "Purchase Receipt": {
+          "validate": "inter_company_transactions.date_validation_hooks.validate_backdate",
+          "before_insert": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
+          "before_save":   "inter_company_transactions.date_control.date_validator.validate_transaction_date",
+          "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
 
-# Uninstallation
-# ------------
+        # "validate": "inter_company_transactions.doctype.backdate_permission.backdate_permission.validate_posting_date"
+    },
+      "Salary Slip": {
+           "before_save": "inter_company_transactionshrms.custom_fetch_fixed_allowances"
+    },
+    "Stock Entry": {
+          "validate": "inter_company_transactions.date_validation_hooks.validate_backdate",
+          "before_insert": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
+          "before_save":   "inter_company_transactions.date_control.date_validator.validate_transaction_date",
+          "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
+       
+          # "validate": "inter_company_transactions.doctype.backdate_permission.backdate_permission.validate_posting_date"
+    }
+}
 
-# before_uninstall = "inter_company_transactions.uninstall.before_uninstall"
-# after_uninstall = "inter_company_transactions.uninstall.after_uninstall"
+# Login hooks for theme application
+on_login = [
+    "inter_company_transactions.enhanced_theme.apply_user_theme"
+]
 
-# Integration Setup
-# ------------------
-# To set up dependencies/integrations with other apps
-# Name of the app being installed is passed as an argument
+# Scheduled tasks for workflow reminders and escalations
+scheduler_events = {
+    "hourly": [
+        "inter_company_transactions.workflow.send_approval_reminders",
+        "inter_company_transactions.workflow.process_escalations"
+    ],
+    "daily": [
+        "inter_company_transactions.workflow.cleanup_old_notifications",
+        "inter_company_transactions.enhanced_theme.cleanup_old_theme_files"
+    ]
+}
 
-# before_app_install = "inter_company_transactions.utils.before_app_install"
-# after_app_install = "inter_company_transactions.utils.after_app_install"
+# Jinja Environment - Enhanced with theme and workflow methods
+jenv = {
+    "methods": [
+        "inter_company_transactions.enhanced_theme.get_company_theme",
+        "inter_company_transactions.workflow.get_pending_approvals_count",
+        "inter_company_transactions.workflow.get_user_approval_requests"
+    ]
+}
 
-# Integration Cleanup
-# -------------------
-# To clean up dependencies/integrations with other apps
-# Name of the app being uninstalled is passed as an argument
+# Website context - Enhanced branding
+website_context = {
+    "favicon": "/assets/inter_company_transactions/images/favicon.ico",
+    "splash_image": "/assets/inter_company_transactions/images/splash.png",
+    "brand_html": "Inter Company Transactions"
+}
 
-# before_app_uninstall = "inter_company_transactions.utils.before_app_uninstall"
-# after_app_uninstall = "inter_company_transactions.utils.after_app_uninstall"
+# Boot session - Add user-specific data on login
+boot_session = "inter_company_transactions.boot.boot_session"
 
-# Desk Notifications
-# ------------------
-# See frappe.core.notifications.get_notification_config
+# Override whitelisted methods
+#override_whitelisted_methods = {
+    #"frappe.desk.form.save.savedocs": "inter_company_transactions.overrides.enhanced_save_docs"
+#}
 
-# notification_config = "inter_company_transactions.notifications.get_notification_config"
+# Import whitelisted functions
+#from .overrides import enhanced_save_docs, check_workflow_triggers
 
-# Permissions
-# -----------
-# Permissions evaluated in scripted ways
+# Define custom whitelisted functions
+whitelisted_functions = [
+    'enhanced_save_docs',
+    'check_workflow_triggers'
+]
 
-# permission_query_conditions = {
-# 	"Event": "frappe.desk.doctype.event.event.get_permission_query_conditions",
-# }
-#
-# has_permission = {
-# 	"Event": "frappe.desk.doctype.event.event.has_permission",
-# }
+# Standard portal menu items
+standard_portal_menu_items = [
+    {
+        "title": "Approval Requests",
+        "route": "/approval-requests",
+        "reference_doctype": "Workflow Approval Request",
+        "role": "Approver"
+    }
+]
 
-# DocType Class
-# ---------------
-# Override standard doctype classes
+# Permission query methods
+#permission_query_conditions = {
+    #"Workflow Approval Request": "inter_company_transactions.workflow.get_permission_query_conditions_for_approval_request"
+#}
 
-# override_doctype_class = {
-# 	"ToDo": "custom_app.overrides.CustomToDo"
-# }
+# Data import/export hooks
+data_import_tool = {
+    "Intercompany Transaction Link": "inter_company_transactions.data_import.validate_intercompany_data"
+}
 
-# Document Events
-# ---------------
-# Hook on document methods and events
+# Notification hooks
+notification_config = "inter_company_transactions.notifications.get_notification_config"
 
-# doc_events = {
-# 	"*": {
-# 		"on_update": "method",
-# 		"on_cancel": "method",
-# 		"on_trash": "method"
-# 	}
-# }
+# Report hooks
+standard_queries = {
+    "Workflow Approval Request": "inter_company_transactions.queries.workflow_approval_request_query"
+}
 
-# Scheduled Tasks
-# ---------------
+# Translation hooks
+get_translated_dict = {
+    "doctype": "inter_company_transactions.translations.get_doctype_translations"
+}
 
-# scheduler_events = {
-# 	"all": [
-# 		"inter_company_transactions.tasks.all"
-# 	],
-# 	"daily": [
-# 		"inter_company_transactions.tasks.daily"
-# 	],
-# 	"hourly": [
-# 		"inter_company_transactions.tasks.hourly"
-# 	],
-# 	"weekly": [
-# 		"inter_company_transactions.tasks.weekly"
-# 	],
-# 	"monthly": [
-# 		"inter_company_transactions.tasks.monthly"
-# 	],
-# }
+# Desk page hooks
+extend_bootinfo = "inter_company_transactions.boot.extend_bootinfo"
 
-# Testing
-# -------
+# Global search hooks
+global_search_doctypes = {
+    "Workflow Approval Request": {
+        "search_fields": ["document_name", "document_type", "requested_by"],
+        "title_field": "document_name"
+    },
+    "Inter Company Workflow": {
+        "search_fields": ["workflow_name", "source_company", "target_company"],
+        "title_field": "workflow_name"
+    }
+}
 
-# before_tests = "inter_company_transactions.install.before_tests"
+#override_whitelisted_methods = {
+    #"frappe.desk.form.save.savedocs": "inter_company_transactions.inter_company_transactions.overrides.enhanced_save_docs"
+#}
 
-# Overriding Methods
-# ------------------------------
-#
-# override_whitelisted_methods = {
-# 	"frappe.desk.doctype.event.event.get_events": "inter_company_transactions.event.get_events"
-# }
-#
-# each overriding function accepts a `data` argument;
-# generated from the base implementation of the doctype dashboard,
-# along with any modifications made in other Frappe apps
-# override_doctype_dashboards = {
-# 	"Task": "inter_company_transactions.task.get_dashboard_data"
-# }
+# Backup hooks
+before_backup = "inter_company_transactions.backup.before_backup"
+after_backup = "inter_company_transactions.backup.after_backup"
 
-# exempt linked doctypes from being automatically cancelled
-#
-# auto_cancel_exempted_doctypes = ["Auto Repeat"]
+# Migration hooks - Fixed paths
+before_migrate = "inter_company_transactions.patches.before_migrate.before_migrate"
+after_migrate = "inter_company_transactions.patches.after_migrate.after_migrate"
 
-# Ignore links to specified DocTypes when deleting documents
-# -----------------------------------------------------------
+# Installation hooks
+after_install = "inter_company_transactions.install.after_install"
+before_uninstall = "inter_company_transactions.install.before_uninstall"
 
-# ignore_links_on_delete = ["Communication", "ToDo"]
+# Startup hooks
+on_session_creation = "inter_company_transactions.session.on_session_creation"
 
-# Request Events
-# ----------------
-# before_request = ["inter_company_transactions.utils.before_request"]
-# after_request = ["inter_company_transactions.utils.after_request"]
+# Error handling hooks
+on_error = "inter_company_transactions.error_handler.handle_error"
 
-# Job Events
-# ----------
-# before_job = ["inter_company_transactions.utils.before_job"]
-# after_job = ["inter_company_transactions.utils.after_job"]
-
-# User Data Protection
-# --------------------
-
-# user_data_fields = [
-# 	{
-# 		"doctype": "{doctype_1}",
-# 		"filter_by": "{filter_by}",
-# 		"redact_fields": ["{field_1}", "{field_2}"],
-# 		"partial": 1,
-# 	},
-# 	{
-# 		"doctype": "{doctype_2}",
-# 		"filter_by": "{filter_by}",
-# 		"partial": 1,
-# 	},
-# 	{
-# 		"doctype": "{doctype_3}",
-# 		"strict": False,
-# 	},
-# 	{
-# 		"doctype": "{doctype_4}"
-# 	}
-# ]
-
-# Authentication and authorization
-# --------------------------------
-
-# auth_hooks = [
-# 	"inter_company_transactions.auth.validate"
-# ]
-
-# Automatically update python controller files with type annotations for this app.
-# export_python_type_annotations = True
-
-# default_log_clearing_doctypes = {
-# 	"Logging DocType Name": 30  # days to retain logs
-# }
-
+# Cache hooks
+cache_wipe_doctypes = [
+    "Intercompany Transaction Link",
+    "Inter Company Workflow", 
+    "Enhanced Theme Manager"
+]
