@@ -1,0 +1,56 @@
+{
+  "doctype": "DocType",
+  "name": "User Date Permission",
+  "module": "Inter Company Transactions",
+  "is_single": 0,
+  "istable": 0,
+  "custom" : 1,
+  "autoname": "hash",
+  "name_case": "Case Insensitive",
+  "title_field": "user",
+  "fields": [
+    {
+      "fieldname": "user",
+      "label": "User",
+      "fieldtype": "Link",
+      "options": "User",
+      "reqd": 1,
+      "unique": 1
+    },
+    {
+      "fieldname": "enabled",
+      "label": "Enabled",
+      "fieldtype": "Check",
+      "default": 1
+    },
+    {
+      "fieldname": "valid_from",
+      "label": "Valid From",
+      "fieldtype": "Date",
+      "description": "Permissions will be active from this date"
+    },
+    {
+      "fieldname": "valid_until",
+      "label": "Valid Until",
+      "fieldtype": "Date",
+      "description": "Permissions will expire after this date"
+    },
+    {
+      "fieldname": "permissions",
+      "label": "Permissions",
+      "fieldtype": "Table",
+      "options": "Date Permission Detail"
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "permlevel": 0,
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1,
+      "report": 1
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "doctype": "DocType",
+  "name": "Backdate Whitelist Detail",
+  "module": "Inter Company Transactions",
+  "custom": 1,
+  "istable": 1,
+  "editable_grid": 1,
+  "fields": [
+    {
+      "fieldname": "back_doctype",
+      "label": "Doctype",
+      "fieldtype": "Link",
+      "options": "DocType"
+    },
+    {
+      "fieldname": "allowed_days",
+      "label": "Allowed Days",
+      "fieldtype": "Int"
+    }
+  ]
+}

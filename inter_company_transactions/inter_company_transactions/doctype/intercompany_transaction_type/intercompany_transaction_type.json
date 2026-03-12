@@ -1,0 +1,46 @@
+{
+  "actions": [],
+  "creation": "2024-03-14 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "source_type",
+    "target_type",
+    "direction"
+  ],
+  "fields": [
+    {
+      "fieldname": "source_type",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Source Transaction Type",
+      "options": "Journal Entry\nPayment Entry\nSales Order\nPurchase Order",
+      "reqd": 1
+    },
+    {
+      "fieldname": "target_type",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Target Transaction Type",
+      "options": "Journal Entry\nPayment Entry\nSales Order\nPurchase Order",
+      "reqd": 1
+    },
+    {
+      "fieldname": "direction",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Direction",
+      "options": "Main to Other\nOther to Main\nBoth",
+      "reqd": 1
+    }
+  ],
+  "istable": 1,
+  "modified": "2024-03-14 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Inter Company Transactions",
+  "name": "Intercompany Transaction Type",
+  "owner": "Administrator",
+  "permissions": [],
+  "sort_field": "modified",
+  "sort_order": "DESC"
+}

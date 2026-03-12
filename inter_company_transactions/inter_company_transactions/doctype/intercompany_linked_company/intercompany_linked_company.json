@@ -1,0 +1,84 @@
+{
+  "actions": [],
+  "creation": "2024-03-14 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "company",
+    "section_break_1",
+    "main_company_customer",
+    "main_company_supplier",
+    "main_company_account",
+    "section_break_2", 
+    "other_company_customer",
+    "other_company_supplier",
+    "other_company_account"
+  ],
+  "fields": [
+    {
+      "fieldname": "company",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Company",
+      "options": "Company",
+      "reqd": 1
+    },
+    {
+      "fieldname": "section_break_1",
+      "fieldtype": "Section Break",
+      "label": "Main Company Settings"
+    },
+    {
+      "fieldname": "main_company_customer",
+      "fieldtype": "Link",
+      "label": "Main Company Customer",
+      "options": "Customer"
+    },
+    {
+      "fieldname": "main_company_supplier",
+      "fieldtype": "Link",
+      "label": "Main Company Supplier",
+      "options": "Supplier"
+    },
+    {
+      "fieldname": "main_company_account",
+      "fieldtype": "Link",
+      "label": "Main Company Account",
+      "options": "Account",
+      "description": "Account in main company for transactions with this company"
+    },
+    {
+      "fieldname": "section_break_2",
+      "fieldtype": "Section Break",
+      "label": "Other Company Settings"
+    },
+    {
+      "fieldname": "other_company_customer",
+      "fieldtype": "Link",
+      "label": "Other Company Customer",
+      "options": "Customer"
+    },
+    {
+      "fieldname": "other_company_supplier",
+      "fieldtype": "Link",
+      "label": "Other Company Supplier",
+      "options": "Supplier"
+    },
+    {
+      "fieldname": "other_company_account",
+      "fieldtype": "Link",
+      "label": "Other Company Account",
+      "options": "Account",
+      "description": "Account in this company for transactions with main company"
+    }
+  ],
+  "istable": 1,
+  "modified": "2024-03-14 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Inter Company Transactions",
+  "name": "Intercompany Linked Company",
+  "owner": "Administrator",
+  "permissions": [],
+  "sort_field": "modified",
+  "sort_order": "DESC"
+}
