@@ -1,14 +1,12 @@
-# -*- coding: utf-8 -*-
-from __future__ import unicode_literals
 from frappe import _
 
 def get_data():
-	return [
-		{
-			"module_name": "Inter Company Transactions",
-			"color": "blue",
-			"icon": "octicon octicon-git-compare",
-			"type": "module",
-			"label": _("Inter Company Transactions")
-		}
-	]
+    return [
+        {
+            "module_name": "Inter Company Transactions",
+            "color": "grey",
+            "icon": "octicon octicon-git-compare",
+            "type": "module",
+            "label": _("Inter Company Transactions")
+        }
+    ]
