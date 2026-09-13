@@ -1,0 +1,618 @@
+{
+  "actions": [],
+  "allow_rename": 1,
+  "autoname": "format:ETM-{theme_name}-{#####}",
+  "creation": "2024-01-01 00:00:00.000000",
+  "default_view": "List",
+  "doctype": "DocType",
+  "editable_grid": 1,
+  "engine": "InnoDB",
+  "field_order": [
+    "theme_selection_section",
+    "theme_name",
+    "theme_category",
+    "theme_description",
+    "column_break_4",
+    "is_active",
+    "is_default",
+    "theme_preview",
+    "company_specific_section",
+    "company_specific",
+    "target_companies",
+    "business_type",
+    "column_break_company",
+    "industry_template",
+    "login_page_customization",
+    "show_company_info",
+    "color_customization_section",
+    "primary_color",
+    "secondary_color",
+    "accent_color",
+    "success_color",
+    "column_break_9",
+    "warning_color",
+    "danger_color",
+    "info_color",
+    "dark_color",
+    "background_section",
+    "background_color",
+    "surface_color",
+    "card_background",
+    "column_break_bg",
+    "sidebar_color",
+    "navbar_color",
+    "footer_color",
+    "typography_section",
+    "font_family",
+    "heading_font",
+    "font_size",
+    "column_break_typo",
+    "line_height",
+    "font_weight",
+    "text_color",
+    "login_customization_section",
+    "login_background_image",
+    "login_background_color",
+    "login_logo",
+    "column_break_login",
+    "company_tagline",
+    "login_form_style",
+    "login_animation",
+    "navbar_customization_section",
+    "navbar_style",
+    "navbar_position",
+    "navbar_text_color",
+    "column_break_navbar",
+    "show_company_logo",
+    "company_logo_position",
+    "hide_frappe_branding",
+    "layout_section",
+    "border_radius",
+    "box_shadow",
+    "spacing_scale",
+    "column_break_layout",
+    "animation_enabled",
+    "transition_speed",
+    "hover_effects",
+    "advanced_settings_section",
+    "custom_css",
+    "custom_js",
+    "column_break_13",
+    "responsive_breakpoints",
+    "dark_mode_support",
+    "rtl_support",
+    "user_permissions_section",
+    "apply_to_all_users",
+    "allowed_users",
+    "column_break_18",
+    "allowed_roles",
+    "restricted_companies",
+    "audit_section",
+    "created_by_user",
+    "last_applied",
+    "column_break_22",
+    "application_count",
+    "theme_file_path"
+  ],
+  "fields": [
+    {
+      "fieldname": "theme_selection_section",
+      "fieldtype": "Section Break",
+      "label": "Theme Configuration"
+    },
+    {
+      "fieldname": "theme_name",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Theme Name",
+      "options": "QuickBooks Classic\nQuickBooks Modern\nQuickBooks Pro\nSage Green\nXero Blue\nFreshBooks Orange\nZoho Purple\nWave Teal\nAccounting Professional\nManufacturing Blue\nTrading Green\nRetail Orange\nHealthcare Teal\nEducation Purple\nFintech Dark\nStartup Minimal\nCorporate Elite\nCustom Theme",
+      "reqd": 1
+    },
+    {
+      "fieldname": "theme_category",
+      "fieldtype": "Select",
+      "label": "Theme Category",
+      "options": "Accounting Software\nBusiness Application\nModern UI\nClassic UI\nIndustry Specific\nCustom"
+    },
+    {
+      "fieldname": "theme_description",
+      "fieldtype": "Small Text",
+      "label": "Theme Description"
+    },
+    {
+      "fieldname": "column_break_4",
+      "fieldtype": "Column Break"
+    },
+    {
+      "default": 0,
+      "fieldname": "is_active",
+      "fieldtype": "Check",
+      "in_list_view": 1,
+      "label": "Is Active"
+    },
+    {
+      "default": 0,
+      "fieldname": "is_default",
+      "fieldtype": "Check",
+      "label": "Is Default Theme"
+    },
+    {
+      "fieldname": "theme_preview",
+      "fieldtype": "Attach Image",
+      "label": "Theme Preview"
+    },
+    {
+      "fieldname": "company_specific_section",
+      "fieldtype": "Section Break",
+      "label": "Company Specific Settings"
+    },
+    {
+      "default": 1,
+      "fieldname": "company_specific",
+      "fieldtype": "Check",
+      "label": "Company Specific Theme"
+    },
+    {
+      "depends_on": "company_specific",
+      "fieldname": "target_companies",
+      "fieldtype": "Table MultiSelect",
+      "label": "Target Companies",
+      "options": "Theme Manager Company"
+    },
+    {
+      "depends_on": "company_specific",
+      "fieldname": "business_type",
+      "fieldtype": "Select",
+      "label": "Business Type",
+      "options": "\nTrading\nManufacturing\nServices\nRetail\nWholesale\nHealthcare\nEducation\nNon-Profit\nConstruction\nReal Estate\nIT Services\nConsulting\nFintech\nStartup"
+    },
+    {
+      "fieldname": "column_break_company",
+      "fieldtype": "Column Break"
+    },
+    {
+      "depends_on": "business_type",
+      "fieldname": "industry_template",
+      "fieldtype": "Select",
+      "label": "Industry Template",
+      "options": "\nProfessional\nModern\nClassic\nMinimal\nVibrant\nCorporate\nCreative\nTech"
+    },
+    {
+      "default": 1,
+      "depends_on": "company_specific",
+      "fieldname": "login_page_customization",
+      "fieldtype": "Check",
+      "label": "Customize Login Page"
+    },
+    {
+      "default": 1,
+      "depends_on": "login_page_customization",
+      "fieldname": "show_company_info",
+      "fieldtype": "Check",
+      "label": "Show Company Information"
+    },
+    {
+      "fieldname": "color_customization_section",
+      "fieldtype": "Section Break",
+      "label": "Color Palette"
+    },
+    {
+      "fieldname": "primary_color",
+      "fieldtype": "Color",
+      "label": "Primary Color"
+    },
+    {
+      "fieldname": "secondary_color",
+      "fieldtype": "Color",
+      "label": "Secondary Color"
+    },
+    {
+      "fieldname": "accent_color",
+      "fieldtype": "Color",
+      "label": "Accent Color"
+    },
+    {
+      "fieldname": "success_color",
+      "fieldtype": "Color",
+      "label": "Success Color"
+    },
+    {
+      "fieldname": "column_break_9",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "warning_color",
+      "fieldtype": "Color",
+      "label": "Warning Color"
+    },
+    {
+      "fieldname": "danger_color",
+      "fieldtype": "Color",
+      "label": "Danger Color"
+    },
+    {
+      "fieldname": "info_color",
+      "fieldtype": "Color",
+      "label": "Info Color"
+    },
+    {
+      "fieldname": "dark_color",
+      "fieldtype": "Color",
+      "label": "Dark Color"
+    },
+    {
+      "fieldname": "background_section",
+      "fieldtype": "Section Break",
+      "label": "Background & Surfaces"
+    },
+    {
+      "fieldname": "background_color",
+      "fieldtype": "Color",
+      "label": "Background Color"
+    },
+    {
+      "fieldname": "surface_color",
+      "fieldtype": "Color",
+      "label": "Surface Color"
+    },
+    {
+      "fieldname": "card_background",
+      "fieldtype": "Color",
+      "label": "Card Background"
+    },
+    {
+      "fieldname": "column_break_bg",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "sidebar_color",
+      "fieldtype": "Color",
+      "label": "Sidebar Color"
+    },
+    {
+      "fieldname": "navbar_color",
+      "fieldtype": "Color",
+      "label": "Navbar Color"
+    },
+    {
+      "fieldname": "footer_color",
+      "fieldtype": "Color",
+      "label": "Footer Color"
+    },
+    {
+      "fieldname": "typography_section",
+      "fieldtype": "Section Break",
+      "label": "Typography"
+    },
+    {
+      "fieldname": "font_family",
+      "fieldtype": "Select",
+      "label": "Body Font Family",
+      "options": "Inter\nRoboto\nOpen Sans\nLato\nMontserrat\nPoppins\nSource Sans Pro\nNunito\nWork Sans\nSystem Default"
+    },
+    {
+      "fieldname": "heading_font",
+      "fieldtype": "Select",
+      "label": "Heading Font Family",
+      "options": "Inter\nRoboto\nMontserrat\nPoppins\nPlayfair Display\nMerriweather\nLora\nSource Serif Pro\nSystem Default"
+    },
+    {
+      "fieldname": "font_size",
+      "fieldtype": "Select",
+      "label": "Base Font Size",
+      "options": "12px\n13px\n14px\n15px\n16px\n17px\n18px"
+    },
+    {
+      "fieldname": "column_break_typo",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "line_height",
+      "fieldtype": "Select",
+      "label": "Line Height",
+      "options": "1.2\n1.4\n1.5\n1.6\n1.8"
+    },
+    {
+      "fieldname": "font_weight",
+      "fieldtype": "Select",
+      "label": "Font Weight",
+      "options": "300 (Light)\n400 (Normal)\n500 (Medium)\n600 (Semi Bold)\n700 (Bold)"
+    },
+    {
+      "fieldname": "text_color",
+      "fieldtype": "Color",
+      "label": "Text Color"
+    },
+    {
+      "depends_on": "login_page_customization",
+      "fieldname": "login_customization_section",
+      "fieldtype": "Section Break",
+      "label": "Login Page Customization"
+    },
+    {
+      "depends_on": "login_page_customization",
+      "fieldname": "login_background_image",
+      "fieldtype": "Attach Image",
+      "label": "Login Background Image"
+    },
+    {
+      "depends_on": "login_page_customization",
+      "fieldname": "login_background_color",
+      "fieldtype": "Color",
+      "label": "Login Background Color"
+    },
+    {
+      "depends_on": "login_page_customization",
+      "fieldname": "login_logo",
+      "fieldtype": "Attach Image",
+      "label": "Login Page Logo"
+    },
+    {
+      "fieldname": "column_break_login",
+      "fieldtype": "Column Break"
+    },
+    {
+      "depends_on": "login_page_customization",
+      "fieldname": "company_tagline",
+      "fieldtype": "Data",
+      "label": "Company Tagline"
+    },
+    {
+      "depends_on": "login_page_customization",
+      "fieldname": "login_form_style",
+      "fieldtype": "Select",
+      "label": "Login Form Style",
+      "options": "Card\nGlass\nMinimal\nCorporate\nModern\nQuickBooks Style"
+    },
+    {
+      "depends_on": "login_page_customization",
+      "fieldname": "login_animation",
+      "fieldtype": "Select",
+      "label": "Login Animation",
+      "options": "None\nFade In\nSlide Up\nZoom In\nBounce In"
+    },
+    {
+      "fieldname": "navbar_customization_section",
+      "fieldtype": "Section Break",
+      "label": "Navigation Bar Customization"
+    },
+    {
+      "fieldname": "navbar_style",
+      "fieldtype": "Select",
+      "label": "Navbar Style",
+      "options": "Default\nMinimal\nGradient\nSolid\nTransparent\nGlass"
+    },
+    {
+      "fieldname": "navbar_position",
+      "fieldtype": "Select",
+      "label": "Navbar Position",
+      "options": "Fixed Top\nStatic\nSticky"
+    },
+    {
+      "fieldname": "navbar_text_color",
+      "fieldtype": "Color",
+      "label": "Navbar Text Color"
+    },
+    {
+      "fieldname": "column_break_navbar",
+      "fieldtype": "Column Break"
+    },
+    {
+      "default": 1,
+      "fieldname": "show_company_logo",
+      "fieldtype": "Check",
+      "label": "Show Company Logo in Navbar"
+    },
+    {
+      "depends_on": "show_company_logo",
+      "fieldname": "company_logo_position",
+      "fieldtype": "Select",
+      "label": "Company Logo Position",
+      "options": "Left\nCenter\nRight"
+    },
+    {
+      "default": 0,
+      "fieldname": "hide_frappe_branding",
+      "fieldtype": "Check",
+      "label": "Hide Frappe Branding"
+    },
+    {
+      "fieldname": "layout_section",
+      "fieldtype": "Section Break",
+      "label": "Layout & Effects"
+    },
+    {
+      "fieldname": "border_radius",
+      "fieldtype": "Select",
+      "label": "Border Radius",
+      "options": "0px (Sharp)\n4px (Slightly Rounded)\n8px (Rounded)\n12px (Very Rounded)\n16px (Highly Rounded)\n20px (Extra Rounded)"
+    },
+    {
+      "fieldname": "box_shadow",
+      "fieldtype": "Select",
+      "label": "Box Shadow",
+      "options": "None\nSubtle\nMedium\nStrong\nExtra Strong"
+    },
+    {
+      "fieldname": "spacing_scale",
+      "fieldtype": "Select",
+      "label": "Spacing Scale",
+      "options": "Compact\nNormal\nComfortable\nSpacious"
+    },
+    {
+      "fieldname": "column_break_layout",
+      "fieldtype": "Column Break"
+    },
+    {
+      "default": 1,
+      "fieldname": "animation_enabled",
+      "fieldtype": "Check",
+      "label": "Enable Animations"
+    },
+    {
+      "depends_on": "animation_enabled",
+      "fieldname": "transition_speed",
+      "fieldtype": "Select",
+      "label": "Transition Speed",
+      "options": "Fast (0.15s)\nNormal (0.3s)\nSlow (0.5s)"
+    },
+    {
+      "default": 1,
+      "fieldname": "hover_effects",
+      "fieldtype": "Check",
+      "label": "Hover Effects"
+    },
+    {
+      "fieldname": "advanced_settings_section",
+      "fieldtype": "Section Break",
+      "label": "Advanced Customization"
+    },
+    {
+      "fieldname": "custom_css",
+      "fieldtype": "Code",
+      "label": "Custom CSS",
+      "options": "CSS"
+    },
+    {
+      "fieldname": "custom_js",
+      "fieldtype": "Code",
+      "label": "Custom JavaScript",
+      "options": "JS"
+    },
+    {
+      "fieldname": "column_break_13",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "responsive_breakpoints",
+      "fieldtype": "Code",
+      "label": "Responsive Breakpoints",
+      "options": "JSON"
+    },
+    {
+      "default": 0,
+      "fieldname": "dark_mode_support",
+      "fieldtype": "Check",
+      "label": "Dark Mode Support"
+    },
+    {
+      "default": 0,
+      "fieldname": "rtl_support",
+      "fieldtype": "Check",
+      "label": "RTL Support"
+    },
+    {
+      "fieldname": "user_permissions_section",
+      "fieldtype": "Section Break",
+      "label": "User Permissions"
+    },
+    {
+      "default": 0,
+      "fieldname": "apply_to_all_users",
+      "fieldtype": "Check",
+      "label": "Apply to All Users"
+    },
+    {
+      "depends_on": "eval:!doc.apply_to_all_users",
+      "fieldname": "allowed_users",
+      "fieldtype": "Table MultiSelect",
+      "label": "Allowed Users",
+      "options": "Theme Manager User"
+    },
+    {
+      "fieldname": "column_break_18",
+      "fieldtype": "Column Break"
+    },
+    {
+      "depends_on": "eval:!doc.apply_to_all_users",
+      "fieldname": "allowed_roles",
+      "fieldtype": "Table MultiSelect",
+      "label": "Allowed Roles",
+      "options": "Theme Manager Role"
+    },
+    {
+      "fieldname": "restricted_companies",
+      "fieldtype": "Table MultiSelect",
+      "label": "Restricted to Companies",
+      "options": "Theme Manager Company"
+    },
+    {
+      "fieldname": "audit_section",
+      "fieldtype": "Section Break",
+      "label": "Audit Information"
+    },
+    {
+      "fieldname": "created_by_user",
+      "fieldtype": "Link",
+      "label": "Created By",
+      "options": "User",
+      "read_only": 1
+    },
+    {
+      "fieldname": "last_applied",
+      "fieldtype": "Datetime",
+      "label": "Last Applied",
+      "read_only": 1
+    },
+    {
+      "fieldname": "column_break_22",
+      "fieldtype": "Column Break"
+    },
+    {
+      "default": 0,
+      "fieldname": "application_count",
+      "fieldtype": "Int",
+      "label": "Application Count",
+      "read_only": 1
+    },
+    {
+      "fieldname": "theme_file_path",
+      "fieldtype": "Data",
+      "hidden": 1,
+      "label": "Theme File Path",
+      "read_only": 1
+    }
+  ],
+  "index_web_pages_for_search": 1,
+  "links": [],
+  "modified": "2024-01-01 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Inter Company Transactions",
+  "name": "Enhanced Theme Manager",
+  "naming_rule": "Expression",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    },
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "Theme Administrator",
+      "share": 1,
+      "write": 1
+    },
+    {
+      "read": 1,
+      "role": "All"
+    }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": [],
+  "track_changes": 1
+}

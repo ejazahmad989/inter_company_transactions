@@ -1,42 +1,67 @@
-# Installation Guide for Inter-Company Transactions
+# Installation Guide for Inter-Company Transactions App
 
-This ERPNext custom application automates transaction mirroring and synchronization between associated companies.
+This guide will help you install and set up the Inter-Company Transactions app in your ERPNext installation.
 
-## System Prerequisites
-- Frappe Framework v14 or v15
-- ERPNext v14 or v15
-- Python >= 3.10
+## Prerequisites
 
-## Bench Installation Steps
+- ERPNext v13 or higher
+- Frappe Framework v13 or higher
+- Administrator access to your ERPNext instance
 
-1. Change directory to your Frappe bench directory:
-   ```bash
-   cd ~/frappe-bench
-   ```
+## Installation Steps
 
-2. Fetch the custom app repository into bench:
-   ```bash
-   bench get-app inter_company_transactions https://github.com/your-repo/inter_company_transactions
-   ```
-   *(Or clone directly into `apps/inter_company_transactions`)*
+### Step 1: Get the App
 
-3. Install the application on your target ERPNext site:
-   ```bash
-   bench --site <your-site-name> install-app inter_company_transactions
-   ```
+Clone the repository or download the zip file:
 
-4. Execute database migrations to provision custom doctypes and custom fields:
-   ```bash
-   bench --site <your-site-name> migrate
-   ```
+```bash
+cd /home/frappe/frappe-bench
+bench get-app inter_company_transactions https://github.com/your-repo/inter_company_transactions
+```
 
-5. Clear bench cache and restart worker services:
-   ```bash
-   bench --site <your-site-name> clear-cache
-   bench restart
-   ```
+### Step 2: Install the App on Your Site
 
-## Verification
-- Log in to your ERPNext desk.
-- Search for **"Inter Company Transaction Map"** in the awesome bar.
-- Configure your primary company, counterpart entity, and document mappings.
+```bash
+bench --site your-site.local install-app inter_company_transactions
+```
+
+### Step 3: Run Migrations
+
+```bash
+bench --site your-site.local migrate
+```
+
+### Step 4: Restart the Server
+
+```bash
+bench restart
+```
+
+## Configuration
+
+### Step 1: Create Inter-Company Transaction Map
+
+1. Go to **Inter Company Transactions > Inter Company Transaction Map**
+2. Create a new record
+3. Select your main company
+4. Add transaction mappings for each transaction type and company combination
+5. Save the document
+
+### Step 2: Test the Configuration
+
+1. Create a transaction (e.g., Sales Order) in your main company
+2. When you submit the transaction, a corresponding transaction will be created in the linked company
+3. Verify that the transaction was created correctly
+
+## Troubleshooting
+
+If you encounter any issues:
+
+1. Check the Frappe Error Logs
+2. Ensure that the companies are correctly set up
+3. Verify that the customers and suppliers are correctly linked
+4. Make sure the accounts are mapped correctly between companies
+
+## Support
+
+For support, please open an issue on the GitHub repository or contact us at support@example.com.

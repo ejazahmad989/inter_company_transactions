@@ -1,0 +1,83 @@
+{
+  "doctype": "DocType",
+  "name": "Date Permission Detail",
+  "module": "Inter Company Transactions",
+  "is_single": 0,
+  "custom" : 1,
+  "istable": 1,
+  "autoname": "hash",
+  "name_case": "Case Insensitive",
+  "fields": [
+    {
+      "fieldname": "Form",
+      "label": "Document Type",
+      "fieldtype": "Link",
+      "options": "DocType",
+      "reqd": 1
+    },
+    {
+      "fieldname": "allow_backdated",
+      "label": "Allow Backdated",
+      "fieldtype": "Check",
+      "default": 0
+    },
+    {
+      "fieldname": "max_backdated_days",
+      "label": "Max Backdated Days",
+      "fieldtype": "Int",
+      "default": 0,
+      "depends_on": "eval:doc.allow_backdated"
+    },
+    {
+      "fieldname": "require_backdate_reason",
+      "label": "Require Backdate Reason",
+      "fieldtype": "Check",
+      "default": 0,
+      "depends_on": "eval:doc.allow_backdated"
+    },
+    {
+      "fieldname": "allow_futuredated",
+      "label": "Allow Future-dated",
+      "fieldtype": "Check",
+      "default": 0
+    },
+    {
+      "fieldname": "max_futuredated_days",
+      "label": "Max Future-dated Days",
+      "fieldtype": "Int",
+      "default": 0,
+      "depends_on": "eval:doc.allow_futuredated"
+    },
+    {
+      "fieldname": "require_futuredate_reason",
+      "label": "Require Future-date Reason",
+      "fieldtype": "Check",
+      "default": 0,
+      "depends_on": "eval:doc.allow_futuredated"
+    },
+    {
+      "fieldname": "require_expiry_date",
+      "label": "Require Expiry Date",
+      "fieldtype": "Check",
+      "default": 0
+    },
+    {
+      "fieldname": "expiry_date_field",
+      "label": "Expiry Date Field",
+      "fieldtype": "Date",
+      "depends_on": "eval:doc.require_expiry_date"
+    },
+    {
+      "fieldname": "monthly_limit",
+      "label": "Monthly Transaction Limit",
+      "fieldtype": "Int",
+      "description": "Maximum number of allowed transactions per month (0 for unlimited)"
+    },
+    {
+      "fieldname": "amount_limit",
+      "label": "Amount Limit",
+      "fieldtype": "Currency",
+      "description": "Maximum total amount allowed for transactions (0 for unlimited)"
+    }
+  ]
+}

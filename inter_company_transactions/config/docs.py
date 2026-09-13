@@ -1,3 +1,6 @@
-# -*- coding: utf-8 -*-
+"""
+Configuration for docs
+"""
+
 def get_context(context):
-    context.brand_html = "Inter Company Transactions"
+	context.brand_html = "Inter Company Transactions"

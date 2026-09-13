@@ -1,0 +1,319 @@
+{
+  "actions": [],
+  "allow_rename": 1,
+  "autoname": "format:WAR-{document_type}-{#####}",
+  "creation": "2024-01-01 00:00:00.000000",
+  "default_view": "List",
+  "doctype": "DocType",
+  "editable_grid": 1,
+  "engine": "InnoDB",
+  "field_order": [
+    "request_details_section",
+    "workflow",
+    "document_type",
+    "document_name",
+    "column_break_4",
+    "source_company",
+    "target_company",
+    "requested_by",
+    "approval_details_section",
+    "current_approval_level",
+    "required_approvals",
+    "completed_approvals",
+    "column_break_9",
+    "status",
+    "priority",
+    "due_date",
+    "document_summary_section",
+    "document_amount",
+    "document_description",
+    "approval_notes",
+    "column_break_15",
+    "attachments",
+    "reference_documents",
+    "approval_history_section",
+    "approval_history",
+    "notification_section",
+    "last_notification_sent",
+    "reminder_count",
+    "column_break_21",
+    "escalation_level",
+    "escalated_to",
+    "escalation_date",
+    "audit_section",
+    "created_date",
+    "completed_date",
+    "column_break_27",
+    "total_processing_time",
+    "approval_sla_status"
+  ],
+  "fields": [
+    {
+      "fieldname": "request_details_section",
+      "fieldtype": "Section Break",
+      "label": "Request Details"
+    },
+    {
+      "fieldname": "workflow",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Workflow",
+      "options": "Inter Company Workflow",
+      "reqd": 1
+    },
+    {
+      "fieldname": "document_type",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Document Type",
+      "options": "DocType",
+      "reqd": 1
+    },
+    {
+      "fieldname": "document_name",
+      "fieldtype": "Dynamic Link",
+      "in_list_view": 1,
+      "label": "Document Name",
+      "options": "document_type",
+      "reqd": 1
+    },
+    {
+      "fieldname": "column_break_4",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "source_company",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Source Company",
+      "options": "Company",
+      "reqd": 1
+    },
+    {
+      "fieldname": "target_company",
+      "fieldtype": "Link",
+      "label": "Target Company",
+      "options": "Company",
+      "reqd": 1
+    },
+    {
+      "fieldname": "requested_by",
+      "fieldtype": "Link",
+      "label": "Requested By",
+      "options": "User",
+      "reqd": 1
+    },
+    {
+      "fieldname": "approval_details_section",
+      "fieldtype": "Section Break",
+      "label": "Approval Details"
+    },
+    {
+      "default": 1,
+      "fieldname": "current_approval_level",
+      "fieldtype": "Int",
+      "in_list_view": 1,
+      "label": "Current Approval Level"
+    },
+    {
+      "fieldname": "required_approvals",
+      "fieldtype": "Int",
+      "label": "Required Approvals"
+    },
+    {
+      "default": 0,
+      "fieldname": "completed_approvals",
+      "fieldtype": "Int",
+      "label": "Completed Approvals"
+    },
+    {
+      "fieldname": "column_break_9",
+      "fieldtype": "Column Break"
+    },
+    {
+      "default": "Pending",
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Status",
+      "options": "Pending\nApproved\nRejected\nEscalated\nCancelled"
+    },
+    {
+      "default": "Medium",
+      "fieldname": "priority",
+      "fieldtype": "Select",
+      "label": "Priority",
+      "options": "Low\nMedium\nHigh\nUrgent"
+    },
+    {
+      "fieldname": "due_date",
+      "fieldtype": "Datetime",
+      "label": "Due Date"
+    },
+    {
+      "fieldname": "document_summary_section",
+      "fieldtype": "Section Break",
+      "label": "Document Summary"
+    },
+    {
+      "fieldname": "document_amount",
+      "fieldtype": "Currency",
+      "label": "Document Amount"
+    },
+    {
+      "fieldname": "document_description",
+      "fieldtype": "Text",
+      "label": "Document Description"
+    },
+    {
+      "fieldname": "approval_notes",
+      "fieldtype": "Text",
+      "label": "Approval Notes"
+    },
+    {
+      "fieldname": "column_break_15",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "attachments",
+      "fieldtype": "Table MultiSelect",
+      "label": "Attachments",
+      "options": "File"
+    },
+    {
+      "fieldname": "reference_documents",
+      "fieldtype": "Text",
+      "label": "Reference Documents"
+    },
+    {
+      "fieldname": "approval_history_section",
+      "fieldtype": "Section Break",
+      "label": "Approval History"
+    },
+    {
+      "fieldname": "approval_history",
+      "fieldtype": "Table",
+      "label": "Approval History",
+      "options": "Workflow Approval History"
+    },
+    {
+      "fieldname": "notification_section",
+      "fieldtype": "Section Break",
+      "label": "Notification Tracking"
+    },
+    {
+      "fieldname": "last_notification_sent",
+      "fieldtype": "Datetime",
+      "label": "Last Notification Sent",
+      "read_only": 1
+    },
+    {
+      "default": 0,
+      "fieldname": "reminder_count",
+      "fieldtype": "Int",
+      "label": "Reminder Count",
+      "read_only": 1
+    },
+    {
+      "fieldname": "column_break_21",
+      "fieldtype": "Column Break"
+    },
+    {
+      "default": 0,
+      "fieldname": "escalation_level",
+      "fieldtype": "Int",
+      "label": "Escalation Level",
+      "read_only": 1
+    },
+    {
+      "fieldname": "escalated_to",
+      "fieldtype": "Link",
+      "label": "Escalated To",
+      "options": "User",
+      "read_only": 1
+    },
+    {
+      "fieldname": "escalation_date",
+      "fieldtype": "Datetime",
+      "label": "Escalation Date",
+      "read_only": 1
+    },
+    {
+      "fieldname": "audit_section",
+      "fieldtype": "Section Break",
+      "label": "Audit Information"
+    },
+    {
+      "fieldname": "created_date",
+      "fieldtype": "Datetime",
+      "label": "Created Date",
+      "read_only": 1
+    },
+    {
+      "fieldname": "completed_date",
+      "fieldtype": "Datetime",
+      "label": "Completed Date",
+      "read_only": 1
+    },
+    {
+      "fieldname": "column_break_27",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "total_processing_time",
+      "fieldtype": "Data",
+      "label": "Total Processing Time",
+      "read_only": 1
+    },
+    {
+      "default": "On Time",
+      "fieldname": "approval_sla_status",
+      "fieldtype": "Select",
+      "label": "SLA Status",
+      "options": "On Time\nNear Breach\nBreached",
+      "read_only": 1
+    }
+  ],
+  "index_web_pages_for_search": 1,
+  "links": [],
+  "modified": "2024-01-01 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Inter Company Transactions",
+  "name": "Workflow Approval Request",
+  "naming_rule": "Expression",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    },
+    {
+      "create": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "Workflow Manager",
+      "share": 1,
+      "write": 1
+    },
+    {
+      "read": 1,
+      "write": 1,
+      "role": "Approver"
+    }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": [],
+  "track_changes": 1
+}

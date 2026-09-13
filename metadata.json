@@ -1,6 +1,0 @@
-{
-  "name": "Inter-Company Transactions",
-  "description": "Multi-company transaction mapping, automatic two-way synchronization, workflow approvals, and date control management.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}

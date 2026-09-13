@@ -1,0 +1,485 @@
+/* Enhanced Theme System - QuickBooks & Modern Accounting Software Styles */
+
+/* QuickBooks Classic Theme */
+.quickbooks-classic-theme {
+    --primary-color: #0077C5;
+    --secondary-color: #2CA01C;
+    --accent-color: #F7931E;
+    --background-color: #F5F5F5;
+    --surface-color: #FFFFFF;
+    --text-color: #333333;
+    --sidebar-color: #E8F4FD;
+    --navbar-color: #0077C5;
+    --border-color: #D1D5DB;
+    --shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.quickbooks-classic-theme .navbar {
+    background: linear-gradient(135deg, #0077C5, #005A9F);
+    border-bottom: 3px solid #2CA01C;
+}
+
+.quickbooks-classic-theme .card {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+    background: var(--surface-color);
+}
+
+.quickbooks-classic-theme .btn-primary {
+    background: linear-gradient(135deg, #0077C5, #005A9F);
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.quickbooks-classic-theme .btn-primary:hover {
+    background: linear-gradient(135deg, #005A9F, #004080);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 119, 197, 0.3);
+}
+
+/* QuickBooks Modern Theme */
+.quickbooks-modern-theme {
+    --primary-color: #0052CC;
+    --secondary-color: #36B37E;
+    --accent-color: #FF5630;
+    --background-color: #FAFBFC;
+    --surface-color: #FFFFFF;
+    --text-color: #172B4D;
+    --sidebar-color: #F4F5F7;
+    --navbar-color: #FFFFFF;
+    --border-color: #DFE1E6;
+    --shadow: 0 4px 8px rgba(0, 0, 0, 0.12);
+}
+
+.quickbooks-modern-theme .navbar {
+    background: var(--navbar-color);
+    border-bottom: 1px solid var(--border-color);
+    backdrop-filter: blur(10px);
+}
+
+.quickbooks-modern-theme .card {
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    background: var(--surface-color);
+    transition: all 0.3s ease;
+}
+
+.quickbooks-modern-theme .card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+}
+
+/* Sage Green Theme */
+.sage-green-theme {
+    --primary-color: #00A651;
+    --secondary-color: #7CB342;
+    --accent-color: #FFC107;
+    --background-color: #F8FFF8;
+    --surface-color: #FFFFFF;
+    --text-color: #2E7D32;
+    --sidebar-color: #E8F5E8;
+    --navbar-color: #00A651;
+}
+
+/* Xero Blue Theme */
+.xero-blue-theme {
+    --primary-color: #13B5EA;
+    --secondary-color: #1976D2;
+    --accent-color: #FF6B35;
+    --background-color: #F0F9FF;
+    --surface-color: #FFFFFF;
+    --text-color: #0D47A1;
+    --sidebar-color: #E3F2FD;
+    --navbar-color: #13B5EA;
+}
+
+/* FreshBooks Orange Theme */
+.freshbooks-orange-theme {
+    --primary-color: #F56500;
+    --secondary-color: #FF8A65;
+    --accent-color: #4CAF50;
+    --background-color: #FFF8F0;
+    --surface-color: #FFFFFF;
+    --text-color: #E65100;
+    --sidebar-color: #FFF3E0;
+    --navbar-color: #F56500;
+}
+
+/* Zoho Purple Theme */
+.zoho-purple-theme {
+    --primary-color: #7B1FA2;
+    --secondary-color: #9C27B0;
+    --accent-color: #E91E63;
+    --background-color: #F8F5FF;
+    --surface-color: #FFFFFF;
+    --text-color: #4A148C;
+    --sidebar-color: #F3E5F5;
+    --navbar-color: #7B1FA2;
+}
+
+/* Wave Teal Theme */
+.wave-teal-theme {
+    --primary-color: #00695C;
+    --secondary-color: #26A69A;
+    --accent-color: #FF7043;
+    --background-color: #F0FDFC;
+    --surface-color: #FFFFFF;
+    --text-color: #004D40;
+    --sidebar-color: #E0F2F1;
+    --navbar-color: #00695C;
+}
+
+/* Fintech Dark Theme */
+.fintech-dark-theme {
+    --primary-color: #00D4AA;
+    --secondary-color: #1DE9B6;
+    --accent-color: #FF6B6B;
+    --background-color: #0A0E27;
+    --surface-color: #1A1D3A;
+    --text-color: #FFFFFF;
+    --sidebar-color: #151937;
+    --navbar-color: #1A1D3A;
+    --border-color: #2D3748;
+}
+
+.fintech-dark-theme .card {
+    background: linear-gradient(135deg, #1A1D3A, #2D3748);
+    border: 1px solid #4A5568;
+    color: var(--text-color);
+}
+
+/* Corporate Elite Theme */
+.corporate-elite-theme {
+    --primary-color: #1565C0;
+    --secondary-color: #1976D2;
+    --accent-color: #FFC107;
+    --background-color: #F8FAFC;
+    --surface-color: #FFFFFF;
+    --text-color: #263238;
+    --sidebar-color: #ECEFF1;
+    --navbar-color: #1565C0;
+    --gradient: linear-gradient(135deg, #1565C0, #1976D2, #42A5F5);
+}
+
+.corporate-elite-theme .navbar {
+    background: var(--gradient);
+    box-shadow: 0 4px 20px rgba(21, 101, 192, 0.3);
+}
+
+/* Enhanced Login Styles */
+.enhanced-login-page {
+    min-height: 100vh;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.enhanced-login-page::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.2));
+    z-index: 1;
+}
+
+.enhanced-login-form {
+    position: relative;
+    z-index: 2;
+    backdrop-filter: blur(20px);
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 20px;
+    padding: 40px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    max-width: 400px;
+    width: 100%;
+    animation: slideUp 0.6s ease-out;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.enhanced-login-form.glass {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.enhanced-login-form.quickbooks-style {
+    background: linear-gradient(135deg, #FFFFFF, #F8FAFC);
+    border: 2px solid #0077C5;
+    box-shadow: 0 10px 30px rgba(0, 119, 197, 0.2);
+}
+
+.login-logo {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.login-logo img {
+    max-height: 60px;
+    width: auto;
+}
+
+.company-tagline {
+    text-align: center;
+    margin-top: 20px;
+    font-style: italic;
+    color: #666;
+    font-size: 14px;
+}
+
+/* Enhanced Form Controls */
+.enhanced-form-control {
+    border-radius: 12px;
+    border: 2px solid #E2E8F0;
+    padding: 12px 16px;
+    font-size: 16px;
+    transition: all 0.3s ease;
+    background: rgba(255, 255, 255, 0.9);
+}
+
+.enhanced-form-control:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(var(--primary-color-rgb), 0.1);
+    outline: none;
+}
+
+/* Enhanced Buttons */
+.enhanced-btn {
+    border-radius: 12px;
+    padding: 12px 24px;
+    font-weight: 600;
+    font-size: 16px;
+    transition: all 0.3s ease;
+    border: none;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+
+.enhanced-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.5s;
+}
+
+.enhanced-btn:hover::before {
+    left: 100%;
+}
+
+.enhanced-btn-primary {
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    color: white;
+}
+
+.enhanced-btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(var(--primary-color-rgb), 0.3);
+}
+
+/* Enhanced Cards */
+.enhanced-card {
+    border-radius: 16px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    background: var(--surface-color);
+    transition: all 0.3s ease;
+    overflow: hidden;
+}
+
+.enhanced-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+}
+
+.enhanced-card-header {
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    color: white;
+    padding: 20px;
+    border-bottom: none;
+}
+
+/* Enhanced Sidebar */
+.enhanced-sidebar {
+    background: var(--sidebar-color);
+    border-right: 1px solid rgba(0, 0, 0, 0.08);
+    backdrop-filter: blur(10px);
+}
+
+.enhanced-sidebar-item {
+    padding: 12px 20px;
+    border-radius: 12px;
+    margin: 4px 8px;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.enhanced-sidebar-item:hover {
+    background: rgba(var(--primary-color-rgb), 0.1);
+    transform: translateX(4px);
+}
+
+.enhanced-sidebar-item.active {
+    background: var(--primary-color);
+    color: white;
+    box-shadow: 0 4px 12px rgba(var(--primary-color-rgb), 0.3);
+}
+
+/* Enhanced Navbar */
+.enhanced-navbar {
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    padding: 12px 0;
+}
+
+.enhanced-navbar.glass {
+    background: rgba(255, 255, 255, 0.9);
+}
+
+.enhanced-navbar.gradient {
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .enhanced-login-form {
+        margin: 20px;
+        padding: 30px 20px;
+    }
+    
+    .enhanced-card {
+        margin: 10px;
+        border-radius: 12px;
+    }
+    
+    .enhanced-sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+    }
+    
+    .enhanced-sidebar.open {
+        transform: translateX(0);
+    }
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+    .enhanced-theme.dark-mode-support {
+        --background-color: #0F172A;
+        --surface-color: #1E293B;
+        --text-color: #F1F5F9;
+        --border-color: #334155;
+    }
+    
+    .enhanced-theme.dark-mode-support .enhanced-card {
+        background: var(--surface-color);
+        border-color: var(--border-color);
+        color: var(--text-color);
+    }
+}
+
+/* Animation Classes */
+.fade-in {
+    animation: fadeIn 0.6s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.slide-up {
+    animation: slideUp 0.6s ease-out;
+}
+
+.zoom-in {
+    animation: zoomIn 0.6s ease-out;
+}
+
+@keyframes zoomIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.bounce-in {
+    animation: bounceIn 0.8s ease-out;
+}
+
+@keyframes bounceIn {
+    0% {
+        opacity: 0;
+        transform: scale(0.3);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.05);
+    }
+    70% {
+        transform: scale(0.9);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Utility Classes */
+.text-gradient {
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.glass-effect {
+    backdrop-filter: blur(20px);
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.shadow-soft {
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.shadow-medium {
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+}
+
+.shadow-strong {
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+}
+
+.shadow-extra-strong {
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+}

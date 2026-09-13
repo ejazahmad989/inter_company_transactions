@@ -1,0 +1,42 @@
+{
+ "doctype": "DocType",
+ "name": "Backdate Whitelist",
+ "module": "Inter Company Transactions",
+ "custom": 1,
+ "is_submittable": 1,
+ "istable": 0,
+ "editable_grid": 0,
+ "track_changes": 1,
+ "track_seen": 1,
+ "fields": [
+  {
+   "fieldname": "Backdate_section",
+   "label": "backdate",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "user",
+   "label": "user",
+   "fieldtype": "Link",
+   "options": "User"
+  },
+  {
+   "fieldname": "link",
+   "label": "note",
+   "fieldtype": "Small Text"
+  },
+  {
+   "fieldname": "c_doctype",
+   "label": "doctypes",
+   "fieldtype": "Table",
+   "options": "Backdate Whitelist Detail"
+  },
+  {
+   "fieldname": "amended_form",
+   "label": "amended From",
+   "fieldtype": "Link",
+   "options": "Backdate Whitelist"
+  }
+ ],
+ "has_list_view": 1
+}

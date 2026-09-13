@@ -1,0 +1,6 @@
+bench --site frappe.com console
+import inter_company_transactions.custom_method
+inter_company_transactions.custom_method.add_custom_fields()
+
+
+=backdate reason depend on eval:doc.posting_date && (frappe.datetime.get_diff(frappe.datetime.nowdate(), doc.posting_date) > 0)
