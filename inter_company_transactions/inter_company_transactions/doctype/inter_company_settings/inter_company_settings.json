@@ -1,0 +1,113 @@
+{
+  "actions": [],
+  "creation": "2024-03-14 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "enabled",
+    "section_break_execution",
+    "execution_mode",
+    "auto_submit_target_doc",
+    "logging_level",
+    "section_break_pricing",
+    "default_transfer_pricing_rule",
+    "markup_percentage",
+    "section_break_reconciliation",
+    "tolerance_amount",
+    "notify_on_sync_failure"
+  ],
+  "fields": [
+    {
+      "default": "1",
+      "fieldname": "enabled",
+      "fieldtype": "Check",
+      "label": "Enable Inter Company Automation"
+    },
+    {
+      "fieldname": "section_break_execution",
+      "fieldtype": "Section Break",
+      "label": "Execution & Workflow"
+    },
+    {
+      "default": "Synchronous",
+      "fieldname": "execution_mode",
+      "fieldtype": "Select",
+      "label": "Execution Mode",
+      "options": "Synchronous\nAsynchronous (Background Job)",
+      "description": "Background mode uses frappe.enqueue to prevent timeout on high-volume documents"
+    },
+    {
+      "default": "0",
+      "fieldname": "auto_submit_target_doc",
+      "fieldtype": "Check",
+      "label": "Auto-Submit Target Document When Feasible",
+      "description": "If enabled, creates target document directly in Submitted status when all dependencies are satisfied"
+    },
+    {
+      "default": "Info",
+      "fieldname": "logging_level",
+      "fieldtype": "Select",
+      "label": "Logging Level",
+      "options": "Debug\nInfo\nWarning\nError"
+    },
+    {
+      "fieldname": "section_break_pricing",
+      "fieldtype": "Section Break",
+      "label": "Transfer Pricing Rules"
+    },
+    {
+      "default": "Source Document Rate",
+      "fieldname": "default_transfer_pricing_rule",
+      "fieldtype": "Select",
+      "label": "Default Transfer Pricing Rule",
+      "options": "Source Document Rate\nCost / Valuation Rate\nCost + Markup %"
+    },
+    {
+      "default": "0.0",
+      "depends_on": "eval:doc.default_transfer_pricing_rule == 'Cost + Markup %'",
+      "fieldname": "markup_percentage",
+      "fieldtype": "Percent",
+      "label": "Markup Percentage (%)"
+    },
+    {
+      "fieldname": "section_break_reconciliation",
+      "fieldtype": "Section Break",
+      "label": "Reconciliation & Alerts"
+    },
+    {
+      "default": "0.05",
+      "fieldname": "tolerance_amount",
+      "fieldtype": "Currency",
+      "label": "Reconciliation Tolerance Amount",
+      "description": "Allowable variance (e.g. tax rounding) between source and target totals"
+    },
+    {
+      "default": "1",
+      "fieldname": "notify_on_sync_failure",
+      "fieldtype": "Check",
+      "label": "Send System Alert on Automation Failure"
+    }
+  ],
+  "issingle": 1,
+  "modified": "2024-03-14 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Inter Company Transactions",
+  "name": "Inter Company Settings",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC"
+}

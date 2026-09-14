@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import unicode_literals
-
 import frappe
 from frappe import _
 from frappe.utils import now_datetime, add_to_date, get_datetime, time_diff_in_hours
@@ -43,7 +40,6 @@ def create_workflow_request(doc, method=None):
     
     request.insert(ignore_permissions=True)
     request.notify_next_approvers()
-    frappe.db.commit()
 
 def get_applicable_workflow(doc):
     """Find workflow matching this document"""

@@ -1,10 +1,7 @@
-# -*- coding: utf-8 -*-
-from __future__ import unicode_literals
-
 app_name = "inter_company_transactions"
 app_title = "Inter Company Transactions"
 app_publisher = "Your Company"
-app_description = "A custom app for handling inter-company transactions with workflow and theme management"
+app_description = "Comprehensive Inter-Company Transactions, Transfer Pricing, and Balance Reconciliation for ERPNext"
 app_icon = "octicon octicon-git-compare"
 app_color = "blue"
 app_email = "your@example.com"
@@ -255,9 +252,6 @@ doc_events = {
           "before_insert": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
           "before_save":   "inter_company_transactions.date_control.date_validator.validate_transaction_date",
           "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
-    },
-    "Salary Slip": {
-           "before_save": "inter_company_transactions.hrms.custom_fetch_fixed_allowances"
     },
     "Stock Entry": {
           "on_submit": [
