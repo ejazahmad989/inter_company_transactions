@@ -215,47 +215,59 @@ doc_events = {
         # "validate": "inter_company_transactions.doctype.backdate_permission.backdate_permission.validate_posting_date"
     },
     "Sales Invoice": {
+          "on_submit": [
+              "inter_company_transactions.workflow.create_workflow_request",
+              "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents"
+          ],
+          "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
           "validate": "inter_company_transactions.date_validation_hooks.validate_backdate",
           "before_insert": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
           "before_save":   "inter_company_transactions.date_control.date_validator.validate_transaction_date",
           "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
-
-          # "validate": "inter_company_transactions.doctype.backdate_permission.backdate_permission.validate_posting_date"
     },
     "Purchase Invoice": {
+          "on_submit": [
+              "inter_company_transactions.workflow.create_workflow_request",
+              "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents"
+          ],
+          "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
           "validate": "inter_company_transactions.date_validation_hooks.validate_backdate",
           "before_insert": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
           "before_save":   "inter_company_transactions.date_control.date_validator.validate_transaction_date",
           "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
-
-          # "validate": "inter_company_transactions.doctype.backdate_permission.backdate_permission.validate_posting_date"
     },
     "Delivery Note": {
+          "on_submit": [
+              "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents"
+          ],
+          "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
           "validate": "inter_company_transactions.date_validation_hooks.validate_backdate",
           "before_insert": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
           "before_save":   "inter_company_transactions.date_control.date_validator.validate_transaction_date",
           "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
-
-       # "validate": "inter_company_transactions.doctype.backdate_permission.backdate_permission.validate_posting_date"
     },
     "Purchase Receipt": {
+          "on_submit": [
+              "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents"
+          ],
+          "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
           "validate": "inter_company_transactions.date_validation_hooks.validate_backdate",
           "before_insert": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
           "before_save":   "inter_company_transactions.date_control.date_validator.validate_transaction_date",
           "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
-
-        # "validate": "inter_company_transactions.doctype.backdate_permission.backdate_permission.validate_posting_date"
     },
-      "Salary Slip": {
-           "before_save": "inter_company_transactionshrms.custom_fetch_fixed_allowances"
+    "Salary Slip": {
+           "before_save": "inter_company_transactions.hrms.custom_fetch_fixed_allowances"
     },
     "Stock Entry": {
+          "on_submit": [
+              "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents"
+          ],
+          "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
           "validate": "inter_company_transactions.date_validation_hooks.validate_backdate",
           "before_insert": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
           "before_save":   "inter_company_transactions.date_control.date_validator.validate_transaction_date",
           "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
-       
-          # "validate": "inter_company_transactions.doctype.backdate_permission.backdate_permission.validate_posting_date"
     }
 }
 

@@ -1,1572 +1,1184 @@
+# Copyright (c) 2024-2026, Inter Company Transactions and contributors
+# For license information, please see license.txt
+
 import frappe
+from frappe import _
 from frappe.model.document import Document
+from frappe.utils import flt, getdate, nowdate
+
+logger = frappe.logger("inter_company_transactions")
+
 
 class IntercompanyTransactionLink(Document):
-    def validate(self):
-        self.validate_companies()
-        self.validate_parties()
-        # DO NOT call validate_transaction_types here - it belongs to child table
-    
-    def validate_companies(self):
-        """Ensure main company and linked companies are different"""
-        linked_companies = [d.company for d in self.linked_companies]
-        if self.main_company in linked_companies:
-            frappe.throw("Main Company cannot be in Linked Companies")
-        
-        if len(linked_companies) != len(set(linked_companies)):
-            frappe.throw("Duplicate companies found in Linked Companies")
-    
-    def validate_parties(self):
-        """Validate that customers and suppliers are properly mapped between companies"""
-        for linked_company in self.linked_companies:
-            # Only validate required parties based on what's configured
-            if linked_company.main_company_customer and not linked_company.other_company_supplier:
-                frappe.throw(f"Other Company Supplier is required when Main Company Customer is set for {linked_company.company}")
-            
-            if linked_company.main_company_supplier and not linked_company.other_company_customer:
-                frappe.throw(f"Other Company Customer is required when Main Company Supplier is set for {linked_company.company}")
-def create_linked_documents(doc, method):
-    """Create corresponding documents in all linked companies"""
-    print(f"?? DEBUG: create_linked_documents called for {doc.doctype} {doc.name} in company {doc.company}")
-    
-    if doc.get("intercompany_linked_doc_doctype"):
-        print(f"?? DEBUG: Skipping {doc.name} - already a linked document")
-        return
-    
-    # Find applicable mappings
-    mappings = find_applicable_mappings(doc)
-    print(f"?? DEBUG: Found {len(mappings)} mappings for {doc.doctype}")
-    
-    if not mappings:
-        print(f"? DEBUG: No mappings found for {doc.doctype} in company {doc.company}")
-        return
-    
-    for i, mapping in enumerate(mappings):
-        print(f"?? DEBUG: Processing mapping {i+1}: {mapping['transaction_type'].source_type} -> {mapping['transaction_type'].target_type}")
-        print(f"?? DEBUG: Direction: {mapping.get('direction', 'Unknown')}")
-        print(f"?? DEBUG: Target company: {mapping.get('company', 'Unknown')}")
-        
-        try:
-            # Determine direction
-            is_main_to_other = doc.company == mapping["mapping"].main_company
-            direction = "main_to_other" if is_main_to_other else "other_to_main"
-            print(f"?? DEBUG: Calculated direction: {direction}")
-            
-            # Validate required parties before creating document
-            print(f"? DEBUG: Validating parties...")
-            validate_required_parties(doc, mapping)
-            
-            print(f"??? DEBUG: Creating corresponding document...")
-            linked_doc = create_corresponding_document(doc, mapping, direction)
-            
-            if linked_doc:
-                print(f"? DEBUG: Successfully created {linked_doc.doctype} for company {linked_doc.company}")
-                
-                # Set references
-                linked_doc.intercompany_linked_doc_doctype = doc.doctype
-                linked_doc.intercompany_linked_doc_name = doc.name
-                linked_doc.intercompany_linked_company = doc.company
-                
-                linked_doc.flags.ignore_permissions = True
-                linked_doc.insert()
-                
-                create_document_reference(doc, linked_doc)
-                
-                frappe.msgprint(f"Created draft {linked_doc.doctype} {linked_doc.name} in company {linked_doc.company}")
-                print(f"?? DEBUG: Document {linked_doc.name} inserted successfully")
-            else:
-                print(f"? DEBUG: create_corresponding_document returned None")
-            
-        except Exception as e:
-            print(f"?? DEBUG: Error in mapping {i+1}: {str(e)}")
-            frappe.log_error(f"Error creating linked document: {str(e)}", "Inter Company Transaction Error")
-            frappe.msgprint(f"Failed to create linked document in company {mapping['company']}: {str(e)}")
+	def validate(self):
+		self.validate_companies()
+		self.validate_parties()
+		self.validate_accounts()
 
-def cancel_linked_documents(doc, method):
-    """Cancel corresponding documents in all linked companies - BIDIRECTIONAL"""
-    
-    # Add debug logging
-    frappe.logger().info(f"cancel_linked_documents called for {doc.doctype} {doc.name} in company {doc.company}")
-    
-    # Check if this document has the company field
-    if not hasattr(doc, 'company') or not doc.company:
-        frappe.logger().warning(f"Document {doc.doctype} {doc.name} has no company field")
-        return
-    
-    # Check if this cancellation is triggered by our method (prevent infinite loop)
-    if doc.flags.get("intercompany_auto_cancel"):
-        frappe.logger().info(f"Skipping {doc.doctype} {doc.name} - triggered by intercompany auto cancel")
-        return
-    
-    # Check if Inter Company Document Reference doctype exists
-    if not frappe.db.exists("DocType", "Inter Company Document Reference"):
-        frappe.logger().warning("Inter Company Document Reference doctype does not exist")
-        return
-        
-    # Find ALL related documents (both as source and target)
-    all_related_docs = []
-    
-    # Find documents where current doc is the SOURCE
-    try:
-        linked_docs = frappe.get_all(
-            "Inter Company Document Reference",
-            filters=[
-                ["source_doctype", "=", doc.doctype],
-                ["source_name", "=", doc.name],
-                ["source_company", "=", doc.company]
-            ],
-            fields=["target_doctype", "target_name", "target_company"]
-        )
-        
-        for linked_doc in linked_docs:
-            all_related_docs.append({
-                "doctype": linked_doc.target_doctype,
-                "name": linked_doc.target_name,
-                "company": linked_doc.target_company,
-                "relationship": "target"
-            })
-            
-        frappe.logger().info(f"Found {len(linked_docs)} documents where current doc is SOURCE")
-    except Exception as e:
-        frappe.logger().error(f"Error finding linked documents (as source): {str(e)}")
-    
-    # Find documents where current doc is the TARGET  
-    try:
-        reverse_links = frappe.get_all(
-            "Inter Company Document Reference",
-            filters=[
-                ["target_doctype", "=", doc.doctype],
-                ["target_name", "=", doc.name],  
-                ["target_company", "=", doc.company]
-            ],
-            fields=["source_doctype", "source_name", "source_company"]
-        )
-        
-        for reverse_link in reverse_links:
-            all_related_docs.append({
-                "doctype": reverse_link.source_doctype,
-                "name": reverse_link.source_name,
-                "company": reverse_link.source_company,
-                "relationship": "source"
-            })
-            
-        frappe.logger().info(f"Found {len(reverse_links)} documents where current doc is TARGET")
-    except Exception as e:
-        frappe.logger().error(f"Error finding reverse links (as target): {str(e)}")
-    
-    frappe.logger().info(f"Total related documents found: {len(all_related_docs)}")
-    
-    def cancel_doc(doctype, docname, company=None, relationship=None):
-        """Cancel a document with proper error handling"""
-        try:
-            if not frappe.db.exists(doctype, docname):
-                frappe.logger().warning(f"Document {doctype} {docname} does not exist")
-                return False
-                
-            target_doc = frappe.get_doc(doctype, docname)
-            
-            # Additional checks
-            if target_doc.docstatus != 1:
-                frappe.logger().info(f"Document {doctype} {docname} is not submitted (docstatus: {target_doc.docstatus})")
-                return False
-            
-            # Set all permission flags
-            target_doc.flags.ignore_permissions = True
-            target_doc.flags.ignore_mandatory = True
-            target_doc.flags.ignore_account_permission = True
-            target_doc.flags.ignore_validate = True
-            target_doc.flags.ignore_links = True
-            target_doc.flags.ignore_validate_update_after_submit = True
-            target_doc.flags.ignore_workflow = True
-            
-            # CRITICAL: Set flag to prevent recursive calling
-            target_doc.flags.intercompany_auto_cancel = True
-            
-            frappe.logger().info(f"Attempting to cancel {doctype} {docname} (relationship: {relationship})")
-            target_doc.cancel()
-            
-            # Commit the transaction
-            frappe.db.commit()
-            
-            frappe.msgprint(f"Cancelled {target_doc.doctype} {target_doc.name} ({relationship} document)")
-            frappe.logger().info(f"Successfully cancelled {doctype} {docname}")
-            return True
-            
-        except Exception as e:
-            frappe.logger().error(f"Error cancelling {doctype} {docname}: {str(e)}")
-            frappe.log_error(
-                f"Error cancelling document: {str(e)}\n"
-                f"Document: {doctype} {docname}\n"
-                f"Company: {company}\n"
-                f"Relationship: {relationship}\n"
-                f"Traceback: {frappe.get_traceback()}",
-                "Inter Company Transaction Error"
-            )
-            return False
-    
-    try:
-        # Cancel ALL related documents (both sources and targets)
-        for related_doc in all_related_docs:
-            try:
-                frappe.logger().info(
-                    f"Processing {related_doc['relationship']} doc: "
-                    f"{related_doc['doctype']} {related_doc['name']} "
-                    f"in company {related_doc['company']}"
-                )
-                cancel_doc(
-                    related_doc['doctype'], 
-                    related_doc['name'],
-                    related_doc['company'],
-                    related_doc['relationship']
-                )
-            except Exception as e:
-                frappe.log_error(
-                    f"Error cancelling {related_doc['relationship']} document: {str(e)}\n"
-                    f"Document: {related_doc['doctype']} {related_doc['name']}\n"
-                    f"Company: {related_doc['company']}",
-                    "Inter Company Transaction Error"
-                )
-                
-    except Exception as e:
-        frappe.log_error(
-            f"Error in cancel_linked_documents: {str(e)}\n"
-            f"Document: {doc.doctype} {doc.name}\n"
-            f"Company: {getattr(doc, 'company', 'No company field')}\n"
-            f"Traceback: {frappe.get_traceback()}",
-            "Inter Company Transaction Error"
-        )
-        # Don't re-raise the exception to prevent blocking the main document cancellation
-        frappe.logger().error(f"cancel_linked_documents failed for {doc.doctype} {doc.name}: {str(e)}")
+	def validate_companies(self):
+		"""Ensure main company and linked companies are valid and distinct"""
+		if not self.main_company:
+			frappe.throw(_("Main Company is required"))
+
+		if not self.linked_companies:
+			frappe.throw(_("At least one Linked Company must be configured"))
+
+		linked_companies = [d.company for d in self.linked_companies if d.company]
+		if self.main_company in linked_companies:
+			frappe.throw(_("Main Company cannot be listed in Linked Companies"))
+
+		if len(linked_companies) != len(set(linked_companies)):
+			frappe.throw(_("Duplicate companies found in Linked Companies table"))
+
+	def validate_parties(self):
+		"""Validate that customers and suppliers are properly mapped between companies"""
+		for linked_company in self.linked_companies:
+			if not linked_company.company:
+				continue
+
+			if linked_company.main_company_customer and not linked_company.other_company_supplier:
+				frappe.throw(
+					_(
+						"Other Company Supplier is required when Main Company Customer is set for linked company {0}"
+					).format(frappe.bold(linked_company.company))
+				)
+
+			if linked_company.main_company_supplier and not linked_company.other_company_customer:
+				frappe.throw(
+					_(
+						"Other Company Customer is required when Main Company Supplier is set for linked company {0}"
+					).format(frappe.bold(linked_company.company))
+				)
+
+	def validate_accounts(self):
+		"""Validate that clearing accounts are configured if financial entries are used"""
+		has_financial = any(
+			t.source_type in ["Journal Entry", "Payment Entry"] or t.target_type in ["Journal Entry", "Payment Entry"]
+			for t in (self.transaction_types or [])
+		)
+		if has_financial:
+			for lc in self.linked_companies:
+				if not lc.main_company_account or not lc.other_company_account:
+					frappe.msgprint(
+						_(
+							"Warning: Clearing accounts (Main Company Account and Other Company Account) "
+							"should be configured on linked company {0} for financial transactions."
+						).format(frappe.bold(lc.company)),
+						indicator="orange",
+					)
 
 
-def validate_required_parties(doc, mapping):
-    """Validate that required parties are configured based on transaction type"""
-    print(f"?? DEBUG: validate_required_parties called for {doc.doctype}")
-    
-    linked_company = mapping["linked_company"]
-    trans_type = mapping["transaction_type"]
-    
-    print(f"?? DEBUG: Linked company: {linked_company.company}")
-    print(f"?? DEBUG: Transaction type: {trans_type.source_type} -> {trans_type.target_type}")
-    print(f"?? DEBUG: Main company customer: {linked_company.main_company_customer}")
-    print(f"?? DEBUG: Main company supplier: {linked_company.main_company_supplier}")
-    print(f"?? DEBUG: Other company customer: {linked_company.other_company_customer}")
-    print(f"?? DEBUG: Other company supplier: {linked_company.other_company_supplier}")
-    
-    # Sales Order -> Purchase Order
-    if doc.doctype == "Sales Order" and trans_type.target_type == "Purchase Order":
-        print(f"? DEBUG: Validating Sales Order -> Purchase Order")
-        if not linked_company.main_company_supplier:
-            frappe.throw(f"Main Company Supplier is required for company {linked_company.company}")
-    
-    # Sales Invoice -> Purchase Invoice  
-    elif doc.doctype == "Sales Invoice" and trans_type.target_type == "Purchase Invoice":
-        print(f"? DEBUG: Validating Sales Invoice -> Purchase Invoice")
-        if not linked_company.main_company_supplier:
-            print(f"? DEBUG: Missing main_company_supplier for {linked_company.company}")
-            frappe.throw(f"Main Company Supplier is required for company {linked_company.company}")
-        else:
-            print(f"? DEBUG: main_company_supplier found: {linked_company.main_company_supplier}")
-    
-    # Purchase Order -> Sales Order
-    elif doc.doctype == "Purchase Order" and trans_type.target_type == "Sales Order":
-        print(f"? DEBUG: Validating Purchase Order -> Sales Order")
-        if not linked_company.main_company_customer:
-            frappe.throw(f"Main Company Customer is required for company {linked_company.company}")
-    
-    # Purchase Invoice -> Sales Invoice
-    elif doc.doctype == "Purchase Invoice" and trans_type.target_type == "Sales Invoice":
-        print(f"? DEBUG: Validating Purchase Invoice -> Sales Invoice")
-        if not linked_company.main_company_customer:
-            print(f"? DEBUG: Missing main_company_customer for {linked_company.company}")
-            frappe.throw(f"Main Company Customer is required for company {linked_company.company}")
-        else:
-            print(f"? DEBUG: main_company_customer found: {linked_company.main_company_customer}")
-    
-    # Journal Entry and Payment Entry
-    elif doc.doctype in ["Journal Entry", "Payment Entry"]:
-        print(f"? DEBUG: Validating {doc.doctype}")
-        # For financial transactions, we need both customer and supplier
-        if not linked_company.main_company_customer:
-            frappe.throw(f"Main Company Customer is required for company {linked_company.company}")
-        if not linked_company.other_company_supplier:
-            frappe.throw(f"Other Company Supplier is required for company {linked_company.company}")
-    
-    else:
-        print(f"? DEBUG: Unknown validation case: {doc.doctype} -> {trans_type.target_type}")
-    
-    print(f"? DEBUG: Party validation passed for {doc.doctype}")
+def create_linked_documents(doc, method=None):
+	"""
+	Hook called on_submit of supported documents.
+	Creates corresponding documents in linked companies according to active mappings.
+	"""
+	# Avoid recursive loops if triggered by automated creation
+	if doc.flags.get("intercompany_auto_create"):
+		logger.debug(f"Skipping {doc.doctype} {doc.name}: triggered by intercompany auto create flag")
+		return
 
-def create_journal_entry(source_je, mapping, linked_company, direction):
-    """Create corresponding Journal Entry"""
-    je = frappe.new_doc("Journal Entry")
-    
-    # Set company based on direction
-    if direction == "other_to_main":
-        je.company = mapping.main_company
-        supplier = linked_company.main_company_supplier
-        customer = linked_company.main_company_customer
-        tmp_account = linked_company.main_company_account
-    else:
-        je.company = linked_company.company
-        supplier = linked_company.other_company_supplier
-        customer = linked_company.other_company_customer
-        tmp_account = linked_company.other_company_account
-    
-    je.posting_date = source_je.posting_date
-    je.multi_currency = source_je.multi_currency
-    je.user_remark = f"Auto-generated from {source_je.doctype} {source_je.name}" + (source_je.user_remark or "")
-    
-    # Get the party type and party from source document
-    source_party_type = None
-    source_party = None
-    source_is_credit = False
-    
-    for acc in source_je.accounts:
-        if acc.party_type and acc.party:
-            source_party_type = acc.party_type
-            source_party = acc.party
-            source_is_credit = acc.credit_in_account_currency > 0
-            break
-    
-    # Create corresponding entries based on source party type and credit/debit
-    if source_party_type == "Supplier" and source_is_credit:
-        # If source credits supplier, target credits customer
-        je.append("accounts", {
-            "account": frappe.db.get_value("Company", je.company, "default_receivable_account"),
-            "party_type": "Customer",
-            "party": customer,
-            "credit_in_account_currency": 0,
-            "debit_in_account_currency": source_je.total_credit,
-            "cost_center": get_default_cost_center(je.company)
-        })
-        
-        # Counter entry
-        je.append("accounts", {
-            "account": tmp_account,
-            "debit_in_account_currency": 0,
-            "credit_in_account_currency": source_je.total_credit,
-            "cost_center": get_default_cost_center(je.company)
-        })
-    elif source_party_type == "Supplier" and not source_is_credit:
-        # If source debits supplier, target debits customer
-        je.append("accounts", {
-            "account": frappe.db.get_value("Company", je.company, "default_receivable_account"),
-            "party_type": "Customer",
-            "party": customer,
-            "debit_in_account_currency": 0,
-            "credit_in_account_currency": source_je.total_debit,
-            "cost_center": get_default_cost_center(je.company)
-        })
-        
-        # Counter entry
-        je.append("accounts", {
-            "account": tmp_account,
-            "credit_in_account_currency": 0,
-            "debit_in_account_currency": source_je.total_debit,
-            "cost_center": get_default_cost_center(je.company)
-        })
-    elif source_party_type == "Customer" and source_is_credit:
-        # If source credits customer, target credits supplier
-        je.append("accounts", {
-            "account": frappe.db.get_value("Company", je.company, "default_payable_account"),
-            "party_type": "Supplier",
-            "party": supplier,
-            "credit_in_account_currency": 0,
-            "debit_in_account_currency": source_je.total_credit,
-            "cost_center": get_default_cost_center(je.company)
-        })
-        
-        # Counter entry
-        je.append("accounts", {
-            "account": tmp_account,
-            "debit_in_account_currency": 0,
-            "credit_in_account_currency": source_je.total_credit,
-            "cost_center": get_default_cost_center(je.company)
-        })
-    else:  # Customer debit
-        # If source debits customer, target debits supplier
-        je.append("accounts", {
-            "account": frappe.db.get_value("Company", je.company, "default_payable_account"),
-            "party_type": "Supplier",
-            "party": supplier,
-            "debit_in_account_currency": 0,
-            "credit_in_account_currency": source_je.total_debit,
-            "cost_center": get_default_cost_center(je.company)
-        })
-        
-        # Counter entry
-        je.append("accounts", {
-            "account": tmp_account,
-            "credit_in_account_currency": 0,
-            "debit_in_account_currency": source_je.total_debit,
-            "cost_center": get_default_cost_center(je.company)
-        })
-    
-    # Set ALL permission flags
-    je.flags.ignore_permissions = True
-    je.flags.ignore_mandatory = True
-    je.flags.ignore_account_permission = True
-    je.flags.ignore_validate = True
-    je.flags.ignore_links = True
-    
-    
-    # Set inter-company reference
-    je.intercompany_target_company = source_je.company
-    
-    je.docstatus = 0  # Keep as draft
-    return je   
+	if doc.get("intercompany_linked_doc_name") and doc.get("intercompany_linked_doc_doctype"):
+		logger.debug(f"Skipping {doc.doctype} {doc.name}: document already has a linked reference")
+		return
 
-import frappe
-def create_payment_entry(source_pe, mapping, linked_company, direction):
-    """Create corresponding Payment Entry"""
-    try:
-        pe = frappe.new_doc("Payment Entry")
-        
-        # Set company and accounts based on direction
-        if direction == "other_to_main":
-            pe.company = mapping.main_company
-            tmp_account = linked_company.main_company_account
-            customer = linked_company.main_company_customer
-            supplier = linked_company.main_company_supplier
-        else:  # main_to_other
-            pe.company = linked_company.company
-            tmp_account = linked_company.other_company_account
-            customer = linked_company.other_company_customer
-            supplier = linked_company.other_company_supplier
-        
-        pe.posting_date = source_pe.posting_date
-        pe.payment_type = "Pay" if source_pe.payment_type == "Receive" else "Receive"
-        pe.mode_of_payment = source_pe.mode_of_payment
-        
-        # Set paid from/to accounts and party type/name based on payment type
-        if pe.payment_type == "Pay":
-            pe.paid_from = tmp_account
-            pe.paid_to = frappe.db.get_value("Company", pe.company, "default_payable_account")
-            pe.party_type = "Supplier"
-            pe.party = supplier
-            pe.party_name = frappe.db.get_value("Supplier", supplier, "supplier_name") if supplier else ""
-        else:  # Receive
-            pe.paid_from = frappe.db.get_value("Company", pe.company, "default_receivable_account")
-            pe.paid_to = tmp_account
-            pe.party_type = "Customer"
-            pe.party = customer
-            pe.party_name = frappe.db.get_value("Customer", customer, "customer_name") if customer else ""
-        
-        # Set currencies
-        pe.paid_from_account_currency = frappe.db.get_value("Account", pe.paid_from, "account_currency")
-        pe.paid_to_account_currency = frappe.db.get_value("Account", pe.paid_to, "account_currency")
-        
-        # Set amounts
-        pe.paid_amount = source_pe.paid_amount
-        pe.received_amount = source_pe.received_amount
-        pe.target_exchange_rate = source_pe.target_exchange_rate
-        
-        # Copy reference details
-        pe.reference_no = source_pe.reference_no
-        pe.reference_date = source_pe.reference_date
-        
-        # Set inter-company reference fields
-        pe.intercompany_linked_doc_doctype = source_pe.doctype
-        pe.intercompany_linked_doc_name = source_pe.name
-        pe.intercompany_linked_company = source_pe.company
-        pe.intercompany_target_company = source_pe.company
-        
-        # Set ALL permission flags to bypass restrictions
-        pe.flags.ignore_permissions = True
-        pe.flags.ignore_mandatory = True
-        pe.flags.ignore_account_permission = True
-        pe.flags.ignore_validate = True
-        pe.flags.ignore_links = True
-        
-        # Additional flags specific to Payment Entry
-        pe.flags.ignore_party_validation = True
-        pe.flags.ignore_exchange_rate = True
-        pe.flags.ignore_pricing_rule = True
-        
-        pe.docstatus = 0  # Keep as draft
-        return pe
-        
-    except Exception as e:
-        frappe.log_error(
-            f"Error creating payment entry: {str(e)}\n"
-            f"Source PE: {source_pe.name}\n"
-            f"Direction: {direction}\n"
-            f"Traceback: {frappe.get_traceback()}",
-            "Inter Company Transaction Error"
-        )
-        raise
+	if not hasattr(doc, "company") or not doc.company:
+		return
 
-def create_purchase_order(sales_order, mapping, linked_company, direction):
-    """Create Purchase Order from Sales Order"""
-    po = frappe.new_doc("Purchase Order")
-    
-    # Set company and supplier based on direction
-    if direction == "other_to_main":
-        po.company = mapping.main_company
-        po.supplier = linked_company.main_company_supplier
-    else:
-        po.company = linked_company.company
-        po.supplier = linked_company.other_company_supplier
-    
-    if not po.supplier:
-        frappe.throw(f"Supplier not found for company {po.company}")
-    
-    po.currency = sales_order.currency
-    po.conversion_rate = sales_order.conversion_rate
-    po.transaction_date = sales_order.transaction_date
-    po.schedule_date = sales_order.delivery_date
-    po.intercompany_target_company = sales_order.intercompany_linked_company
-    
-    warehouse = get_default_warehouse(po.company)
-    if not warehouse:
-        frappe.throw(f"Default warehouse not found for company {po.company}")
-    
-    for item in sales_order.items:
-        po.append("items", {
-            "item_code": item.item_code,
-            "item_name": item.item_name,
-            "description": item.description,
-            "qty": item.qty,
-            "uom": item.uom,
-            "rate": item.rate,
-            "warehouse": warehouse,
-            "schedule_date": item.delivery_date
-        })
-    
-    # Set ALL permission flags to bypass restrictions
-    po.flags.ignore_permissions = True
-    po.flags.ignore_mandatory = True
-    po.flags.ignore_account_permission = True
-    po.flags.ignore_validate = True
-    po.flags.ignore_links = True
-    
-    # Additional flags specific to Purchase Order
-    po.flags.ignore_pricing_rule = True
-    po.flags.ignore_party_validation = True
-    
-    po.docstatus = 0  # Keep as draft
-    return po
+	mappings = find_applicable_mappings(doc)
+	if not mappings:
+		logger.debug(f"No applicable intercompany mappings found for {doc.doctype} {doc.name} ({doc.company})")
+		return
+
+	logger.info(f"Found {len(mappings)} applicable mappings for {doc.doctype} {doc.name}")
+
+	for i, mapping_info in enumerate(mappings):
+		link_parent = mapping_info["mapping"]
+		trans_type = mapping_info["transaction_type"]
+		target_company = mapping_info["company"]
+		linked_company = mapping_info["linked_company"]
+		direction = mapping_info["direction"]
+
+		# Respect auto_create_draft configuration
+		if not link_parent.get("auto_create_draft", 1):
+			logger.info(
+				f"Skipping mapping {i+1}: auto_create_draft is disabled for link {link_parent.name}"
+			)
+			continue
+
+		try:
+			validate_required_parties(doc, mapping_info)
+
+			linked_doc = create_corresponding_document(doc, mapping_info, direction)
+			if not linked_doc:
+				logger.warning(
+					f"create_corresponding_document returned None for {doc.doctype} {doc.name} -> {trans_type.target_type}"
+				)
+				continue
+
+			# Set standard tracking and provenance fields
+			if linked_doc.meta.has_field("intercompany_linked_doc_doctype"):
+				linked_doc.intercompany_linked_doc_doctype = doc.doctype
+			if linked_doc.meta.has_field("intercompany_linked_doc_name"):
+				linked_doc.intercompany_linked_doc_name = doc.name
+			if linked_doc.meta.has_field("intercompany_linked_company"):
+				linked_doc.intercompany_linked_company = doc.company
+			if linked_doc.meta.has_field("intercompany_target_company"):
+				linked_doc.intercompany_target_company = doc.company
+
+			# Bypass user permissions for cross-company automated document creation
+			linked_doc.flags.ignore_permissions = True
+			linked_doc.flags.intercompany_auto_create = True
+			linked_doc.docstatus = 0  # Draft
+
+			linked_doc.insert()
+
+			# Record relationship in Inter Company Document Reference
+			create_document_reference(doc, linked_doc)
+
+			# Cross-reference back on source document if field exists
+			if doc.meta.has_field("intercompany_linked_doc_name"):
+				update_dict = {
+					"intercompany_linked_doc_name": linked_doc.name,
+					"intercompany_linked_company": linked_doc.company,
+				}
+				if doc.meta.has_field("intercompany_linked_doc_doctype"):
+					update_dict["intercompany_linked_doc_doctype"] = linked_doc.doctype
+				frappe.db.set_value(doc.doctype, doc.name, update_dict, update_modified=False)
+
+			frappe.msgprint(
+				_("Created draft {0} {1} in company {2}").format(
+					linked_doc.doctype,
+					frappe.bold(linked_doc.name),
+					frappe.bold(linked_doc.company),
+				),
+				title=_("Intercompany Transaction"),
+				indicator="green",
+			)
+			logger.info(
+				f"Successfully created draft {linked_doc.doctype} {linked_doc.name} in {linked_doc.company}"
+			)
+
+		except Exception as e:
+			error_msg = f"Failed to create intercompany document in company {target_company}: {str(e)}"
+			logger.error(f"{error_msg}\n{frappe.get_traceback()}")
+			frappe.log_error(
+				f"{error_msg}\nSource: {doc.doctype} {doc.name}\nTraceback: {frappe.get_traceback()}",
+				"Inter Company Transaction Error",
+			)
+			frappe.msgprint(error_msg, title=_("Intercompany Error"), indicator="red")
 
 
+def cancel_linked_documents(doc, method=None):
+	"""
+	Hook called on_cancel of supported documents.
+	Cancels corresponding documents in all linked companies symmetrically.
+	"""
+	if doc.flags.get("intercompany_auto_cancel"):
+		logger.debug(f"Skipping {doc.doctype} {doc.name}: triggered by intercompany auto cancel")
+		return
 
-def create_sales_order(purchase_order, mapping, linked_company, direction):
-    """Create Sales Order from Purchase Order"""
-    so = frappe.new_doc("Sales Order")
-    
-    # Set company based on direction
-    if direction == "other_to_main":
-        so.company = mapping.main_company
-        so.customer = linked_company.main_company_customer
-    else:
-        so.company = linked_company.company
-        so.customer = linked_company.other_company_customer
-    
-    if not so.customer:
-        frappe.throw(f"Customer not found for company {so.company}")
-    
-    so.currency = purchase_order.currency
-    so.conversion_rate = purchase_order.conversion_rate
-    so.transaction_date = purchase_order.transaction_date
-    so.delivery_date = purchase_order.schedule_date
-    
-    warehouse = get_default_warehouse(so.company)
-    if not warehouse:
-        frappe.throw(f"Default warehouse not found for company {so.company}")
-    
-    for item in purchase_order.items:
-        so.append("items", {
-            "item_code": item.item_code,
-            "item_name": item.item_name,
-            "description": item.description,
-            "qty": item.qty,
-            "uom": item.uom,
-            "rate": item.rate,
-            "warehouse": warehouse,
-            "delivery_date": item.schedule_date
-        })
-    
-    so.flags.ignore_permissions = True
-    so.flags.ignore_mandatory = True
-    so.docstatus = 0  # Keep as draft
-    return so
+	if not hasattr(doc, "company") or not doc.company:
+		return
 
-def create_purchase_invoice(sales_invoice, mapping, linked_company, direction):
-    """Create Purchase Invoice from Sales Invoice"""
-    print(f"??? DEBUG: create_purchase_invoice called")
-    print(f"?? DEBUG: Source SI: {sales_invoice.name} in company {sales_invoice.company}")
-    print(f"?? DEBUG: Direction: {direction}")
-    
-    pi = frappe.new_doc("Purchase Invoice")
-    print(f"?? DEBUG: Created new Purchase Invoice doc")
-    
-    if direction == "other_to_main":
-        pi.company = mapping.main_company
-        pi.supplier = linked_company.main_company_supplier
-        print(f"?? DEBUG: Set company to main: {pi.company}")
-        print(f"?? DEBUG: Set supplier to main_company_supplier: {pi.supplier}")
-    else:
-        pi.company = linked_company.company
-        pi.supplier = linked_company.other_company_supplier
-        print(f"?? DEBUG: Set company to other: {pi.company}")
-        print(f"?? DEBUG: Set supplier to other_company_supplier: {pi.supplier}")
+	if not frappe.db.exists("DocType", "Inter Company Document Reference"):
+		return
 
-    if not pi.supplier:
-        print(f"? DEBUG: No supplier found!")
-        frappe.throw(f"Supplier not found for company {pi.company}")
-    
-    print(f"? DEBUG: Supplier validated: {pi.supplier}")
+	all_related_docs = []
 
-    # Copy basic fields
-    pi.currency = sales_invoice.currency
-    pi.conversion_rate = sales_invoice.conversion_rate
-    pi.posting_date = sales_invoice.posting_date
-    pi.due_date = sales_invoice.due_date
-    pi.bill_no = sales_invoice.name
-    
-    print(f"?? DEBUG: Basic fields copied - currency: {pi.currency}, posting_date: {pi.posting_date}")
-    
-    warehouse = get_default_warehouse(pi.company)
-    if not warehouse:
-        print(f"? DEBUG: No warehouse found for company {pi.company}")
-        frappe.throw(f"Default warehouse not found for company {pi.company}")
-    
-    print(f"?? DEBUG: Using warehouse: {warehouse}")
+	# Find documents where current doc is the SOURCE
+	try:
+		linked_docs = frappe.get_all(
+			"Inter Company Document Reference",
+			filters={
+				"source_doctype": doc.doctype,
+				"source_name": doc.name,
+				"source_company": doc.company,
+			},
+			fields=["name", "target_doctype", "target_name", "target_company"],
+		)
+		for ldoc in linked_docs:
+			all_related_docs.append(
+				{
+					"doctype": ldoc.target_doctype,
+					"name": ldoc.target_name,
+					"company": ldoc.target_company,
+					"relationship": "target",
+				}
+			)
+	except Exception as e:
+		logger.error(f"Error finding linked documents as source: {str(e)}")
 
-    # Copy items
-    print(f"?? DEBUG: Copying {len(sales_invoice.items)} items")
-    for i, item in enumerate(sales_invoice.items):
-        print(f"?? DEBUG: Item {i+1}: {item.item_code} (qty: {item.qty}, rate: {item.rate})")
-        pi.append("items", {
-            "item_code": item.item_code,
-            "item_name": item.item_name,
-            "description": item.description,
-            "qty": item.qty,
-            "uom": item.uom,
-            "rate": item.rate,
-            "warehouse": warehouse,
-        })
+	# Find documents where current doc is the TARGET
+	try:
+		reverse_links = frappe.get_all(
+			"Inter Company Document Reference",
+			filters={
+				"target_doctype": doc.doctype,
+				"target_name": doc.name,
+				"target_company": doc.company,
+			},
+			fields=["name", "source_doctype", "source_name", "source_company"],
+		)
+		for rlink in reverse_links:
+			all_related_docs.append(
+				{
+					"doctype": rlink.source_doctype,
+					"name": rlink.source_name,
+					"company": rlink.source_company,
+					"relationship": "source",
+				}
+			)
+	except Exception as e:
+		logger.error(f"Error finding reverse linked documents as target: {str(e)}")
 
-    # Set inter-company reference fields
-    pi.intercompany_linked_doc_doctype = sales_invoice.doctype
-    pi.intercompany_linked_doc_name = sales_invoice.name
-    pi.intercompany_linked_company = sales_invoice.company
-    
-    print(f"?? DEBUG: Set intercompany references")
+	logger.info(f"Found {len(all_related_docs)} related documents to cancel for {doc.doctype} {doc.name}")
 
-    # Set flags
-    pi.flags.ignore_permissions = True
-    pi.flags.ignore_mandatory = True
-    pi.flags.ignore_account_permission = True
-    pi.flags.ignore_validate = True
-    pi.flags.ignore_links = True
-    pi.flags.ignore_pricing_rule = True
-    pi.flags.ignore_party_validation = True
+	for rel in all_related_docs:
+		doctype = rel["doctype"]
+		name = rel["name"]
+		company = rel["company"]
+		relationship = rel["relationship"]
 
-    pi.docstatus = 0  # Keep as draft
-    
-    print(f"? DEBUG: Purchase Invoice created successfully")
-    return pi
+		try:
+			if not frappe.db.exists(doctype, name):
+				continue
 
-def create_sales_invoice(purchase_invoice, mapping, linked_company, direction):
-    """Create Sales Invoice from Purchase Invoice"""
-    print(f"??? DEBUG: create_sales_invoice called")
-    print(f"?? DEBUG: Source PI: {purchase_invoice.name} in company {purchase_invoice.company}")
-    print(f"?? DEBUG: Direction: {direction}")
-    
-    si = frappe.new_doc("Sales Invoice")
-    print(f"?? DEBUG: Created new Sales Invoice doc")
-    
-    if direction == "other_to_main":
-        si.company = mapping.main_company
-        si.customer = linked_company.main_company_customer
-        print(f"?? DEBUG: Set company to main: {si.company}")
-        print(f"?? DEBUG: Set customer to main_company_customer: {si.customer}")
-    else:
-        si.company = linked_company.company
-        si.customer = linked_company.other_company_customer
-        print(f"?? DEBUG: Set company to other: {si.company}")
-        print(f"?? DEBUG: Set customer to other_company_customer: {si.customer}")
+			target_doc = frappe.get_doc(doctype, name)
+			if target_doc.docstatus != 1:
+				logger.info(f"{doctype} {name} is not submitted (docstatus={target_doc.docstatus}), skipping cancel")
+				continue
 
-    if not si.customer:
-        print(f"? DEBUG: No customer found!")
-        frappe.throw(f"Customer not found for company {si.company}")
-    
-    print(f"? DEBUG: Customer validated: {si.customer}")
+			target_doc.flags.ignore_permissions = True
+			target_doc.flags.intercompany_auto_cancel = True
+			target_doc.cancel()
 
-    # Copy basic fields
-    si.currency = purchase_invoice.currency
-    si.conversion_rate = purchase_invoice.conversion_rate
-    si.posting_date = purchase_invoice.posting_date
-    si.due_date = purchase_invoice.due_date
-    si.po_no = purchase_invoice.name
-    
-    print(f"?? DEBUG: Basic fields copied - currency: {si.currency}, posting_date: {si.posting_date}")
+			frappe.msgprint(
+				_("Cancelled linked {0} {1} in company {2} ({3})").format(
+					doctype, frappe.bold(name), frappe.bold(company), relationship
+				),
+				title=_("Intercompany Cancellation"),
+				indicator="orange",
+			)
+			logger.info(f"Successfully cancelled {doctype} {name} in {company}")
 
-    warehouse = get_default_warehouse(si.company)
-    if not warehouse:
-        print(f"? DEBUG: No warehouse found for company {si.company}")
-        frappe.throw(f"Default warehouse not found for company {si.company}")
-    
-    print(f"?? DEBUG: Using warehouse: {warehouse}")
+		except Exception as e:
+			err = f"Error cancelling linked {relationship} document {doctype} {name}: {str(e)}"
+			logger.error(f"{err}\n{frappe.get_traceback()}")
+			frappe.log_error(
+				f"{err}\nSource Document: {doc.doctype} {doc.name}\nTraceback: {frappe.get_traceback()}",
+				"Inter Company Transaction Error",
+			)
 
-    # Copy items
-    print(f"?? DEBUG: Copying {len(purchase_invoice.items)} items")
-    for i, item in enumerate(purchase_invoice.items):
-        print(f"?? DEBUG: Item {i+1}: {item.item_code} (qty: {item.qty}, rate: {item.rate})")
-        si.append("items", {
-            "item_code": item.item_code,
-            "item_name": item.item_name,
-            "description": item.description,
-            "qty": item.qty,
-            "uom": item.uom,
-            "rate": item.rate,
-            "warehouse": warehouse,
-        })
-
-    # Set inter-company reference fields
-    si.intercompany_linked_doc_doctype = purchase_invoice.doctype
-    si.intercompany_linked_doc_name = purchase_invoice.name
-    si.intercompany_linked_company = purchase_invoice.company
-    
-    print(f"?? DEBUG: Set intercompany references")
-
-    # Set flags
-    si.flags.ignore_permissions = True
-    si.flags.ignore_mandatory = True
-    si.flags.ignore_account_permission = True
-    si.flags.ignore_validate = True
-    si.flags.ignore_links = True
-    si.flags.ignore_pricing_rule = True
-    si.flags.ignore_party_validation = True
-
-    si.docstatus = 0  # Keep as draft
-    
-    print(f"? DEBUG: Sales Invoice created successfully")
-    return si
-def create_delivery_note(purchase_receipt, mapping, linked_company, direction):
-    """Create Delivery Note from Purchase Receipt"""
-    print(f"?? DEBUG: create_delivery_note called")
-    print(f"?? DEBUG: Source PR: {purchase_receipt.name} in company {purchase_receipt.company}")
-    print(f"?? DEBUG: Direction: {direction}")
-    
-    dn = frappe.new_doc("Delivery Note")
-    print(f"?? DEBUG: Created new Delivery Note doc")
-    
-    if direction == "other_to_main":
-        dn.company = mapping.main_company
-        dn.customer = linked_company.main_company_customer
-        print(f"?? DEBUG: Set company to main: {dn.company}")
-        print(f"?? DEBUG: Set customer to main_company_customer: {dn.customer}")
-    else:
-        dn.company = linked_company.company
-        dn.customer = linked_company.other_company_customer
-        print(f"?? DEBUG: Set company to other: {dn.company}")
-        print(f"?? DEBUG: Set customer to other_company_customer: {dn.customer}")
-
-    if not dn.customer:
-        print(f"? DEBUG: No customer found!")
-        frappe.throw(f"Customer not found for company {dn.company}")
-    
-    print(f"? DEBUG: Customer validated: {dn.customer}")
-
-    # Copy basic fields
-    dn.posting_date = purchase_receipt.posting_date
-    dn.posting_time = purchase_receipt.posting_time
-    dn.set_posting_time = purchase_receipt.set_posting_time
-    dn.currency = purchase_receipt.currency
-    dn.conversion_rate = purchase_receipt.conversion_rate
-    
-    print(f"?? DEBUG: Basic fields copied - posting_date: {dn.posting_date}")
-    
-    # Get target warehouse
-    target_warehouse = get_default_warehouse(dn.company)
-    if not target_warehouse:
-        print(f"? DEBUG: No warehouse found for company {dn.company}")
-        frappe.throw(f"Default warehouse not found for company {dn.company}")
-    
-    print(f"?? DEBUG: Using target warehouse: {target_warehouse}")
-
-    # Copy items
-    print(f"?? DEBUG: Copying {len(purchase_receipt.items)} items")
-    for i, item in enumerate(purchase_receipt.items):
-        print(f"?? DEBUG: Item {i+1}: {item.item_code} (qty: {item.qty}, rate: {item.rate})")
-        
-        # Check if item exists and is allowed in target company
-        if not frappe.db.exists("Item", item.item_code):
-            print(f"?? DEBUG: Item {item.item_code} does not exist, skipping")
-            continue
-            
-        dn.append("items", {
-            "item_code": item.item_code,
-            "item_name": item.item_name,
-            "description": item.description,
-            "qty": item.qty,
-            "uom": item.uom,
-            "rate": item.rate,
-            "warehouse": target_warehouse,
-            "against_sales_order": None,  # Will be set if linked to SO
-            "against_sales_invoice": None  # Will be set if linked to SI
-        })
-
-    # Set inter-company reference fields
-    dn.intercompany_linked_doc_doctype = purchase_receipt.doctype
-    dn.intercompany_linked_doc_name = purchase_receipt.name
-    dn.intercompany_linked_company = purchase_receipt.company
-    
-    print(f"?? DEBUG: Set intercompany references")
-
-    # Set flags to bypass validations
-    dn.flags.ignore_permissions = True
-    dn.flags.ignore_mandatory = True
-    dn.flags.ignore_account_permission = True
-    dn.flags.ignore_validate = True
-    dn.flags.ignore_links = True
-    dn.flags.ignore_pricing_rule = True
-    dn.flags.ignore_party_validation = True
-
-    dn.docstatus = 0  # Keep as draft
-    
-    print(f"? DEBUG: Delivery Note created successfully")
-    return dn
-
-def create_purchase_receipt(delivery_note, mapping, linked_company, direction):
-    """Create Purchase Receipt from Delivery Note"""
-    print(f"?? DEBUG: create_purchase_receipt called")
-    print(f"?? DEBUG: Source DN: {delivery_note.name} in company {delivery_note.company}")
-    print(f"?? DEBUG: Direction: {direction}")
-    
-    pr = frappe.new_doc("Purchase Receipt")
-    print(f"?? DEBUG: Created new Purchase Receipt doc")
-    
-    if direction == "other_to_main":
-        pr.company = mapping.main_company
-        pr.supplier = linked_company.main_company_supplier
-        print(f"?? DEBUG: Set company to main: {pr.company}")
-        print(f"?? DEBUG: Set supplier to main_company_supplier: {pr.supplier}")
-    else:
-        pr.company = linked_company.company
-        pr.supplier = linked_company.other_company_supplier
-        print(f"?? DEBUG: Set company to other: {pr.company}")
-        print(f"?? DEBUG: Set supplier to other_company_supplier: {pr.supplier}")
-
-    if not pr.supplier:
-        print(f"? DEBUG: No supplier found!")
-        frappe.throw(f"Supplier not found for company {pr.company}")
-    
-    print(f"? DEBUG: Supplier validated: {pr.supplier}")
-
-    # Copy basic fields
-    pr.posting_date = delivery_note.posting_date
-    pr.posting_time = delivery_note.posting_time
-    pr.set_posting_time = delivery_note.set_posting_time
-    pr.currency = delivery_note.currency
-    pr.conversion_rate = delivery_note.conversion_rate
-    
-    print(f"?? DEBUG: Basic fields copied - posting_date: {pr.posting_date}")
-    
-    # Get target warehouse
-    target_warehouse = get_default_warehouse(pr.company)
-    if not target_warehouse:
-        print(f"? DEBUG: No warehouse found for company {pr.company}")
-        frappe.throw(f"Default warehouse not found for company {pr.company}")
-    
-    print(f"?? DEBUG: Using target warehouse: {target_warehouse}")
-
-    # Copy items
-    print(f"?? DEBUG: Copying {len(delivery_note.items)} items")
-    for i, item in enumerate(delivery_note.items):
-        print(f"?? DEBUG: Item {i+1}: {item.item_code} (qty: {item.qty}, rate: {item.rate})")
-        
-        # Check if item exists
-        if not frappe.db.exists("Item", item.item_code):
-            print(f"?? DEBUG: Item {item.item_code} does not exist, skipping")
-            continue
-            
-        pr.append("items", {
-            "item_code": item.item_code,
-            "item_name": item.item_name,
-            "description": item.description,
-            "qty": item.qty,
-            "uom": item.uom,
-            "rate": item.rate,
-            "warehouse": target_warehouse,
-            "purchase_order": None,  # Will be set if linked to PO
-            "purchase_invoice": None  # Will be set if linked to PI
-        })
-
-    # Set inter-company reference fields
-    pr.intercompany_linked_doc_doctype = delivery_note.doctype
-    pr.intercompany_linked_doc_name = delivery_note.name
-    pr.intercompany_linked_company = delivery_note.company
-    
-    print(f"?? DEBUG: Set intercompany references")
-
-    # Set flags to bypass validations
-    pr.flags.ignore_permissions = True
-    pr.flags.ignore_mandatory = True
-    pr.flags.ignore_account_permission = True
-    pr.flags.ignore_validate = True
-    pr.flags.ignore_links = True
-    pr.flags.ignore_pricing_rule = True
-    pr.flags.ignore_party_validation = True
-
-    pr.docstatus = 0  # Keep as draft
-    
-    print(f"? DEBUG: Purchase Receipt created successfully")
-    return pr
-def get_intercompany_warehouse(company):
-    """Get inter-company warehouse for a company"""
-    # First try to find a warehouse specifically marked for inter-company transfers
-    warehouse = frappe.db.get_value(
-        "Warehouse",
-        {
-            "company": company,
-            "warehouse_name": ["like", "%inter%company%"],
-            "is_group": 0
-        },
-        "name"
-    )
-    
-    if not warehouse:
-        # Fallback to any non-group warehouse for the company
-        warehouse = frappe.db.get_value(
-            "Warehouse",
-            {"company": company, "is_group": 0},
-            "name"
-        )
-    
-    return warehouse
-
-def create_stock_entry(source_stock_entry, mapping, linked_company, direction):
-    """Create Stock Entry for inter-company stock transfer"""
-    print(f"?? DEBUG: create_stock_entry called")
-    print(f"?? DEBUG: Source SE: {source_stock_entry.name} in company {source_stock_entry.company}")
-    print(f"?? DEBUG: Direction: {direction}")
-    
-    se = frappe.new_doc("Stock Entry")
-    print(f"?? DEBUG: Created new Stock Entry doc")
-    
-    # Set target company
-    if direction == "other_to_main":
-        se.company = mapping.main_company
-        source_warehouse_company = linked_company.company
-        target_warehouse_company = mapping.main_company
-        print(f"?? DEBUG: Set company to main: {se.company}")
-    else:
-        se.company = linked_company.company
-        source_warehouse_company = mapping.main_company
-        target_warehouse_company = linked_company.company
-        print(f"?? DEBUG: Set company to other: {se.company}")
-
-    # Set stock entry type
-    se.stock_entry_type = "Material Transfer"
-    se.purpose = "Material Transfer"
-    
-    # Copy basic fields
-    se.posting_date = source_stock_entry.posting_date
-    se.posting_time = source_stock_entry.posting_time
-    se.set_posting_time = source_stock_entry.set_posting_time
-    
-    print(f"?? DEBUG: Basic fields copied - posting_date: {se.posting_date}")
-    
-    # Get warehouses for both companies
-    source_warehouse = get_intercompany_warehouse(source_warehouse_company)
-    target_warehouse = get_intercompany_warehouse(target_warehouse_company)
-    
-    if not source_warehouse or not target_warehouse:
-        frappe.throw(f"Inter-company warehouses not configured properly")
-    
-    print(f"?? DEBUG: Source warehouse: {source_warehouse}, Target warehouse: {target_warehouse}")
-
-    # Copy items
-    print(f"?? DEBUG: Copying {len(source_stock_entry.items)} items")
-    for i, item in enumerate(source_stock_entry.items):
-        print(f"?? DEBUG: Item {i+1}: {item.item_code} (qty: {item.qty})")
-        
-        # Check if item exists
-        if not frappe.db.exists("Item", item.item_code):
-            print(f"?? DEBUG: Item {item.item_code} does not exist, skipping")
-            continue
-            
-        se.append("items", {
-            "item_code": item.item_code,
-            "qty": item.qty,
-            "uom": item.uom,
-            "s_warehouse": source_warehouse,
-            "t_warehouse": target_warehouse,
-            "basic_rate": item.basic_rate or 0,
-            "basic_amount": (item.basic_rate or 0) * item.qty,
-            "conversion_factor": item.conversion_factor or 1
-        })
-
-    # Set inter-company reference fields
-    se.intercompany_linked_doc_doctype = source_stock_entry.doctype
-    se.intercompany_linked_doc_name = source_stock_entry.name
-    se.intercompany_linked_company = source_stock_entry.company
-    
-    print(f"?? DEBUG: Set intercompany references")
-
-    # Set flags to bypass validations
-    se.flags.ignore_permissions = True
-    se.flags.ignore_mandatory = True
-    se.flags.ignore_validate = True
-    se.flags.ignore_links = True
-
-    se.docstatus = 0  # Keep as draft
-    
-    print(f"? DEBUG: Stock Entry created successfully")
-    return se
-
-
-def get_default_warehouse(company):
-    """Get default warehouse for company"""
-    warehouse = frappe.db.get_value(
-        "Warehouse",
-        {"company": company, "is_group": 0},
-        "name"
-    )
-    
-    if not warehouse:
-        frappe.throw(f"Default warehouse not found for company {company}")
-    
-    return warehouse
-
-def get_default_cost_center(company):
-    """Get default cost center for company"""
-    cost_center = frappe.db.get_value("Company", company, "cost_center")
-    
-    if not cost_center:
-        frappe.throw(f"Default cost center not found for company {company}")
-    
-    return cost_center
-
-def get_mapped_account(account, to_company):
-    """Get corresponding account in target company"""
-    account_type = frappe.db.get_value("Account", account, "account_type")
-    account_name = frappe.db.get_value("Account", account, "account_name")
-    
-    # Try to find account with same name
-    mapped_account = frappe.db.get_value(
-        "Account",
-        {"account_name": account_name, "company": to_company},
-        "name"
-    )
-    
-    # If not found, try to find by account type
-    if not mapped_account and account_type:
-        mapped_account = frappe.db.get_value(
-            "Account",
-            {"account_type": account_type, "company": to_company, "is_group": 0},
-            "name"
-        )
-    
-    # Default fallback
-    if not mapped_account:
-        if account_type == "Receivable":
-            mapped_account = frappe.db.get_value("Company", to_company, "default_receivable_account")
-        elif account_type == "Payable":
-            mapped_account = frappe.db.get_value("Company", to_company, "default_payable_account")
-        else:
-            mapped_account = frappe.db.get_value("Company", to_company, "default_expense_account")
-    
-    if not mapped_account:
-        frappe.throw(f"Could not find corresponding account in company {to_company}")
-    
-    return mapped_account
-
-def find_matching_mapping_and_direction(doc, link):
-    """
-    Given a document and IntercompanyTransactionLink, find the matching mapping row and direction
-    """
-    for row in link.intercompany_transaction_type_mappings:
-        dir = row.direction.lower().strip()
-        main = link.main_company
-        other = link.other_company
-
-        if dir == "both":
-            if doc.company == main and doc.doctype == row.main_company_doctype:
-                return row, "main_to_other"
-            elif doc.company == other and doc.doctype == row.other_company_doctype:
-                return row, "other_to_main"
-        elif dir == "main to other":
-            if doc.company == main and doc.doctype == row.main_company_doctype:
-                return row, "main_to_other"
-        elif dir == "other to main":
-            if doc.company == other and doc.doctype == row.other_company_doctype:
-                return row, "other_to_main"
-
-    return None, None
-def handle_after_insert(doc, method=None):
-    try:
-        links = frappe.get_all("Intercompany Transaction Link", filters={"disabled": 0})
-        for link_name in [l.name for l in links]:
-            link = frappe.get_doc("Intercompany Transaction Link", link_name)
-            mapping_row, direction = find_matching_mapping_and_direction(doc, link)
-
-            if not mapping_row or not direction:
-                continue
-
-            mapping_info = {
-                "mapping": mapping_row,
-                "transaction_type": mapping_row,
-                "linked_company": link
-            }
-
-            # Avoid infinite loop
-            if doc.intercompany_linked_doc_name:
-                continue
-
-            target_doc = create_corresponding_document(doc, mapping_info, direction)
-            if target_doc:
-                target_doc.insert(ignore_permissions=True)
-                frappe.db.set_value(
-                    doc.doctype,
-                    doc.name,
-                    {
-                        "intercompany_linked_doc_doctype": target_doc.doctype,
-                        "intercompany_linked_doc_name": target_doc.name,
-                        "intercompany_linked_company": target_doc.company,
-                    }
-                )
-    except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "Intercompany Insert Handler Failed")
-
-
-def create_document_reference(source_doc, target_doc):
-    """Create inter-company document reference"""
-    try:
-        # Validate companies are different
-        if source_doc.company == target_doc.company:
-            frappe.log_error(
-                f"Cannot create reference between same company:\n"
-                f"Source: {source_doc.doctype} {source_doc.name} ({source_doc.company})\n"
-                f"Target: {target_doc.doctype} {target_doc.name} ({target_doc.company})",
-                "Inter Company Transaction Error"
-            )
-            return
-            
-        # Check if reference already exists
-        existing_ref = frappe.db.exists(
-            "Inter Company Document Reference",
-            {
-                "source_doctype": source_doc.doctype,
-                "source_name": source_doc.name,
-                "target_doctype": target_doc.doctype,
-                "target_name": target_doc.name
-            }
-        )
-        
-        if not existing_ref:
-            ref_doc = frappe.get_doc({
-                "doctype": "Inter Company Document Reference",
-                "source_doctype": source_doc.doctype,
-                "source_name": source_doc.name,
-                "source_company": source_doc.company,
-                "target_doctype": target_doc.doctype,
-                "target_name": target_doc.name,
-                "target_company": target_doc.company
-            })
-            ref_doc.flags.ignore_permissions = True
-            ref_doc.insert()
-            frappe.db.commit()
-    except Exception as e:
-        frappe.db.rollback()
-        frappe.log_error(f"Error creating document reference: {str(e)}", "Inter Company Transaction Error")
 
 def find_applicable_mappings(doc):
-    """Find appropriate mapping configurations with enhanced debugging for Purchase Invoice"""
-    print(f"?? DEBUG: find_applicable_mappings called for {doc.doctype} in company {doc.company}")
-    mappings = []
-    
-    # Get all enabled transaction links
-    links = frappe.get_all(
-        "Intercompany Transaction Link",
-        filters={"enabled": 1},
-        fields=["name", "main_company"]
-    )
-    
-    print(f"?? DEBUG: Found {len(links)} enabled Intercompany Transaction Links")
-    
-    for link in links:
-        print(f"?? DEBUG: Processing link {link.name} (main company: {link.main_company})")
-        mapping = frappe.get_doc("Intercompany Transaction Link", link.name)
-        
-        # Skip if this is already a linked document
-        if doc.get("intercompany_linked_doc_doctype") and doc.get("intercompany_linked_doc_name"):
-            print(f"?? DEBUG: Skipping auto-created doc {doc.doctype} {doc.name}")
-            continue
-        
-        # Check if doc's company is main company or in linked companies
-        is_main = doc.company == mapping.main_company
-        print(f"?? DEBUG: Is main company? {is_main} (doc.company: {doc.company}, main: {mapping.main_company})")
-        
-        # Debug: Print all linked companies
-        print(f"?? DEBUG: Linked companies: {[lc.company for lc in mapping.linked_companies]}")
-        
-        # Debug: Print all transaction types
-        print(f"?? DEBUG: Transaction types in this mapping:")
-        for tt in mapping.transaction_types:
-            print(f"   - {tt.source_type} -> {tt.target_type} (direction: {tt.direction})")
-        
-        # SPECIAL DEBUG for Purchase Invoice
-        if doc.doctype == "Purchase Invoice":
-            print(f"?? DEBUG: PURCHASE INVOICE SPECIAL HANDLING")
-            print(f"?? DEBUG: Document company: {doc.company}")
-            print(f"?? DEBUG: Main company: {mapping.main_company}")
-            print(f"?? DEBUG: Is main company transaction: {is_main}")
-            
-            # Check if Purchase Invoice has intercompany_target_company field
-            target_company = doc.get('intercompany_target_company')
-            print(f"?? DEBUG: Target company from doc: {target_company}")
-        
-        # For main company transactions
-        if is_main:
-            print(f"?? DEBUG: Processing as main company transaction")
-            target_company = doc.get('intercompany_target_company')
-            print(f"?? DEBUG: Target company from doc: {target_company}")
-            
-            if target_company:
-                linked_company = next(
-                    (lc for lc in mapping.linked_companies if lc.company == target_company),
-                    None
-                )
-                if linked_company:
-                    print(f"? DEBUG: Found linked company: {linked_company.company}")
-                    for trans_type in mapping.transaction_types:
-                        print(f"?? DEBUG: Checking transaction type: {trans_type.source_type} -> {trans_type.target_type}")
-                        print(f"?? DEBUG: Direction check: {trans_type.direction} (looking for 'Main to Other' or 'Both')")
-                        
-                        # SPECIAL DEBUG for Purchase Invoice
-                        if doc.doctype == "Purchase Invoice":
-                            print(f"?? DEBUG: Purchase Invoice source type match: {trans_type.source_type == doc.doctype}")
-                            print(f"?? DEBUG: Direction match: {trans_type.direction in ['Main to Other', 'Both']}")
-                        
-                        if trans_type.source_type == doc.doctype and trans_type.direction in ["Main to Other", "Both"]:
-                            print(f"? DEBUG: Match found! Adding mapping for {doc.doctype}")
-                            mappings.append({
-                                "mapping": mapping,
-                                "transaction_type": trans_type,
-                                "company": target_company,
-                                "linked_company": linked_company,
-                                "direction": "main_to_other"
-                            })
-                        else:
-                            print(f"? DEBUG: No match - source_type: {trans_type.source_type}, direction: {trans_type.direction}")
-                else:
-                    print(f"? DEBUG: No linked company found for {target_company}")
-            else:
-                print(f"? DEBUG: No target company specified in document")
-                # SPECIAL: For Purchase Invoice, let's check if it should auto-map to main company
-                if doc.doctype == "Purchase Invoice":
-                    print(f"?? DEBUG: Purchase Invoice without target company - checking if this is a linked company transaction")
-        
-        # For linked company transactions
-        else:
-            print(f"?? DEBUG: Processing as linked company transaction")
-            is_linked = any(lc.company == doc.company for lc in mapping.linked_companies)
-            print(f"?? DEBUG: Is linked company? {is_linked}")
-            
-            # SPECIAL DEBUG for Purchase Invoice in linked company
-            if doc.doctype == "Purchase Invoice" and is_linked:
-                print(f"?? DEBUG: PURCHASE INVOICE IN LINKED COMPANY!")
-                print(f"?? DEBUG: This should create Sales Invoice in main company")
-            
-            if is_linked:
-                linked_company = next(
-                    (lc for lc in mapping.linked_companies if lc.company == doc.company),
-                    None
-                )
-                if linked_company:
-                    print(f"? DEBUG: Found linked company config: {linked_company.company}")
-                    for trans_type in mapping.transaction_types:
-                        print(f"?? DEBUG: Checking transaction type: {trans_type.source_type} -> {trans_type.target_type}")
-                        print(f"?? DEBUG: Direction check: {trans_type.direction} (looking for 'Other to Main' or 'Both')")
-                        
-                        # SPECIAL DEBUG for Purchase Invoice
-                        if doc.doctype == "Purchase Invoice":
-                            print(f"?? DEBUG: Purchase Invoice source type match: {trans_type.source_type == doc.doctype}")
-                            print(f"?? DEBUG: Direction match: {trans_type.direction in ['Other to Main', 'Both']}")
-                            print(f"?? DEBUG: Target type: {trans_type.target_type}")
-                        
-                        if trans_type.source_type == doc.doctype and trans_type.direction in ["Other to Main", "Both"]:
-                            print(f"? DEBUG: Match found! Adding mapping for {doc.doctype}")
-                            mappings.append({
-                                "mapping": mapping,
-                                "transaction_type": trans_type,
-                                "company": mapping.main_company,
-                                "linked_company": linked_company,
-                                "direction": "other_to_main"
-                            })
-                        else:
-                            print(f"? DEBUG: No match - source_type: {trans_type.source_type}, direction: {trans_type.direction}")
-                else:
-                    print(f"? DEBUG: Linked company config not found")
-    
-    print(f"?? DEBUG: Final mappings count: {len(mappings)}")
-    if doc.doctype == "Purchase Invoice":
-        print(f"?? DEBUG: PURCHASE INVOICE FINAL MAPPINGS:")
-        for i, mapping in enumerate(mappings):
-            print(f"?? DEBUG: Mapping {i+1}: {mapping['transaction_type'].source_type} -> {mapping['transaction_type'].target_type}")
-            print(f"?? DEBUG: Direction: {mapping['direction']}")
-            print(f"?? DEBUG: Target company: {mapping['company']}")
-    
-    return mappings
+	"""
+	Identify all valid Intercompany Transaction Link configurations that match
+	the given document by company, linked company, party, and transaction type.
+	"""
+	mappings = []
 
-def validate_required_parties(doc, mapping):
-    """Validate that required parties are configured based on transaction type"""
-    print(f"?? DEBUG: validate_required_parties called for {doc.doctype}")
-    
-    linked_company = mapping["linked_company"]
-    trans_type = mapping["transaction_type"]
-    direction = mapping.get("direction", "unknown")
-    
-    print(f"?? DEBUG: Linked company: {linked_company.company}")
-    print(f"?? DEBUG: Transaction type: {trans_type.source_type} -> {trans_type.target_type}")
-    print(f"?? DEBUG: Direction: {direction}")
-    
-    # Purchase Receipt -> Delivery Note (need customer)
-    if doc.doctype == "Purchase Receipt" and trans_type.target_type == "Delivery Note":
-        print(f"?? DEBUG: Validating Purchase Receipt -> Delivery Note")
-        
-        if direction == "other_to_main":
-            required_customer = linked_company.main_company_customer
-            customer_field = "main_company_customer"
-        else:
-            required_customer = linked_company.other_company_customer
-            customer_field = "other_company_customer"
-        
-        if not required_customer:
-            frappe.throw(f"{customer_field} is required for company {linked_company.company}")
-        print(f"? DEBUG: {customer_field} found: {required_customer}")
-    
-    # Delivery Note -> Purchase Receipt (need supplier)
-    elif doc.doctype == "Delivery Note" and trans_type.target_type == "Purchase Receipt":
-        print(f"?? DEBUG: Validating Delivery Note -> Purchase Receipt")
-        
-        if direction == "other_to_main":
-            required_supplier = linked_company.main_company_supplier
-            supplier_field = "main_company_supplier"
-        else:
-            required_supplier = linked_company.other_company_supplier
-            supplier_field = "other_company_supplier"
-        
-        if not required_supplier:
-            frappe.throw(f"{supplier_field} is required for company {linked_company.company}")
-        print(f"? DEBUG: {supplier_field} found: {required_supplier}")
-    
-    # Stock Entry -> Stock Entry (need inter-company warehouse setup)
-    elif doc.doctype == "Stock Entry" and trans_type.target_type == "Stock Entry":
-        print(f"?? DEBUG: Validating Stock Entry -> Stock Entry")
-        
-        # Check if inter-company warehouses are configured
-        source_warehouse = get_intercompany_warehouse(doc.company)
-        target_company = mapping["company"]
-        target_warehouse = get_intercompany_warehouse(target_company)
-        
-        if not source_warehouse:
-            frappe.throw(f"Inter-company warehouse not configured for company {doc.company}")
-        if not target_warehouse:
-            frappe.throw(f"Inter-company warehouse not configured for company {target_company}")
-        
-        print(f"? DEBUG: Inter-company warehouses validated")
-    
-    # Existing validations for other document types...
-    elif doc.doctype == "Purchase Invoice" and trans_type.target_type == "Sales Invoice":
-        if direction == "other_to_main":
-            required_customer = linked_company.main_company_customer
-            customer_field = "main_company_customer"
-        else:
-            required_customer = linked_company.other_company_customer
-            customer_field = "other_company_customer"
-        
-        if not required_customer:
-            frappe.throw(f"{customer_field} is required for company {linked_company.company}")
-    
-    elif doc.doctype == "Sales Invoice" and trans_type.target_type == "Purchase Invoice":
-        if direction == "other_to_main":
-            required_supplier = linked_company.main_company_supplier
-            supplier_field = "main_company_supplier"
-        else:
-            required_supplier = linked_company.other_company_supplier
-            supplier_field = "other_company_supplier"
-            
-        if not required_supplier:
-            frappe.throw(f"{supplier_field} is required for company {linked_company.company}")
-    
-    elif doc.doctype == "Sales Order" and trans_type.target_type == "Purchase Order":
-        if not linked_company.main_company_supplier:
-            frappe.throw(f"Main Company Supplier is required for company {linked_company.company}")
-    
-    elif doc.doctype == "Purchase Order" and trans_type.target_type == "Sales Order":
-        if not linked_company.main_company_customer:
-            frappe.throw(f"Main Company Customer is required for company {linked_company.company}")
-    
-    elif doc.doctype in ["Journal Entry", "Payment Entry"]:
-        if not linked_company.main_company_customer:
-            frappe.throw(f"Main Company Customer is required for company {linked_company.company}")
-        if not linked_company.other_company_supplier:
-            frappe.throw(f"Other Company Supplier is required for company {linked_company.company}")
-    
-    print(f"? DEBUG: Party validation passed for {doc.doctype}")
+	links = frappe.get_all("Intercompany Transaction Link", filters={"enabled": 1}, fields=["name"])
 
-def get_user_default_company(user):
-    return frappe.db.get_value(
-        "User Default",
-        {"parent": user, "defkey": "company"},
-        "defvalue"
-    )
+	for item in links:
+		link = frappe.get_doc("Intercompany Transaction Link", item.name)
+		is_main = doc.company == link.main_company
+		target_company_from_doc = doc.get("intercompany_target_company")
+
+		if is_main:
+			# Direction is Main -> Other
+			for lc in link.linked_companies:
+				if not lc.company:
+					continue
+
+				# Check target company match:
+				# 1. Explicit target company in document
+				# 2. Or party match (Customer / Supplier on document matches linked company party)
+				match_by_explicit = target_company_from_doc and target_company_from_doc == lc.company
+				match_by_party = False
+
+				if not target_company_from_doc:
+					if doc.doctype in ["Sales Order", "Sales Invoice", "Delivery Note"]:
+						if lc.main_company_customer and doc.get("customer") == lc.main_company_customer:
+							match_by_party = True
+					elif doc.doctype in ["Purchase Order", "Purchase Invoice", "Purchase Receipt"]:
+						if lc.main_company_supplier and doc.get("supplier") == lc.main_company_supplier:
+							match_by_party = True
+					elif doc.doctype == "Payment Entry":
+						if doc.get("party_type") == "Customer" and doc.get("party") == lc.main_company_customer:
+							match_by_party = True
+						elif doc.get("party_type") == "Supplier" and doc.get("party") == lc.main_company_supplier:
+							match_by_party = True
+					elif doc.doctype == "Journal Entry":
+						for acc in doc.get("accounts", []):
+							if acc.get("party_type") == "Customer" and acc.get("party") == lc.main_company_customer:
+								match_by_party = True
+								break
+							elif acc.get("party_type") == "Supplier" and acc.get("party") == lc.main_company_supplier:
+								match_by_party = True
+								break
+					elif doc.doctype == "Stock Entry":
+						# For stock entry, explicit target company is required
+						match_by_party = False
+
+				if match_by_explicit or match_by_party:
+					for tt in link.transaction_types:
+						if tt.source_type == doc.doctype and tt.direction in ["Main to Other", "Both"]:
+							mappings.append(
+								{
+									"mapping": link,
+									"transaction_type": tt,
+									"company": lc.company,
+									"linked_company": lc,
+									"direction": "main_to_other",
+								}
+							)
+		else:
+			# Direction is Other -> Main (doc is in a linked company)
+			matching_lc = next((lc for lc in link.linked_companies if lc.company == doc.company), None)
+			if matching_lc:
+				match_by_explicit = (
+					target_company_from_doc and target_company_from_doc == link.main_company
+				)
+				match_by_party = False
+
+				if not target_company_from_doc:
+					if doc.doctype in ["Sales Order", "Sales Invoice", "Delivery Note"]:
+						if matching_lc.other_company_customer and doc.get("customer") == matching_lc.other_company_customer:
+							match_by_party = True
+					elif doc.doctype in ["Purchase Order", "Purchase Invoice", "Purchase Receipt"]:
+						if matching_lc.other_company_supplier and doc.get("supplier") == matching_lc.other_company_supplier:
+							match_by_party = True
+					elif doc.doctype == "Payment Entry":
+						if doc.get("party_type") == "Customer" and doc.get("party") == matching_lc.other_company_customer:
+							match_by_party = True
+						elif doc.get("party_type") == "Supplier" and doc.get("party") == matching_lc.other_company_supplier:
+							match_by_party = True
+					elif doc.doctype == "Journal Entry":
+						for acc in doc.get("accounts", []):
+							if acc.get("party_type") == "Customer" and acc.get("party") == matching_lc.other_company_customer:
+								match_by_party = True
+								break
+							elif acc.get("party_type") == "Supplier" and acc.get("party") == matching_lc.other_company_supplier:
+								match_by_party = True
+								break
+					elif doc.doctype == "Stock Entry":
+						match_by_party = False
+
+				if match_by_explicit or match_by_party:
+					for tt in link.transaction_types:
+						if tt.source_type == doc.doctype and tt.direction in ["Other to Main", "Both"]:
+							mappings.append(
+								{
+									"mapping": link,
+									"transaction_type": tt,
+									"company": link.main_company,
+									"linked_company": matching_lc,
+									"direction": "other_to_main",
+								}
+							)
+
+	return mappings
 
 
+def validate_required_parties(doc, mapping_info):
+	"""
+	Validate that all required entities (parties, clearing accounts, warehouses)
+	are present for creating the target document.
+	"""
+	lc = mapping_info["linked_company"]
+	tt = mapping_info["transaction_type"]
+	direction = mapping_info.get("direction")
+	target_company = mapping_info["company"]
+
+	# Target is Purchase Order / Purchase Invoice / Purchase Receipt -> needs Supplier in target company
+	if tt.target_type in ["Purchase Order", "Purchase Invoice", "Purchase Receipt"]:
+		supplier = lc.main_company_supplier if direction == "other_to_main" else lc.other_company_supplier
+		if not supplier:
+			field_name = "Main Company Supplier" if direction == "other_to_main" else "Other Company Supplier"
+			frappe.throw(
+				_("{0} is required on linked company configuration for {1} to create {2}").format(
+					field_name, frappe.bold(target_company), tt.target_type
+				)
+			)
+
+	# Target is Sales Order / Sales Invoice / Delivery Note -> needs Customer in target company
+	elif tt.target_type in ["Sales Order", "Sales Invoice", "Delivery Note"]:
+		customer = lc.main_company_customer if direction == "other_to_main" else lc.other_company_customer
+		if not customer:
+			field_name = "Main Company Customer" if direction == "other_to_main" else "Other Company Customer"
+			frappe.throw(
+				_("{0} is required on linked company configuration for {1} to create {2}").format(
+					field_name, frappe.bold(target_company), tt.target_type
+				)
+			)
+
+	# Financial documents (Journal Entry / Payment Entry) -> needs clearing accounts
+	elif tt.target_type in ["Journal Entry", "Payment Entry"]:
+		customer = lc.main_company_customer if direction == "other_to_main" else lc.other_company_customer
+		supplier = lc.main_company_supplier if direction == "other_to_main" else lc.other_company_supplier
+		account = lc.main_company_account if direction == "other_to_main" else lc.other_company_account
+
+		if not customer or not supplier:
+			frappe.throw(
+				_("Both Customer and Supplier must be configured on linked company {0} for {1}").format(
+					frappe.bold(target_company), tt.target_type
+				)
+			)
+		if not account:
+			account_label = "Main Company Account" if direction == "other_to_main" else "Other Company Account"
+			frappe.throw(
+				_("{0} (Clearing Account) is required for company {1}").format(
+					account_label, frappe.bold(target_company)
+				)
+			)
+
+	# Stock Entry -> needs source and target warehouses
+	elif tt.target_type == "Stock Entry":
+		s_wh = get_intercompany_warehouse(doc.company)
+		t_wh = get_intercompany_warehouse(target_company)
+		if not s_wh or not t_wh:
+			frappe.throw(
+				_("Intercompany warehouses must be configured for both {0} and {1}").format(
+					frappe.bold(doc.company), frappe.bold(target_company)
+				)
+			)
 
 
 def create_corresponding_document(source_doc, mapping_info, direction):
-    """Create the corresponding document based on mapping"""
-    try:
-        print(f"??? DEBUG: create_corresponding_document called")
-        print(f"?? DEBUG: Source: {source_doc.doctype} {source_doc.name}")
-        
-        mapping = mapping_info["mapping"]
-        trans_type = mapping_info["transaction_type"]
-        linked_company = mapping_info["linked_company"]
-        
-        print(f"?? DEBUG: Transaction mapping: {trans_type.source_type} -> {trans_type.target_type}")
-        print(f"?? DEBUG: Direction: {direction}")
+	"""Dispatcher to route creation to the appropriate handler"""
+	trans_type = mapping_info["transaction_type"]
+	mapping = mapping_info["mapping"]
+	linked_company = mapping_info["linked_company"]
 
-        # Check: skip if target company is user's default company
-        user_default_company = get_user_default_company(frappe.session.user)
-        target_company = source_doc.get("intercompany_target_company")
+	target = trans_type.target_type
 
-        if user_default_company and target_company == user_default_company:
-            print(f"?? DEBUG: Skipping - target company {target_company} is user's default")
-            return None
+	if source_doc.doctype == "Sales Order" and target == "Purchase Order":
+		return create_purchase_order(source_doc, mapping, linked_company, direction)
+	elif source_doc.doctype == "Purchase Order" and target == "Sales Order":
+		return create_sales_order(source_doc, mapping, linked_company, direction)
+	elif source_doc.doctype == "Sales Invoice" and target == "Purchase Invoice":
+		return create_purchase_invoice(source_doc, mapping, linked_company, direction)
+	elif source_doc.doctype == "Purchase Invoice" and target == "Sales Invoice":
+		return create_sales_invoice(source_doc, mapping, linked_company, direction)
+	elif source_doc.doctype == "Delivery Note" and target == "Purchase Receipt":
+		return create_purchase_receipt(source_doc, mapping, linked_company, direction)
+	elif source_doc.doctype == "Purchase Receipt" and target == "Delivery Note":
+		return create_delivery_note(source_doc, mapping, linked_company, direction)
+	elif source_doc.doctype == "Stock Entry" and target == "Stock Entry":
+		return create_stock_entry(source_doc, mapping, linked_company, direction)
+	elif source_doc.doctype == "Journal Entry" and target == "Journal Entry":
+		return create_journal_entry(source_doc, mapping, linked_company, direction)
+	elif source_doc.doctype == "Payment Entry" and target == "Payment Entry":
+		return create_payment_entry(source_doc, mapping, linked_company, direction)
 
-        # Document creation logic with ALL mappings
-        if source_doc.doctype == "Sales Order" and trans_type.target_type == "Purchase Order":
-            print(f"?? DEBUG: Creating Purchase Order from Sales Order")
-            return create_purchase_order(source_doc, mapping, linked_company, direction)
-        elif source_doc.doctype == "Purchase Order" and trans_type.target_type == "Sales Order":
-            print(f"?? DEBUG: Creating Sales Order from Purchase Order")
-            return create_sales_order(source_doc, mapping, linked_company, direction)
-        elif source_doc.doctype == "Sales Invoice" and trans_type.target_type == "Purchase Invoice":
-            print(f"?? DEBUG: Creating Purchase Invoice from Sales Invoice")
-            return create_purchase_invoice(source_doc, mapping, linked_company, direction)
-        elif source_doc.doctype == "Purchase Invoice" and trans_type.target_type == "Sales Invoice":
-            print(f"?? DEBUG: Creating Sales Invoice from Purchase Invoice")
-            return create_sales_invoice(source_doc, mapping, linked_company, direction)
-        elif source_doc.doctype == "Purchase Receipt" and trans_type.target_type == "Delivery Note":
-            print(f"?? DEBUG: Creating Delivery Note from Purchase Receipt")
-            return create_delivery_note(source_doc, mapping, linked_company, direction)
-        elif source_doc.doctype == "Delivery Note" and trans_type.target_type == "Purchase Receipt":
-            print(f"?? DEBUG: Creating Purchase Receipt from Delivery Note")
-            return create_purchase_receipt(source_doc, mapping, linked_company, direction)
-        elif source_doc.doctype == "Stock Entry" and trans_type.target_type == "Stock Entry":
-            print(f"?? DEBUG: Creating Stock Entry from Stock Entry")
-            return create_stock_entry(source_doc, mapping, linked_company, direction)
-        elif source_doc.doctype == "Journal Entry" and trans_type.target_type == "Journal Entry":
-            print(f"?? DEBUG: Creating Journal Entry from Journal Entry")
-            return create_journal_entry(source_doc, mapping, linked_company, direction)
-        elif source_doc.doctype == "Payment Entry" and trans_type.target_type == "Payment Entry":
-            print(f"?? DEBUG: Creating Payment Entry from Payment Entry")
-            return create_payment_entry(source_doc, mapping, linked_company, direction)
-        else:
-            print(f"? DEBUG: No matching document creation function found")
-            print(f"? DEBUG: Source: {source_doc.doctype}, Target: {trans_type.target_type}")
-
-        return None
-    except Exception as e:
-        print(f"?? DEBUG: Exception in create_corresponding_document: {str(e)}")
-        frappe.log_error(
-            f"Error in create_corresponding_document: {str(e)}\n"
-            f"Source Doc: {source_doc.doctype} {source_doc.name}\n"
-            f"Target Type: {trans_type.target_type}\n"
-            f"Direction: {direction}\n"
-            f"Traceback: {frappe.get_traceback()}",
-            "Inter Company Transaction Error"
-        )
-        raise
-def cancel_child_documents(doc):
-    """Cancel any child documents linked to this document"""
-    # Get all linked documents where this doc is the source
-    child_docs = frappe.get_all(
-        "Inter Company Document Reference",
-        filters={
-            "source_doctype": doc.doctype,
-            "source_name": doc.name
-        },
-        fields=["target_doctype", "target_name"]
-    )
-    
-    for child_doc in child_docs:
-        try:
-            if frappe.db.exists(child_doc.target_doctype, child_doc.target_name):
-                target = frappe.get_doc(child_doc.target_doctype, child_doc.target_name)
-                
-                # Set all permission flags
-                target.flags.ignore_permissions = True
-                target.flags.ignore_mandatory = True
-                target.flags.ignore_account_permission = True
-                target.flags.ignore_validate = True
-                target.flags.ignore_links = True
-                
-                if target.docstatus == 1:
-                    target.cancel()
-                    frappe.msgprint(f"Cancelled child document {target.doctype} {target.name}")
-        except Exception as e:
-            frappe.log_error(
-                f"Error cancelling child document: {str(e)}\n"
-                f"Document: {child_doc.target_doctype} {child_doc.target_name}",
-                "Inter Company Transaction Error"
-            )
-
-def cancel_parent_documents(doc):
-    """Cancel any parent documents linked to this document"""
-    # Get all parent (source) documents where this doc is the target
-    parent_docs = frappe.get_all(
-        "Inter Company Document Reference",
-        filters={
-            "target_doctype": doc.doctype,
-            "target_name": doc.name
-        },
-        fields=["source_doctype", "source_name"]
-    )
-
-    for parent_doc in parent_docs:
-        try:
-            if frappe.db.exists(parent_doc.source_doctype, parent_doc.source_name):
-                source = frappe.get_doc(parent_doc.source_doctype, parent_doc.source_name)
-
-                # Set all permission flags
-                source.flags.ignore_permissions = True
-                source.flags.ignore_mandatory = True
-                source.flags.ignore_account_permission = True
-                source.flags.ignore_validate = True
-                source.flags.ignore_links = True
-
-                if source.docstatus == 1:
-                    source.cancel()
-                    frappe.msgprint(f"Cancelled parent document {source.doctype} {source.name}")
-        except Exception as e:
-            frappe.log_error(
-                f"Error cancelling parent document: {str(e)}\n"
-                f"Document: {parent_doc.source_doctype} {parent_doc.source_name}",
-                "Inter Company Transaction Error"
-            )
+	logger.warning(f"No document creation mapping found for {source_doc.doctype} -> {target}")
+	return None
 
 
-# Example: Custom validation for the "intercompany_linked_company" field
-def validate_intercompany_linked_company(doc, method):
-    if doc.get('intercompany_linked_company'):
-        # Custom validation logic for the field
-        pass
-    else:
-        # If you want to skip validation, you can override it or leave it empty
-        pass
+# -------------------------------------------------------------------------
+# Document Creators
+# -------------------------------------------------------------------------
+
+def create_purchase_order(sales_order, mapping, linked_company, direction):
+	"""Create Purchase Order from Sales Order"""
+	po = frappe.new_doc("Purchase Order")
+
+	if direction == "other_to_main":
+		po.company = mapping.main_company
+		po.supplier = linked_company.main_company_supplier
+	else:
+		po.company = linked_company.company
+		po.supplier = linked_company.other_company_supplier
+
+	if not po.supplier:
+		frappe.throw(_("Supplier not found for company {0}").format(po.company))
+
+	po.currency = sales_order.currency
+	po.conversion_rate = sales_order.conversion_rate or 1.0
+	po.transaction_date = sales_order.transaction_date or nowdate()
+	po.schedule_date = sales_order.delivery_date or sales_order.transaction_date or nowdate()
+
+	target_warehouse = get_default_warehouse(po.company)
+
+	for item in sales_order.items:
+		po.append(
+			"items",
+			{
+				"item_code": item.item_code,
+				"item_name": item.item_name,
+				"description": item.description,
+				"qty": flt(item.qty),
+				"uom": item.uom,
+				"stock_uom": item.stock_uom or item.uom,
+				"conversion_factor": flt(item.conversion_factor) or 1.0,
+				"rate": flt(item.rate),
+				"price_list_rate": flt(item.price_list_rate or item.rate),
+				"warehouse": target_warehouse,
+				"schedule_date": item.delivery_date or po.schedule_date,
+			},
+		)
+
+	po.flags.ignore_permissions = True
+	po.run_method("set_missing_values")
+	po.run_method("calculate_taxes_and_totals")
+	po.docstatus = 0
+	return po
 
 
+def create_sales_order(purchase_order, mapping, linked_company, direction):
+	"""Create Sales Order from Purchase Order"""
+	so = frappe.new_doc("Sales Order")
+
+	if direction == "other_to_main":
+		so.company = mapping.main_company
+		so.customer = linked_company.main_company_customer
+	else:
+		so.company = linked_company.company
+		so.customer = linked_company.other_company_customer
+
+	if not so.customer:
+		frappe.throw(_("Customer not found for company {0}").format(so.company))
+
+	so.currency = purchase_order.currency
+	so.conversion_rate = purchase_order.conversion_rate or 1.0
+	so.transaction_date = purchase_order.transaction_date or nowdate()
+	so.delivery_date = purchase_order.schedule_date or purchase_order.transaction_date or nowdate()
+
+	target_warehouse = get_default_warehouse(so.company)
+
+	for item in purchase_order.items:
+		so.append(
+			"items",
+			{
+				"item_code": item.item_code,
+				"item_name": item.item_name,
+				"description": item.description,
+				"qty": flt(item.qty),
+				"uom": item.uom,
+				"stock_uom": item.stock_uom or item.uom,
+				"conversion_factor": flt(item.conversion_factor) or 1.0,
+				"rate": flt(item.rate),
+				"price_list_rate": flt(item.price_list_rate or item.rate),
+				"warehouse": target_warehouse,
+				"delivery_date": item.schedule_date or so.delivery_date,
+			},
+		)
+
+	so.flags.ignore_permissions = True
+	so.run_method("set_missing_values")
+	so.run_method("calculate_taxes_and_totals")
+	so.docstatus = 0
+	return so
 
 
+def create_purchase_invoice(sales_invoice, mapping, linked_company, direction):
+	"""Create Purchase Invoice from Sales Invoice"""
+	pi = frappe.new_doc("Purchase Invoice")
+
+	if direction == "other_to_main":
+		pi.company = mapping.main_company
+		pi.supplier = linked_company.main_company_supplier
+	else:
+		pi.company = linked_company.company
+		pi.supplier = linked_company.other_company_supplier
+
+	if not pi.supplier:
+		frappe.throw(_("Supplier not found for company {0}").format(pi.company))
+
+	pi.currency = sales_invoice.currency
+	pi.conversion_rate = sales_invoice.conversion_rate or 1.0
+	pi.posting_date = sales_invoice.posting_date or nowdate()
+	pi.due_date = sales_invoice.due_date or pi.posting_date
+	pi.bill_no = sales_invoice.name
+	pi.bill_date = sales_invoice.posting_date
+
+	# Handle Return / Credit Note
+	if sales_invoice.get("is_return"):
+		pi.is_return = 1
+
+	target_warehouse = get_default_warehouse(pi.company)
+	cost_center = get_default_cost_center(pi.company)
+
+	for item in sales_invoice.items:
+		pi.append(
+			"items",
+			{
+				"item_code": item.item_code,
+				"item_name": item.item_name,
+				"description": item.description,
+				"qty": flt(item.qty),
+				"uom": item.uom,
+				"stock_uom": item.stock_uom or item.uom,
+				"conversion_factor": flt(item.conversion_factor) or 1.0,
+				"rate": flt(item.rate),
+				"price_list_rate": flt(item.price_list_rate or item.rate),
+				"discount_percentage": flt(item.discount_percentage),
+				"warehouse": target_warehouse,
+				"cost_center": cost_center,
+			},
+		)
+
+	pi.flags.ignore_permissions = True
+	pi.run_method("set_missing_values")
+	pi.run_method("calculate_taxes_and_totals")
+	pi.docstatus = 0
+	return pi
 
 
+def create_sales_invoice(purchase_invoice, mapping, linked_company, direction):
+	"""Create Sales Invoice from Purchase Invoice"""
+	si = frappe.new_doc("Sales Invoice")
+
+	if direction == "other_to_main":
+		si.company = mapping.main_company
+		si.customer = linked_company.main_company_customer
+	else:
+		si.company = linked_company.company
+		si.customer = linked_company.other_company_customer
+
+	if not si.customer:
+		frappe.throw(_("Customer not found for company {0}").format(si.company))
+
+	si.currency = purchase_invoice.currency
+	si.conversion_rate = purchase_invoice.conversion_rate or 1.0
+	si.posting_date = purchase_invoice.posting_date or nowdate()
+	si.due_date = purchase_invoice.due_date or si.posting_date
+	si.po_no = purchase_invoice.name
+	si.po_date = purchase_invoice.posting_date
+
+	# Handle Return / Debit Note
+	if purchase_invoice.get("is_return"):
+		si.is_return = 1
+
+	target_warehouse = get_default_warehouse(si.company)
+	cost_center = get_default_cost_center(si.company)
+
+	for item in purchase_invoice.items:
+		si.append(
+			"items",
+			{
+				"item_code": item.item_code,
+				"item_name": item.item_name,
+				"description": item.description,
+				"qty": flt(item.qty),
+				"uom": item.uom,
+				"stock_uom": item.stock_uom or item.uom,
+				"conversion_factor": flt(item.conversion_factor) or 1.0,
+				"rate": flt(item.rate),
+				"price_list_rate": flt(item.price_list_rate or item.rate),
+				"discount_percentage": flt(item.discount_percentage),
+				"warehouse": target_warehouse,
+				"cost_center": cost_center,
+			},
+		)
+
+	si.flags.ignore_permissions = True
+	si.run_method("set_missing_values")
+	si.run_method("calculate_taxes_and_totals")
+	si.docstatus = 0
+	return si
 
 
+def create_delivery_note(purchase_receipt, mapping, linked_company, direction):
+	"""Create Delivery Note from Purchase Receipt"""
+	dn = frappe.new_doc("Delivery Note")
+
+	if direction == "other_to_main":
+		dn.company = mapping.main_company
+		dn.customer = linked_company.main_company_customer
+	else:
+		dn.company = linked_company.company
+		dn.customer = linked_company.other_company_customer
+
+	if not dn.customer:
+		frappe.throw(_("Customer not found for company {0}").format(dn.company))
+
+	dn.posting_date = purchase_receipt.posting_date or nowdate()
+	dn.posting_time = purchase_receipt.posting_time
+	dn.set_posting_time = purchase_receipt.set_posting_time
+	dn.currency = purchase_receipt.currency
+	dn.conversion_rate = purchase_receipt.conversion_rate or 1.0
+
+	if purchase_receipt.get("is_return"):
+		dn.is_return = 1
+
+	target_warehouse = get_default_warehouse(dn.company)
+
+	for item in purchase_receipt.items:
+		if not frappe.db.exists("Item", item.item_code):
+			frappe.throw(
+				_("Item {0} does not exist in company {1}").format(
+					frappe.bold(item.item_code), frappe.bold(dn.company)
+				)
+			)
+
+		dn.append(
+			"items",
+			{
+				"item_code": item.item_code,
+				"item_name": item.item_name,
+				"description": item.description,
+				"qty": flt(item.qty),
+				"uom": item.uom,
+				"stock_uom": item.stock_uom or item.uom,
+				"conversion_factor": flt(item.conversion_factor) or 1.0,
+				"rate": flt(item.rate),
+				"warehouse": target_warehouse,
+			},
+		)
+
+	dn.flags.ignore_permissions = True
+	dn.run_method("set_missing_values")
+	dn.run_method("calculate_taxes_and_totals")
+	dn.docstatus = 0
+	return dn
+
+
+def create_purchase_receipt(delivery_note, mapping, linked_company, direction):
+	"""Create Purchase Receipt from Delivery Note"""
+	pr = frappe.new_doc("Purchase Receipt")
+
+	if direction == "other_to_main":
+		pr.company = mapping.main_company
+		pr.supplier = linked_company.main_company_supplier
+	else:
+		pr.company = linked_company.company
+		pr.supplier = linked_company.other_company_supplier
+
+	if not pr.supplier:
+		frappe.throw(_("Supplier not found for company {0}").format(pr.company))
+
+	pr.posting_date = delivery_note.posting_date or nowdate()
+	pr.posting_time = delivery_note.posting_time
+	pr.set_posting_time = delivery_note.set_posting_time
+	pr.currency = delivery_note.currency
+	pr.conversion_rate = delivery_note.conversion_rate or 1.0
+
+	if delivery_note.get("is_return"):
+		pr.is_return = 1
+
+	target_warehouse = get_default_warehouse(pr.company)
+
+	for item in delivery_note.items:
+		if not frappe.db.exists("Item", item.item_code):
+			frappe.throw(
+				_("Item {0} does not exist in company {1}").format(
+					frappe.bold(item.item_code), frappe.bold(pr.company)
+				)
+			)
+
+		pr.append(
+			"items",
+			{
+				"item_code": item.item_code,
+				"item_name": item.item_name,
+				"description": item.description,
+				"qty": flt(item.qty),
+				"uom": item.uom,
+				"stock_uom": item.stock_uom or item.uom,
+				"conversion_factor": flt(item.conversion_factor) or 1.0,
+				"rate": flt(item.rate),
+				"warehouse": target_warehouse,
+			},
+		)
+
+	pr.flags.ignore_permissions = True
+	pr.run_method("set_missing_values")
+	pr.run_method("calculate_taxes_and_totals")
+	pr.docstatus = 0
+	return pr
+
+
+def create_stock_entry(source_se, mapping, linked_company, direction):
+	"""Create Stock Entry for intercompany material transfer"""
+	se = frappe.new_doc("Stock Entry")
+
+	if direction == "other_to_main":
+		se.company = mapping.main_company
+		source_company = linked_company.company
+		target_company = mapping.main_company
+	else:
+		se.company = linked_company.company
+		source_company = mapping.main_company
+		target_company = linked_company.company
+
+	se.stock_entry_type = "Material Transfer"
+	se.purpose = "Material Transfer"
+	se.posting_date = source_se.posting_date or nowdate()
+	se.posting_time = source_se.posting_time
+	se.set_posting_time = source_se.set_posting_time
+
+	source_wh = get_intercompany_warehouse(source_company)
+	target_wh = get_intercompany_warehouse(target_company)
+
+	if not source_wh or not target_wh:
+		frappe.throw(_("Inter-company warehouses not found for {0} and {1}").format(source_company, target_company))
+
+	for item in source_se.items:
+		if not frappe.db.exists("Item", item.item_code):
+			frappe.throw(
+				_("Item {0} does not exist in target company {1}").format(
+					frappe.bold(item.item_code), frappe.bold(se.company)
+				)
+			)
+
+		se.append(
+			"items",
+			{
+				"item_code": item.item_code,
+				"qty": flt(item.qty),
+				"uom": item.uom,
+				"stock_uom": item.stock_uom or item.uom,
+				"s_warehouse": source_wh,
+				"t_warehouse": target_wh,
+				"basic_rate": flt(item.basic_rate),
+				"basic_amount": flt(item.basic_rate) * flt(item.qty),
+				"conversion_factor": flt(item.conversion_factor) or 1.0,
+			},
+		)
+
+	se.flags.ignore_permissions = True
+	se.run_method("set_missing_values")
+	se.docstatus = 0
+	return se
+
+
+def create_journal_entry(source_je, mapping, linked_company, direction):
+	"""Create corresponding Journal Entry with multi-currency support"""
+	je = frappe.new_doc("Journal Entry")
+
+	if direction == "other_to_main":
+		je.company = mapping.main_company
+		supplier = linked_company.main_company_supplier
+		customer = linked_company.main_company_customer
+		clearing_account = linked_company.main_company_account
+	else:
+		je.company = linked_company.company
+		supplier = linked_company.other_company_supplier
+		customer = linked_company.other_company_customer
+		clearing_account = linked_company.other_company_account
+
+	je.posting_date = source_je.posting_date or nowdate()
+	je.user_remark = f"Auto-generated from {source_je.doctype} {source_je.name}: " + (source_je.user_remark or "")
+	cost_center = get_default_cost_center(je.company)
+
+	# Currency handling
+	source_currency = frappe.db.get_value("Company", source_je.company, "default_currency")
+	target_currency = frappe.db.get_value("Company", je.company, "default_currency")
+
+	exchange_rate = 1.0
+	if source_currency != target_currency:
+		exchange_rate = get_exchange_rate(source_currency, target_currency, je.posting_date)
+
+	# Determine primary party direction from source JE
+	source_party_type = None
+	source_is_credit = False
+	total_amount = 0.0
+
+	for acc in source_je.accounts:
+		if acc.party_type and acc.party:
+			source_party_type = acc.party_type
+			source_is_credit = flt(acc.credit_in_account_currency) > 0
+			total_amount = flt(acc.credit_in_account_currency) if source_is_credit else flt(acc.debit_in_account_currency)
+			break
+
+	if not total_amount:
+		total_amount = flt(source_je.total_credit) or flt(source_je.total_debit)
+
+	converted_amount = flt(total_amount * exchange_rate, 2)
+
+	receivable_acc = frappe.db.get_value("Company", je.company, "default_receivable_account")
+	payable_acc = frappe.db.get_value("Company", je.company, "default_payable_account")
+
+	if source_party_type == "Supplier" and source_is_credit:
+		# Source credited supplier -> Target debits customer
+		je.append(
+			"accounts",
+			{
+				"account": receivable_acc,
+				"party_type": "Customer",
+				"party": customer,
+				"debit_in_account_currency": converted_amount,
+				"credit_in_account_currency": 0,
+				"cost_center": cost_center,
+			},
+		)
+		je.append(
+			"accounts",
+			{
+				"account": clearing_account,
+				"debit_in_account_currency": 0,
+				"credit_in_account_currency": converted_amount,
+				"cost_center": cost_center,
+			},
+		)
+
+	elif source_party_type == "Supplier" and not source_is_credit:
+		# Source debited supplier -> Target credits customer
+		je.append(
+			"accounts",
+			{
+				"account": receivable_acc,
+				"party_type": "Customer",
+				"party": customer,
+				"debit_in_account_currency": 0,
+				"credit_in_account_currency": converted_amount,
+				"cost_center": cost_center,
+			},
+		)
+		je.append(
+			"accounts",
+			{
+				"account": clearing_account,
+				"debit_in_account_currency": converted_amount,
+				"credit_in_account_currency": 0,
+				"cost_center": cost_center,
+			},
+		)
+
+	elif source_party_type == "Customer" and source_is_credit:
+		# Source credited customer -> Target debits supplier
+		je.append(
+			"accounts",
+			{
+				"account": payable_acc,
+				"party_type": "Supplier",
+				"party": supplier,
+				"debit_in_account_currency": converted_amount,
+				"credit_in_account_currency": 0,
+				"cost_center": cost_center,
+			},
+		)
+		je.append(
+			"accounts",
+			{
+				"account": clearing_account,
+				"debit_in_account_currency": 0,
+				"credit_in_account_currency": converted_amount,
+				"cost_center": cost_center,
+			},
+		)
+
+	else:
+		# Source debited customer -> Target credits supplier
+		je.append(
+			"accounts",
+			{
+				"account": payable_acc,
+				"party_type": "Supplier",
+				"party": supplier,
+				"debit_in_account_currency": 0,
+				"credit_in_account_currency": converted_amount,
+				"cost_center": cost_center,
+			},
+		)
+		je.append(
+			"accounts",
+			{
+				"account": clearing_account,
+				"debit_in_account_currency": converted_amount,
+				"credit_in_account_currency": 0,
+				"cost_center": cost_center,
+			},
+		)
+
+	je.flags.ignore_permissions = True
+	je.run_method("set_missing_values")
+	je.docstatus = 0
+	return je
+
+
+def create_payment_entry(source_pe, mapping, linked_company, direction):
+	"""Create corresponding Payment Entry with inverted party & payment direction"""
+	pe = frappe.new_doc("Payment Entry")
+
+	if direction == "other_to_main":
+		pe.company = mapping.main_company
+		clearing_account = linked_company.main_company_account
+		customer = linked_company.main_company_customer
+		supplier = linked_company.main_company_supplier
+	else:
+		pe.company = linked_company.company
+		clearing_account = linked_company.other_company_account
+		customer = linked_company.other_company_customer
+		supplier = linked_company.other_company_supplier
+
+	pe.posting_date = source_pe.posting_date or nowdate()
+	pe.payment_type = "Pay" if source_pe.payment_type == "Receive" else "Receive"
+	pe.mode_of_payment = source_pe.mode_of_payment
+
+	if pe.payment_type == "Pay":
+		pe.paid_from = clearing_account
+		pe.paid_to = frappe.db.get_value("Company", pe.company, "default_payable_account")
+		pe.party_type = "Supplier"
+		pe.party = supplier
+		pe.party_name = frappe.db.get_value("Supplier", supplier, "supplier_name") if supplier else ""
+	else:
+		pe.paid_from = frappe.db.get_value("Company", pe.company, "default_receivable_account")
+		pe.paid_to = clearing_account
+		pe.party_type = "Customer"
+		pe.party = customer
+		pe.party_name = frappe.db.get_value("Customer", customer, "customer_name") if customer else ""
+
+	pe.paid_from_account_currency = frappe.db.get_value("Account", pe.paid_from, "account_currency")
+	pe.paid_to_account_currency = frappe.db.get_value("Account", pe.paid_to, "account_currency")
+
+	# Swap paid / received amounts to match reverse flow
+	pe.paid_amount = flt(source_pe.received_amount) or flt(source_pe.paid_amount)
+	pe.received_amount = flt(source_pe.paid_amount) or flt(source_pe.received_amount)
+	pe.target_exchange_rate = flt(source_pe.target_exchange_rate) or 1.0
+
+	pe.reference_no = source_pe.reference_no or source_pe.name
+	pe.reference_date = source_pe.reference_date or source_pe.posting_date
+
+	pe.flags.ignore_permissions = True
+	pe.run_method("set_missing_values")
+	pe.docstatus = 0
+	return pe
+
+
+# -------------------------------------------------------------------------
+# Helpers
+# -------------------------------------------------------------------------
+
+def get_default_warehouse(company):
+	"""Get default non-group warehouse for company with robust fallbacks"""
+	# Check company default inventory account or warehouse
+	company_wh = frappe.db.get_value("Company", company, "default_warehouse")
+	if company_wh and frappe.db.exists("Warehouse", company_wh):
+		return company_wh
+
+	warehouse = frappe.db.get_value(
+		"Warehouse",
+		{"company": company, "is_group": 0, "disabled": 0},
+		"name",
+	)
+	if not warehouse:
+		frappe.throw(_("No active non-group warehouse found for company {0}").format(frappe.bold(company)))
+	return warehouse
+
+
+def get_intercompany_warehouse(company):
+	"""Get designated intercompany or transit warehouse for company"""
+	warehouse = frappe.db.get_value(
+		"Warehouse",
+		{"company": company, "warehouse_name": ["like", "%inter%company%"], "is_group": 0, "disabled": 0},
+		"name",
+	)
+	if not warehouse:
+		warehouse = frappe.db.get_value(
+			"Warehouse",
+			{"company": company, "warehouse_name": ["like", "%transit%"], "is_group": 0, "disabled": 0},
+			"name",
+		)
+	if not warehouse:
+		warehouse = get_default_warehouse(company)
+	return warehouse
+
+
+def get_default_cost_center(company):
+	"""Get default cost center for company with fallback to any active non-group cost center"""
+	cost_center = frappe.db.get_value("Company", company, "cost_center")
+	if cost_center and frappe.db.exists("Cost Center", cost_center):
+		return cost_center
+
+	fallback_cc = frappe.db.get_value(
+		"Cost Center",
+		{"company": company, "is_group": 0, "disabled": 0},
+		"name",
+	)
+	if fallback_cc:
+		return fallback_cc
+
+	frappe.throw(_("No active non-group cost center found for company {0}").format(frappe.bold(company)))
+
+
+def get_mapped_account(account, to_company):
+	"""Find the matching account in the target company by name or type"""
+	account_name = frappe.db.get_value("Account", account, "account_name")
+	account_type = frappe.db.get_value("Account", account, "account_type")
+
+	# Exact name match in target company
+	mapped = frappe.db.get_value(
+		"Account",
+		{"account_name": account_name, "company": to_company, "is_group": 0, "disabled": 0},
+		"name",
+	)
+	if mapped:
+		return mapped
+
+	# Match by account type
+	if account_type:
+		mapped = frappe.db.get_value(
+			"Account",
+			{"account_type": account_type, "company": to_company, "is_group": 0, "disabled": 0},
+			"name",
+		)
+		if mapped:
+			return mapped
+
+	# Fallbacks by standard company defaults
+	if account_type == "Receivable":
+		return frappe.db.get_value("Company", to_company, "default_receivable_account")
+	elif account_type == "Payable":
+		return frappe.db.get_value("Company", to_company, "default_payable_account")
+	else:
+		return frappe.db.get_value("Company", to_company, "default_expense_account")
+
+
+def get_exchange_rate(from_currency, to_currency, transaction_date=None):
+	"""Fetch currency exchange rate with fallback to 1.0"""
+	if from_currency == to_currency:
+		return 1.0
+
+	try:
+		from erpnext.setup.utils import get_exchange_rate as erpnext_get_exchange_rate
+		rate = erpnext_get_exchange_rate(from_currency, to_currency, transaction_date or nowdate())
+		if rate:
+			return flt(rate)
+	except Exception:
+		pass
+
+	return 1.0
+
+
+def create_document_reference(source_doc, target_doc):
+	"""Create tracked relationship in Inter Company Document Reference without manual commits"""
+	if source_doc.company == target_doc.company:
+		logger.warning(
+			f"Cannot create intercompany reference within the same company {source_doc.company}"
+		)
+		return
+
+	exists = frappe.db.exists(
+		"Inter Company Document Reference",
+		{
+			"source_doctype": source_doc.doctype,
+			"source_name": source_doc.name,
+			"target_doctype": target_doc.doctype,
+			"target_name": target_doc.name,
+		},
+	)
+	if exists:
+		return
+
+	try:
+		ref_doc = frappe.get_doc(
+			{
+				"doctype": "Inter Company Document Reference",
+				"source_doctype": source_doc.doctype,
+				"source_name": source_doc.name,
+				"source_company": source_doc.company,
+				"target_doctype": target_doc.doctype,
+				"target_name": target_doc.name,
+				"target_company": target_doc.company,
+			}
+		)
+		ref_doc.flags.ignore_permissions = True
+		ref_doc.insert()
+		logger.debug(
+			f"Created Inter Company Document Reference: {source_doc.doctype} {source_doc.name} -> {target_doc.doctype} {target_doc.name}"
+		)
+	except Exception as e:
+		logger.error(f"Error creating Inter Company Document Reference: {str(e)}")

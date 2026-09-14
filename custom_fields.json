@@ -102,5 +102,85 @@
       "in_standard_filter": 1,
       "fetch_if_empty": 1
     }
+  ],
+  "Sales Invoice": [
+    {
+      "fieldname": "intercompany_target_company",
+      "label": "Inter Company Target",
+      "fieldtype": "Link",
+      "options": "Company",
+      "insert_after": "company",
+      "description": "Select the target company for inter-company transaction",
+      "depends_on": "eval:doc.docstatus===0",
+      "mandatory_depends_on": "eval:doc.docstatus===0",
+      "read_only_depends_on": "eval:doc.docstatus===1",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "fetch_if_empty": 1
+    }
+  ],
+  "Purchase Invoice": [
+    {
+      "fieldname": "intercompany_target_company",
+      "label": "Inter Company Target",
+      "fieldtype": "Link",
+      "options": "Company",
+      "insert_after": "company",
+      "description": "Select the target company for inter-company transaction",
+      "depends_on": "eval:doc.docstatus===0",
+      "mandatory_depends_on": "eval:doc.docstatus===0",
+      "read_only_depends_on": "eval:doc.docstatus===1",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "fetch_if_empty": 1
+    }
+  ],
+  "Delivery Note": [
+    {
+      "fieldname": "intercompany_target_company",
+      "label": "Inter Company Target",
+      "fieldtype": "Link",
+      "options": "Company",
+      "insert_after": "company",
+      "description": "Select the target company for inter-company transaction",
+      "depends_on": "eval:doc.docstatus===0",
+      "mandatory_depends_on": "eval:doc.docstatus===0",
+      "read_only_depends_on": "eval:doc.docstatus===1",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "fetch_if_empty": 1
+    }
+  ],
+  "Purchase Receipt": [
+    {
+      "fieldname": "intercompany_target_company",
+      "label": "Inter Company Target",
+      "fieldtype": "Link",
+      "options": "Company",
+      "insert_after": "company",
+      "description": "Select the target company for inter-company transaction",
+      "depends_on": "eval:doc.docstatus===0",
+      "mandatory_depends_on": "eval:doc.docstatus===0",
+      "read_only_depends_on": "eval:doc.docstatus===1",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "fetch_if_empty": 1
+    }
+  ],
+  "Stock Entry": [
+    {
+      "fieldname": "intercompany_target_company",
+      "label": "Inter Company Target",
+      "fieldtype": "Link",
+      "options": "Company",
+      "insert_after": "company",
+      "description": "Select the target company for inter-company transaction",
+      "depends_on": "eval:doc.docstatus===0",
+      "mandatory_depends_on": "eval:doc.docstatus===0",
+      "read_only_depends_on": "eval:doc.docstatus===1",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "fetch_if_empty": 1
+    }
   ]
 }
