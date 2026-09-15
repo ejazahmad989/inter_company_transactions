@@ -21,6 +21,7 @@ app_include_js = [
     "/assets/inter_company_transactions/js/backdate_permission.js",
     "/assets/inter_company_transactions/js/enhanced_workflow.js",
     "/assets/inter_company_transactions/js/inter_company_transaction_map.js",
+    "/assets/inter_company_transactions/js/inter_company_common.js",
     "/assets/inter_company_transactions/js/theme_manager.js",
     "/assets/enhanced_theme_manager/js/custom_login.js"
 ]
@@ -108,7 +109,14 @@ fixtures = [
         "filters": [
             ["doc_type", "in", [
                 "Sales Order",
-                "Purchase Order", 
+                "Purchase Order",
+                "Sales Invoice",
+                "Purchase Invoice",
+                "Delivery Note",
+                "Purchase Receipt",
+                "Quotation",
+                "Supplier Quotation",
+                "Material Request",
                 "Journal Entry",
                 "Payment Entry",
                 "Customer",
