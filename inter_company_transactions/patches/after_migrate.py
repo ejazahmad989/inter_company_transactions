@@ -12,6 +12,9 @@ def after_migrate():
     # Recreate any missing doctypes
     recreate_missing_doctypes()
     
+    # Ensure custom fields are in place
+    ensure_custom_fields()
+
     # Update permissions
     update_permissions()
     
@@ -20,6 +23,15 @@ def after_migrate():
 def execute():
     """Alias for after_migrate to ensure compatibility"""
     after_migrate()
+
+def ensure_custom_fields():
+    """Ensure all required custom fields exist after migration"""
+    from inter_company_transactions.install import create_custom_fields
+    try:
+        create_custom_fields()
+        print("Ensured custom fields exist")
+    except Exception as e:
+        print(f"Error ensuring custom fields: {str(e)}")
 
 def restore_custom_data():
     """Restore backed up custom data"""

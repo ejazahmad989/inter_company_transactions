@@ -9,6 +9,9 @@
     "execution_mode",
     "auto_submit_target_doc",
     "logging_level",
+    "section_break_items_tax",
+    "auto_create_missing_items",
+    "tax_handling_strategy",
     "section_break_pricing",
     "default_transfer_pricing_rule",
     "markup_percentage",
@@ -49,6 +52,26 @@
       "fieldtype": "Select",
       "label": "Logging Level",
       "options": "Debug\nInfo\nWarning\nError"
+    },
+    {
+      "fieldname": "section_break_items_tax",
+      "fieldtype": "Section Break",
+      "label": "Item & Tax Synchronization"
+    },
+    {
+      "default": "1",
+      "fieldname": "auto_create_missing_items",
+      "fieldtype": "Check",
+      "label": "Auto-Create Missing Items in Target Company",
+      "description": "Automatically copies Item code, description, and Stock UOM if the item is missing in the target company"
+    },
+    {
+      "default": "Mirror Net Rate Exactly",
+      "fieldname": "tax_handling_strategy",
+      "fieldtype": "Select",
+      "label": "Tax Handling Strategy on Target Invoices",
+      "options": "Mirror Net Rate Exactly\nApply Target Company Tax Templates",
+      "description": "Choose whether to copy item rates directly without extra tax or apply target entity tax templates"
     },
     {
       "fieldname": "section_break_pricing",

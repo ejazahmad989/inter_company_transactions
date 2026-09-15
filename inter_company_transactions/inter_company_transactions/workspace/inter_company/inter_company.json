@@ -1,0 +1,110 @@
+{
+  "category": "Modules",
+  "charts": [],
+  "content": "[{\"id\":\"b_header\",\"type\":\"header\",\"data\":{\"text\":\"Inter-Company Central Hub\",\"level\":3}},{\"id\":\"b_card_setup\",\"type\":\"card\",\"data\":{\"card_name\":\"Setup & Configuration\"}},{\"id\":\"b_card_trans\",\"type\":\"card\",\"data\":{\"card_name\":\"Operations & Tracking\"}},{\"id\":\"b_card_recon\",\"type\":\"card\",\"data\":{\"card_name\":\"Reconciliation & Reports\"}}]",
+  "creation": "2024-03-14 00:00:00.000000",
+  "custom_blocks": [],
+  "docstatus": 0,
+  "doctype": "Workspace",
+  "for_user": "",
+  "hide_custom": 0,
+  "icon": "octicon octicon-git-compare",
+  "is_hidden": 0,
+  "label": "Inter Company",
+  "links": [
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "Inter Company Settings",
+      "link_count": 0,
+      "link_to": "Inter Company Settings",
+      "link_type": "DocType",
+      "onboard": 1,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "Intercompany Transaction Link",
+      "link_count": 0,
+      "link_to": "Intercompany Transaction Link",
+      "link_type": "DocType",
+      "onboard": 1,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "Inter Company Document Reference",
+      "link_count": 0,
+      "link_to": "Inter Company Document Reference",
+      "link_type": "DocType",
+      "onboard": 0,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "Inter Company Workflow",
+      "link_count": 0,
+      "link_to": "Inter Company Workflow",
+      "link_type": "DocType",
+      "onboard": 0,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 1,
+      "label": "Inter Company Balance Reconciliation",
+      "link_count": 0,
+      "link_to": "Inter Company Balance Reconciliation",
+      "link_type": "Report",
+      "onboard": 1,
+      "type": "Link"
+    }
+  ],
+  "modified": "2024-03-14 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Inter Company Transactions",
+  "name": "Inter Company",
+  "number_cards": [],
+  "owner": "Administrator",
+  "public": 1,
+  "quick_lists": [],
+  "roles": [
+    {
+      "role": "Accounts Manager"
+    },
+    {
+      "role": "Accounts User"
+    },
+    {
+      "role": "System Manager"
+    }
+  ],
+  "sequence_id": 20.0,
+  "shortcuts": [
+    {
+      "color": "Grey",
+      "doc_view": "List",
+      "label": "Transaction Links",
+      "link_to": "Intercompany Transaction Link",
+      "type": "DocType"
+    },
+    {
+      "color": "Grey",
+      "doc_view": "List",
+      "label": "Global Settings",
+      "link_to": "Inter Company Settings",
+      "type": "DocType"
+    },
+    {
+      "color": "Grey",
+      "doc_view": "Report",
+      "label": "Balance Reconciliation",
+      "link_to": "Inter Company Balance Reconciliation",
+      "type": "Report"
+    }
+  ],
+  "title": "Inter Company"
+}

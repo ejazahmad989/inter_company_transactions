@@ -208,11 +208,31 @@ def _process_linked_documents(doc_doctype, doc_name):
 
 		except Exception as e:
 			error_msg = f"Failed to create intercompany document in company {target_company}: {str(e)}"
-			logger.error(f"{error_msg}\n{frappe.get_traceback()}")
+			tb = frappe.get_traceback()
+			logger.error(f"{error_msg}\n{tb}")
 			frappe.log_error(
-				f"{error_msg}\nSource: {doc.doctype} {doc.name}\nTraceback: {frappe.get_traceback()}",
+				f"{error_msg}\nSource: {doc.doctype} {doc.name}\nTraceback: {tb}",
 				"Inter Company Transaction Error",
 			)
+			# Log into dedicated Inter Company Error Log doctype if it exists
+			try:
+				if frappe.db.exists("DocType", "Inter Company Error Log"):
+					err_doc = frappe.get_doc({
+						"doctype": "Inter Company Error Log",
+						"status": "Failed",
+						"source_doctype": doc.doctype,
+						"source_name": doc.name,
+						"source_company": doc.company,
+						"target_company": target_company,
+						"target_doctype": trans_type.target_type,
+						"error_message": str(e),
+						"traceback": tb,
+					})
+					err_doc.flags.ignore_permissions = True
+					err_doc.insert()
+			except Exception as log_err:
+				logger.warning(f"Could not write to Inter Company Error Log: {str(log_err)}")
+
 			frappe.msgprint(error_msg, title=_("Intercompany Error"), indicator="red")
 
 
@@ -344,10 +364,10 @@ def find_applicable_mappings(doc):
 				match_by_party = False
 
 				if not target_company_from_doc:
-					if doc.doctype in ["Sales Order", "Sales Invoice", "Delivery Note"]:
+					if doc.doctype in ["Sales Order", "Sales Invoice", "Delivery Note", "Quotation"]:
 						if lc.main_company_customer and doc.get("customer") == lc.main_company_customer:
 							match_by_party = True
-					elif doc.doctype in ["Purchase Order", "Purchase Invoice", "Purchase Receipt"]:
+					elif doc.doctype in ["Purchase Order", "Purchase Invoice", "Purchase Receipt", "Supplier Quotation"]:
 						if lc.main_company_supplier and doc.get("supplier") == lc.main_company_supplier:
 							match_by_party = True
 					elif doc.doctype == "Payment Entry":
@@ -363,7 +383,7 @@ def find_applicable_mappings(doc):
 							elif acc.get("party_type") == "Supplier" and acc.get("party") == lc.main_company_supplier:
 								match_by_party = True
 								break
-					elif doc.doctype == "Stock Entry":
+					elif doc.doctype in ["Stock Entry", "Material Request"]:
 						match_by_party = False
 
 				if match_by_explicit or match_by_party:
@@ -385,10 +405,10 @@ def find_applicable_mappings(doc):
 				match_by_party = False
 
 				if not target_company_from_doc:
-					if doc.doctype in ["Sales Order", "Sales Invoice", "Delivery Note"]:
+					if doc.doctype in ["Sales Order", "Sales Invoice", "Delivery Note", "Quotation"]:
 						if matching_lc.other_company_customer and doc.get("customer") == matching_lc.other_company_customer:
 							match_by_party = True
-					elif doc.doctype in ["Purchase Order", "Purchase Invoice", "Purchase Receipt"]:
+					elif doc.doctype in ["Purchase Order", "Purchase Invoice", "Purchase Receipt", "Supplier Quotation"]:
 						if matching_lc.other_company_supplier and doc.get("supplier") == matching_lc.other_company_supplier:
 							match_by_party = True
 					elif doc.doctype == "Payment Entry":
@@ -404,7 +424,7 @@ def find_applicable_mappings(doc):
 							elif acc.get("party_type") == "Supplier" and acc.get("party") == matching_lc.other_company_supplier:
 								match_by_party = True
 								break
-					elif doc.doctype == "Stock Entry":
+					elif doc.doctype in ["Stock Entry", "Material Request"]:
 						match_by_party = False
 
 				if match_by_explicit or match_by_party:
@@ -430,7 +450,7 @@ def validate_required_parties(doc, mapping_info):
 	direction = mapping_info.get("direction")
 	target_company = mapping_info["company"]
 
-	if tt.target_type in ["Purchase Order", "Purchase Invoice", "Purchase Receipt"]:
+	if tt.target_type in ["Purchase Order", "Purchase Invoice", "Purchase Receipt", "Supplier Quotation"]:
 		supplier = lc.main_company_supplier if direction == "other_to_main" else lc.other_company_supplier
 		if not supplier:
 			field_name = "Main Company Supplier" if direction == "other_to_main" else "Other Company Supplier"
@@ -440,7 +460,7 @@ def validate_required_parties(doc, mapping_info):
 				)
 			)
 
-	elif tt.target_type in ["Sales Order", "Sales Invoice", "Delivery Note"]:
+	elif tt.target_type in ["Sales Order", "Sales Invoice", "Delivery Note", "Quotation"]:
 		customer = lc.main_company_customer if direction == "other_to_main" else lc.other_company_customer
 		if not customer:
 			field_name = "Main Company Customer" if direction == "other_to_main" else "Other Company Customer"
@@ -479,6 +499,9 @@ def validate_required_parties(doc, mapping_info):
 				)
 			)
 
+	elif tt.target_type == "Material Request":
+		pass
+
 
 def create_corresponding_document(source_doc, mapping_info, direction, settings=None):
 	"""Dispatcher to route creation with transfer pricing support"""
@@ -496,15 +519,23 @@ def create_corresponding_document(source_doc, mapping_info, direction, settings=
 	elif source_doc.doctype == "Purchase Invoice" and target == "Sales Invoice":
 		return create_sales_invoice(source_doc, mapping, linked_company, direction, settings)
 	elif source_doc.doctype == "Delivery Note" and target == "Purchase Receipt":
-		return create_purchase_receipt(source_doc, mapping, linked_company, direction)
+		return create_purchase_receipt(source_doc, mapping, linked_company, direction, settings)
 	elif source_doc.doctype == "Purchase Receipt" and target == "Delivery Note":
-		return create_delivery_note(source_doc, mapping, linked_company, direction)
+		return create_delivery_note(source_doc, mapping, linked_company, direction, settings)
 	elif source_doc.doctype == "Stock Entry" and target == "Stock Entry":
 		return create_stock_entry(source_doc, mapping, linked_company, direction)
 	elif source_doc.doctype == "Journal Entry" and target == "Journal Entry":
 		return create_journal_entry(source_doc, mapping, linked_company, direction)
 	elif source_doc.doctype == "Payment Entry" and target == "Payment Entry":
 		return create_payment_entry(source_doc, mapping, linked_company, direction)
+	elif source_doc.doctype == "Quotation" and target == "Supplier Quotation":
+		return create_supplier_quotation(source_doc, mapping, linked_company, direction, settings)
+	elif source_doc.doctype == "Supplier Quotation" and target == "Quotation":
+		return create_quotation(source_doc, mapping, linked_company, direction, settings)
+	elif source_doc.doctype == "Material Request" and target == "Sales Order":
+		return create_sales_order_from_material_request(source_doc, mapping, linked_company, direction, settings)
+	elif source_doc.doctype == "Material Request" and target == "Purchase Order":
+		return create_purchase_order_from_material_request(source_doc, mapping, linked_company, direction, settings)
 
 	logger.warning(f"No document creation mapping found for {source_doc.doctype} -> {target}")
 	return None
@@ -513,6 +544,87 @@ def create_corresponding_document(source_doc, mapping_info, direction, settings=
 # -------------------------------------------------------------------------
 # Document Creators (With Transfer Pricing & Auto-Allocation)
 # -------------------------------------------------------------------------
+
+def get_target_item_code(source_item_code, source_company, target_company):
+	"""
+	Look up Intercompany Item Mapping to translate item SKU/code across companies.
+	Checks both direct and reverse mapping.
+	"""
+	if not source_item_code:
+		return source_item_code
+
+	try:
+		if frappe.db.exists("DocType", "Intercompany Item Mapping"):
+			# Check direct mapping
+			mapped_code = frappe.db.get_value(
+				"Intercompany Item Mapping",
+				{
+					"source_company": source_company,
+					"target_company": target_company,
+					"source_item_code": source_item_code,
+					"disabled": 0,
+				},
+				"target_item_code",
+			)
+			if mapped_code:
+				return mapped_code
+
+			# Check reverse mapping
+			rev_mapped_code = frappe.db.get_value(
+				"Intercompany Item Mapping",
+				{
+					"source_company": target_company,
+					"target_company": source_company,
+					"target_item_code": source_item_code,
+					"disabled": 0,
+				},
+				"source_item_code",
+			)
+			if rev_mapped_code:
+				return rev_mapped_code
+	except Exception as e:
+		logger.warning(f"Error checking Intercompany Item Mapping: {e}")
+
+	return source_item_code
+
+
+def ensure_item_exists(item_code, target_company, settings=None):
+	"""
+	Ensure item exists in target company. If missing and auto_create_missing_items is enabled in settings,
+	replicates item master details into target company to prevent sync failure.
+	"""
+	if not item_code or frappe.db.exists("Item", item_code):
+		return
+
+	auto_create = settings.get("auto_create_missing_items", 1) if settings else 1
+	if not auto_create:
+		frappe.throw(
+			_("Item {0} does not exist in target company {1} and auto-creation is disabled in Inter Company Settings.").format(
+				frappe.bold(item_code), frappe.bold(target_company)
+			)
+		)
+
+	try:
+		source_item = frappe.get_doc("Item", item_code)
+		# Create replicated item
+		new_item = frappe.get_doc({
+			"doctype": "Item",
+			"item_code": source_item.item_code,
+			"item_name": source_item.item_name,
+			"item_group": source_item.item_group,
+			"stock_uom": source_item.stock_uom,
+			"is_stock_item": source_item.is_stock_item,
+			"is_sales_item": source_item.is_sales_item,
+			"is_purchase_item": source_item.is_purchase_item,
+			"description": source_item.description or source_item.item_name,
+		})
+		new_item.flags.ignore_permissions = True
+		new_item.flags.ignore_mandatory = True
+		new_item.insert()
+		logger.info(f"Auto-created missing Item {item_code} in target system for company {target_company}")
+	except Exception as e:
+		logger.warning(f"Could not auto-create missing Item {item_code}: {str(e)}")
+
 
 def calculate_transfer_rate(item_doc, source_rate, source_company, settings):
 	"""
@@ -579,11 +691,13 @@ def create_purchase_order(sales_order, mapping, linked_company, direction, setti
 	target_warehouse = get_default_warehouse(po.company)
 
 	for item in sales_order.items:
+		target_item_code = get_target_item_code(item.item_code, sales_order.company, po.company)
+		ensure_item_exists(target_item_code, po.company, settings)
 		rate = calculate_transfer_rate(item, item.rate, sales_order.company, settings)
 		po.append(
 			"items",
 			{
-				"item_code": item.item_code,
+				"item_code": target_item_code,
 				"item_name": item.item_name,
 				"description": item.description,
 				"qty": flt(item.qty),
@@ -626,11 +740,13 @@ def create_sales_order(purchase_order, mapping, linked_company, direction, setti
 	target_warehouse = get_default_warehouse(so.company)
 
 	for item in purchase_order.items:
+		target_item_code = get_target_item_code(item.item_code, purchase_order.company, so.company)
+		ensure_item_exists(target_item_code, so.company, settings)
 		rate = calculate_transfer_rate(item, item.rate, purchase_order.company, settings)
 		so.append(
 			"items",
 			{
-				"item_code": item.item_code,
+				"item_code": target_item_code,
 				"item_name": item.item_name,
 				"description": item.description,
 				"qty": flt(item.qty),
@@ -696,11 +812,13 @@ def create_purchase_invoice(sales_invoice, mapping, linked_company, direction, s
 	cost_center = get_default_cost_center(pi.company)
 
 	for item in sales_invoice.items:
+		target_item_code = get_target_item_code(item.item_code, sales_invoice.company, pi.company)
+		ensure_item_exists(target_item_code, pi.company, settings)
 		rate = calculate_transfer_rate(item, item.rate, sales_invoice.company, settings)
 		pi.append(
 			"items",
 			{
-				"item_code": item.item_code,
+				"item_code": target_item_code,
 				"item_name": item.item_name,
 				"description": item.description,
 				"qty": flt(item.qty),
@@ -717,6 +835,13 @@ def create_purchase_invoice(sales_invoice, mapping, linked_company, direction, s
 
 	pi.flags.ignore_permissions = True
 	pi.run_method("set_missing_values")
+
+	# Tax handling strategy
+	tax_strategy = settings.get("tax_handling_strategy", "Mirror Net Rate Exactly") if settings else "Mirror Net Rate Exactly"
+	if tax_strategy == "Mirror Net Rate Exactly":
+		# Clear auto-fetched taxes to prevent double taxing sister companies
+		pi.set("taxes", [])
+
 	pi.run_method("calculate_taxes_and_totals")
 	pi.docstatus = 0
 	return pi
@@ -766,11 +891,13 @@ def create_sales_invoice(purchase_invoice, mapping, linked_company, direction, s
 	cost_center = get_default_cost_center(si.company)
 
 	for item in purchase_invoice.items:
+		target_item_code = get_target_item_code(item.item_code, purchase_invoice.company, si.company)
+		ensure_item_exists(target_item_code, si.company, settings)
 		rate = calculate_transfer_rate(item, item.rate, purchase_invoice.company, settings)
 		si.append(
 			"items",
 			{
-				"item_code": item.item_code,
+				"item_code": target_item_code,
 				"item_name": item.item_name,
 				"description": item.description,
 				"qty": flt(item.qty),
@@ -787,12 +914,17 @@ def create_sales_invoice(purchase_invoice, mapping, linked_company, direction, s
 
 	si.flags.ignore_permissions = True
 	si.run_method("set_missing_values")
+
+	tax_strategy = settings.get("tax_handling_strategy", "Mirror Net Rate Exactly") if settings else "Mirror Net Rate Exactly"
+	if tax_strategy == "Mirror Net Rate Exactly":
+		si.set("taxes", [])
+
 	si.run_method("calculate_taxes_and_totals")
 	si.docstatus = 0
 	return si
 
 
-def create_delivery_note(purchase_receipt, mapping, linked_company, direction):
+def create_delivery_note(purchase_receipt, mapping, linked_company, direction, settings=None):
 	"""Create Delivery Note from Purchase Receipt"""
 	dn = frappe.new_doc("Delivery Note")
 
@@ -818,17 +950,13 @@ def create_delivery_note(purchase_receipt, mapping, linked_company, direction):
 	target_warehouse = get_default_warehouse(dn.company)
 
 	for item in purchase_receipt.items:
-		if not frappe.db.exists("Item", item.item_code):
-			frappe.throw(
-				_("Item {0} does not exist in company {1}").format(
-					frappe.bold(item.item_code), frappe.bold(dn.company)
-				)
-			)
+		target_item_code = get_target_item_code(item.item_code, purchase_receipt.company, dn.company)
+		ensure_item_exists(target_item_code, dn.company, settings)
 
 		dn.append(
 			"items",
 			{
-				"item_code": item.item_code,
+				"item_code": target_item_code,
 				"item_name": item.item_name,
 				"description": item.description,
 				"qty": flt(item.qty),
@@ -847,7 +975,7 @@ def create_delivery_note(purchase_receipt, mapping, linked_company, direction):
 	return dn
 
 
-def create_purchase_receipt(delivery_note, mapping, linked_company, direction):
+def create_purchase_receipt(delivery_note, mapping, linked_company, direction, settings=None):
 	"""Create Purchase Receipt from Delivery Note"""
 	pr = frappe.new_doc("Purchase Receipt")
 
@@ -873,17 +1001,13 @@ def create_purchase_receipt(delivery_note, mapping, linked_company, direction):
 	target_warehouse = get_default_warehouse(pr.company)
 
 	for item in delivery_note.items:
-		if not frappe.db.exists("Item", item.item_code):
-			frappe.throw(
-				_("Item {0} does not exist in company {1}").format(
-					frappe.bold(item.item_code), frappe.bold(pr.company)
-				)
-			)
+		target_item_code = get_target_item_code(item.item_code, delivery_note.company, pr.company)
+		ensure_item_exists(target_item_code, pr.company, settings)
 
 		pr.append(
 			"items",
 			{
-				"item_code": item.item_code,
+				"item_code": target_item_code,
 				"item_name": item.item_name,
 				"description": item.description,
 				"qty": flt(item.qty),
@@ -928,17 +1052,18 @@ def create_stock_entry(source_se, mapping, linked_company, direction):
 		frappe.throw(_("Inter-company warehouses not found for {0} and {1}").format(source_company, target_company))
 
 	for item in source_se.items:
-		if not frappe.db.exists("Item", item.item_code):
+		target_item_code = get_target_item_code(item.item_code, source_company, target_company)
+		if not frappe.db.exists("Item", target_item_code):
 			frappe.throw(
 				_("Item {0} does not exist in target company {1}").format(
-					frappe.bold(item.item_code), frappe.bold(se.company)
+					frappe.bold(target_item_code), frappe.bold(se.company)
 				)
 			)
 
 		se.append(
 			"items",
 			{
-				"item_code": item.item_code,
+				"item_code": target_item_code,
 				"qty": flt(item.qty),
 				"uom": item.uom,
 				"stock_uom": item.stock_uom or item.uom,
@@ -1167,6 +1292,197 @@ def create_payment_entry(source_pe, mapping, linked_company, direction):
 	pe.run_method("set_missing_values")
 	pe.docstatus = 0
 	return pe
+
+
+def create_supplier_quotation(quotation, mapping, linked_company, direction, settings=None):
+	"""Create Supplier Quotation from Quotation"""
+	sq = frappe.new_doc("Supplier Quotation")
+
+	if direction == "other_to_main":
+		sq.company = mapping.main_company
+		sq.supplier = linked_company.main_company_supplier
+	else:
+		sq.company = linked_company.company
+		sq.supplier = linked_company.other_company_supplier
+
+	if not sq.supplier:
+		frappe.throw(_("Supplier not found for company {0}").format(sq.company))
+
+	sq.currency = quotation.currency
+	sq.conversion_rate = quotation.conversion_rate or 1.0
+	sq.transaction_date = quotation.transaction_date or nowdate()
+	sq.valid_till = quotation.valid_till or add_days(sq.transaction_date, 30)
+
+	target_warehouse = get_default_warehouse(sq.company)
+
+	for item in quotation.items:
+		target_item_code = get_target_item_code(item.item_code, quotation.company, sq.company)
+		ensure_item_exists(target_item_code, sq.company, settings)
+		rate = calculate_transfer_rate(item, item.rate, quotation.company, settings)
+		sq.append(
+			"items",
+			{
+				"item_code": target_item_code,
+				"item_name": item.item_name,
+				"description": item.description,
+				"qty": flt(item.qty),
+				"uom": item.uom,
+				"stock_uom": item.stock_uom or item.uom,
+				"conversion_factor": flt(item.conversion_factor) or 1.0,
+				"rate": rate,
+				"warehouse": target_warehouse,
+				"lead_time_days": flt(item.get("lead_time_days") or 0),
+			},
+		)
+
+	sq.flags.ignore_permissions = True
+	sq.run_method("set_missing_values")
+	sq.run_method("calculate_taxes_and_totals")
+	sq.docstatus = 0
+	return sq
+
+
+def create_quotation(supplier_quotation, mapping, linked_company, direction, settings=None):
+	"""Create Quotation from Supplier Quotation"""
+	q = frappe.new_doc("Quotation")
+
+	if direction == "other_to_main":
+		q.company = mapping.main_company
+		q.party_name = linked_company.main_company_customer
+	else:
+		q.company = linked_company.company
+		q.party_name = linked_company.other_company_customer
+
+	if not q.party_name:
+		frappe.throw(_("Customer not found for company {0}").format(q.company))
+
+	q.quotation_to = "Customer"
+	q.currency = supplier_quotation.currency
+	q.conversion_rate = supplier_quotation.conversion_rate or 1.0
+	q.transaction_date = supplier_quotation.transaction_date or nowdate()
+	q.valid_till = supplier_quotation.valid_till or add_days(q.transaction_date, 30)
+
+	target_warehouse = get_default_warehouse(q.company)
+
+	for item in supplier_quotation.items:
+		target_item_code = get_target_item_code(item.item_code, supplier_quotation.company, q.company)
+		ensure_item_exists(target_item_code, q.company, settings)
+		rate = calculate_transfer_rate(item, item.rate, supplier_quotation.company, settings)
+		q.append(
+			"items",
+			{
+				"item_code": target_item_code,
+				"item_name": item.item_name,
+				"description": item.description,
+				"qty": flt(item.qty),
+				"uom": item.uom,
+				"stock_uom": item.stock_uom or item.uom,
+				"conversion_factor": flt(item.conversion_factor) or 1.0,
+				"rate": rate,
+				"price_list_rate": rate,
+				"warehouse": target_warehouse,
+			},
+		)
+
+	q.flags.ignore_permissions = True
+	q.run_method("set_missing_values")
+	q.run_method("calculate_taxes_and_totals")
+	q.docstatus = 0
+	return q
+
+
+def create_sales_order_from_material_request(material_request, mapping, linked_company, direction, settings=None):
+	"""Create Sales Order from Material Request (for intercompany fulfillment)"""
+	so = frappe.new_doc("Sales Order")
+
+	if direction == "other_to_main":
+		so.company = mapping.main_company
+		so.customer = linked_company.main_company_customer
+	else:
+		so.company = linked_company.company
+		so.customer = linked_company.other_company_customer
+
+	if not so.customer:
+		frappe.throw(_("Customer not found for company {0}").format(so.company))
+
+	so.transaction_date = material_request.transaction_date or nowdate()
+	so.delivery_date = material_request.schedule_date or so.transaction_date or nowdate()
+
+	target_warehouse = get_default_warehouse(so.company)
+
+	for item in material_request.items:
+		target_item_code = get_target_item_code(item.item_code, material_request.company, so.company)
+		ensure_item_exists(target_item_code, so.company, settings)
+		rate = calculate_transfer_rate(item, item.get("rate") or 0.0, material_request.company, settings)
+		so.append(
+			"items",
+			{
+				"item_code": target_item_code,
+				"item_name": item.item_name,
+				"description": item.description,
+				"qty": flt(item.qty),
+				"uom": item.uom,
+				"stock_uom": item.stock_uom or item.uom,
+				"conversion_factor": flt(item.conversion_factor) or 1.0,
+				"rate": rate,
+				"price_list_rate": rate,
+				"warehouse": target_warehouse,
+				"delivery_date": item.schedule_date or so.delivery_date,
+			},
+		)
+
+	so.flags.ignore_permissions = True
+	so.run_method("set_missing_values")
+	so.run_method("calculate_taxes_and_totals")
+	so.docstatus = 0
+	return so
+
+
+def create_purchase_order_from_material_request(material_request, mapping, linked_company, direction, settings=None):
+	"""Create Purchase Order from Material Request (for intercompany procurement)"""
+	po = frappe.new_doc("Purchase Order")
+
+	if direction == "other_to_main":
+		po.company = mapping.main_company
+		po.supplier = linked_company.main_company_supplier
+	else:
+		po.company = linked_company.company
+		po.supplier = linked_company.other_company_supplier
+
+	if not po.supplier:
+		frappe.throw(_("Supplier not found for company {0}").format(po.company))
+
+	po.transaction_date = material_request.transaction_date or nowdate()
+	po.schedule_date = material_request.schedule_date or po.transaction_date or nowdate()
+
+	target_warehouse = get_default_warehouse(po.company)
+
+	for item in material_request.items:
+		target_item_code = get_target_item_code(item.item_code, material_request.company, po.company)
+		ensure_item_exists(target_item_code, po.company, settings)
+		rate = calculate_transfer_rate(item, item.get("rate") or 0.0, material_request.company, settings)
+		po.append(
+			"items",
+			{
+				"item_code": target_item_code,
+				"item_name": item.item_name,
+				"description": item.description,
+				"qty": flt(item.qty),
+				"uom": item.uom,
+				"stock_uom": item.stock_uom or item.uom,
+				"conversion_factor": flt(item.conversion_factor) or 1.0,
+				"rate": rate,
+				"price_list_rate": rate,
+				"warehouse": target_warehouse,
+				"schedule_date": item.schedule_date or po.schedule_date,
+			},
+		)
+
+	po.flags.ignore_permissions = True
+	po.run_method("set_missing_values")
+	po.run_method("calculate_taxes_and_totals")
+	po.docstatus = 0
+	return po
 
 
 # -------------------------------------------------------------------------

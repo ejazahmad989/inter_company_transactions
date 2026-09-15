@@ -1,0 +1,58 @@
+{
+  "actions": [],
+  "creation": "2024-03-14 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "source_item_code",
+    "target_company",
+    "target_item_code",
+    "conversion_factor",
+    "notes"
+  ],
+  "fields": [
+    {
+      "fieldname": "source_item_code",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Source Item Code",
+      "options": "Item",
+      "reqd": 1
+    },
+    {
+      "fieldname": "target_company",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Target Company",
+      "options": "Company",
+      "reqd": 1
+    },
+    {
+      "fieldname": "target_item_code",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Target Item Code (SKU)",
+      "reqd": 1
+    },
+    {
+      "default": "1.0",
+      "fieldname": "conversion_factor",
+      "fieldtype": "Float",
+      "label": "UOM / Qty Conversion Factor"
+    },
+    {
+      "fieldname": "notes",
+      "fieldtype": "Data",
+      "label": "Notes"
+    }
+  ],
+  "istable": 1,
+  "modified": "2024-03-14 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Inter Company Transactions",
+  "name": "Intercompany Item Mapping",
+  "owner": "Administrator",
+  "permissions": [],
+  "sort_field": "modified",
+  "sort_order": "DESC"
+}

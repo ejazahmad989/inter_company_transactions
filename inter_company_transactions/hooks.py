@@ -58,10 +58,13 @@ fixtures = [
         "filters": [
             ["name", "in", [
                 "Role Replication",
+                "Inter Company Settings",
                 "Intercompany Transaction Link",
                 "Intercompany Linked Company", 
                 "Intercompany Transaction Type",
+                "Intercompany Item Mapping",
                 "Inter Company Document Reference",
+                "Inter Company Error Log",
                 "Theme Manager",
                 "Theme Manager Company",
                 "Theme Manager User",
@@ -74,6 +77,13 @@ fixtures = [
                 "Notification Settings"
              
             ]]
+        ]
+    },
+    # Workspaces
+    {
+        "doctype": "Workspace",
+        "filters": [
+            ["name", "in", ["Inter Company"]]
         ]
     },
     # Custom Fields - All inter-company related fields
@@ -262,6 +272,24 @@ doc_events = {
           "before_insert": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
           "before_save":   "inter_company_transactions.date_control.date_validator.validate_transaction_date",
           "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
+    },
+    "Quotation": {
+          "on_submit": [
+              "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents"
+          ],
+          "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents"
+    },
+    "Supplier Quotation": {
+          "on_submit": [
+              "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents"
+          ],
+          "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents"
+    },
+    "Material Request": {
+          "on_submit": [
+              "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents"
+          ],
+          "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents"
     }
 }
 

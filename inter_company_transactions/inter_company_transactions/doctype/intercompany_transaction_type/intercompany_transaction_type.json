@@ -14,7 +14,7 @@
       "fieldtype": "Select",
       "in_list_view": 1,
       "label": "Source Transaction Type",
-      "options": "Sales Order\nPurchase Order\nSales Invoice\nPurchase Invoice\nDelivery Note\nPurchase Receipt\nStock Entry\nJournal Entry\nPayment Entry",
+      "options": "Sales Order\nPurchase Order\nSales Invoice\nPurchase Invoice\nDelivery Note\nPurchase Receipt\nStock Entry\nJournal Entry\nPayment Entry\nQuotation\nSupplier Quotation\nMaterial Request",
       "reqd": 1
     },
     {
@@ -22,7 +22,7 @@
       "fieldtype": "Select",
       "in_list_view": 1,
       "label": "Target Transaction Type",
-      "options": "Sales Order\nPurchase Order\nSales Invoice\nPurchase Invoice\nDelivery Note\nPurchase Receipt\nStock Entry\nJournal Entry\nPayment Entry",
+      "options": "Sales Order\nPurchase Order\nSales Invoice\nPurchase Invoice\nDelivery Note\nPurchase Receipt\nStock Entry\nJournal Entry\nPayment Entry\nQuotation\nSupplier Quotation\nMaterial Request",
       "reqd": 1
     },
     {

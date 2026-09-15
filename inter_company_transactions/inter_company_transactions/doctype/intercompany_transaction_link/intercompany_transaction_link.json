@@ -11,7 +11,9 @@
     "auto_create_draft",
     "auto_cancel_linked_document",
     "section_break_2",
-    "transaction_types"
+    "transaction_types",
+    "section_break_item_mapping",
+    "item_mappings"
   ],
   "fields": [
     {
@@ -64,6 +66,18 @@
       "label": "Transaction Types",
       "options": "Intercompany Transaction Type",
       "reqd": 1
+    },
+    {
+      "fieldname": "section_break_item_mapping",
+      "fieldtype": "Section Break",
+      "label": "SKU / Item Code Mappings (Optional)"
+    },
+    {
+      "fieldname": "item_mappings",
+      "fieldtype": "Table",
+      "label": "Item Code Cross-Mappings",
+      "options": "Intercompany Item Mapping",
+      "description": "Translate Item Code in Source Company to different Item Code in Target Company"
     }
   ],
   "modified": "2024-03-14 00:00:00.000000",
