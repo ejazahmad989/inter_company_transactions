@@ -1244,6 +1244,27 @@ def set_default_permissions():
             "submit": 0, "cancel": 0, "amend": 0,
             "report": 1, "export": 1, "print": 1, "email": 1, "share": 1
         },
+        {
+            "doctype": "Inter Company Settings",
+            "role": "System Manager",
+            "read": 1, "write": 1, "create": 1, "delete": 1,
+            "submit": 0, "cancel": 0, "amend": 0,
+            "report": 1, "export": 1, "print": 1, "email": 1, "share": 1
+        },
+        {
+            "doctype": "Intercompany Item Mapping",
+            "role": "System Manager",
+            "read": 1, "write": 1, "create": 1, "delete": 1,
+            "submit": 0, "cancel": 0, "amend": 0,
+            "report": 1, "export": 1, "print": 1, "email": 1, "share": 1
+        },
+        {
+            "doctype": "Inter Company Error Log",
+            "role": "System Manager",
+            "read": 1, "write": 1, "create": 1, "delete": 1,
+            "submit": 0, "cancel": 0, "amend": 0,
+            "report": 1, "export": 1, "print": 1, "email": 1, "share": 1
+        },
         
         # All Role - Read access to view DocTypes
         {

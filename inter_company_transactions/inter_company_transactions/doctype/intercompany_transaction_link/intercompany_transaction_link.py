@@ -10,6 +10,40 @@ logger = frappe.logger("inter_company_transactions")
 
 
 class IntercompanyTransactionLink(Document):
+	def before_insert(self):
+		if not self.transaction_types:
+			self.populate_default_transaction_types()
+
+	@frappe.whitelist()
+	def populate_default_transaction_types(self):
+		"""Pre-populates the standard inter-company transaction mappings"""
+		default_mappings = [
+			("Sales Order", "Purchase Order", "Both"),
+			("Sales Invoice", "Purchase Invoice", "Both"),
+			("Delivery Note", "Purchase Receipt", "Both"),
+			("Quotation", "Supplier Quotation", "Both"),
+			("Material Request", "Sales Order", "Both"),
+			("Stock Entry", "Stock Entry", "Both"),
+			("Journal Entry", "Journal Entry", "Both"),
+			("Payment Entry", "Payment Entry", "Both"),
+		]
+
+		existing_pairs = set()
+		for row in (self.transaction_types or []):
+			existing_pairs.add((row.source_type, row.target_type))
+
+		added = 0
+		for src, tgt, direction in default_mappings:
+			if (src, tgt) not in existing_pairs:
+				self.append("transaction_types", {
+					"source_type": src,
+					"target_type": tgt,
+					"direction": direction
+				})
+				added += 1
+
+		return added
+
 	def validate(self):
 		self.validate_companies()
 		self.validate_parties()

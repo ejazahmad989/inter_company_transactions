@@ -54,7 +54,10 @@ def ensure_custom_doctypes():
         "Inter Company Workflow Approver",
         "Workflow Approval Request",
         "Workflow Approval History",
-        "Notification Settings"
+        "Notification Settings",
+        "Intercompany Item Mapping",
+        "Inter Company Error Log",
+        "Inter Company Settings"
     ]
     
     for doctype_name in custom_doctypes:

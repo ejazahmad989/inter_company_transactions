@@ -58,3 +58,36 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 		self.assertTrue(meta.has_field("source_name"))
 		self.assertTrue(meta.has_field("target_doctype"))
 		self.assertTrue(meta.has_field("target_name"))
+
+	def test_item_mapping_doctype_exists(self):
+		"""Verify Intercompany Item Mapping doctype metadata exists"""
+		meta = frappe.get_meta("Intercompany Item Mapping")
+		self.assertTrue(meta.has_field("source_company"))
+		self.assertTrue(meta.has_field("target_company"))
+		self.assertTrue(meta.has_field("source_item_code"))
+		self.assertTrue(meta.has_field("target_item_code"))
+
+	def test_error_log_doctype_exists(self):
+		"""Verify Inter Company Error Log doctype metadata exists"""
+		meta = frappe.get_meta("Inter Company Error Log")
+		self.assertTrue(meta.has_field("source_doctype"))
+		self.assertTrue(meta.has_field("source_name"))
+		self.assertTrue(meta.has_field("error_message"))
+		self.assertTrue(meta.has_field("resolved"))
+
+	def test_populate_default_transaction_types(self):
+		"""Verify default transaction types population logic"""
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			IntercompanyTransactionLink,
+		)
+		doc = frappe.new_doc("Intercompany Transaction Link")
+		doc.main_company = "Test Company 1"
+		added = doc.populate_default_transaction_types()
+		self.assertGreaterEqual(added, 8)
+		type_pairs = [(r.source_type, r.target_type) for r in doc.transaction_types]
+		self.assertIn(("Sales Order", "Purchase Order"), type_pairs)
+		self.assertIn(("Quotation", "Supplier Quotation"), type_pairs)
+		self.assertIn(("Material Request", "Sales Order"), type_pairs)
+		self.assertIn(("Delivery Note", "Purchase Receipt"), type_pairs)
+
+

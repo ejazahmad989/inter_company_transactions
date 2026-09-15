@@ -54,6 +54,26 @@
     },
     {
       "hidden": 0,
+      "is_query_report": 0,
+      "label": "Intercompany Item Mapping",
+      "link_count": 0,
+      "link_to": "Intercompany Item Mapping",
+      "link_type": "DocType",
+      "onboard": 0,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "Inter Company Error Log",
+      "link_count": 0,
+      "link_to": "Inter Company Error Log",
+      "link_type": "DocType",
+      "onboard": 0,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
       "is_query_report": 1,
       "label": "Inter Company Balance Reconciliation",
       "link_count": 0,
@@ -104,6 +124,20 @@
       "label": "Balance Reconciliation",
       "link_to": "Inter Company Balance Reconciliation",
       "type": "Report"
+    },
+    {
+      "color": "Grey",
+      "doc_view": "List",
+      "label": "Item Mappings",
+      "link_to": "Intercompany Item Mapping",
+      "type": "DocType"
+    },
+    {
+      "color": "Grey",
+      "doc_view": "List",
+      "label": "Sync Error Logs",
+      "link_to": "Inter Company Error Log",
+      "type": "DocType"
     }
   ],
   "title": "Inter Company"

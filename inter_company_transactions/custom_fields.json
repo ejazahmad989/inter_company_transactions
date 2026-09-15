@@ -182,5 +182,50 @@
       "in_standard_filter": 1,
       "fetch_if_empty": 1
     }
+  ],
+  "Quotation": [
+    {
+      "fieldname": "intercompany_target_company",
+      "label": "Inter Company Target",
+      "fieldtype": "Link",
+      "options": "Company",
+      "insert_after": "company",
+      "description": "Select the target company for inter-company transaction",
+      "depends_on": "eval:doc.docstatus===0",
+      "read_only_depends_on": "eval:doc.docstatus===1",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "fetch_if_empty": 1
+    }
+  ],
+  "Supplier Quotation": [
+    {
+      "fieldname": "intercompany_target_company",
+      "label": "Inter Company Target",
+      "fieldtype": "Link",
+      "options": "Company",
+      "insert_after": "company",
+      "description": "Select the target company for inter-company transaction",
+      "depends_on": "eval:doc.docstatus===0",
+      "read_only_depends_on": "eval:doc.docstatus===1",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "fetch_if_empty": 1
+    }
+  ],
+  "Material Request": [
+    {
+      "fieldname": "intercompany_target_company",
+      "label": "Inter Company Target",
+      "fieldtype": "Link",
+      "options": "Company",
+      "insert_after": "company",
+      "description": "Select the target company for inter-company transaction",
+      "depends_on": "eval:doc.docstatus===0",
+      "read_only_depends_on": "eval:doc.docstatus===1",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "fetch_if_empty": 1
+    }
   ]
 }
