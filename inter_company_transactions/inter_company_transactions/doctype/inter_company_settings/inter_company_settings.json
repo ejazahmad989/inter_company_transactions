@@ -109,6 +109,44 @@
       "fieldname": "notify_on_sync_failure",
       "fieldtype": "Check",
       "label": "Send System Alert on Automation Failure"
+    },
+    {
+      "fieldname": "section_break_enterprise",
+      "fieldtype": "Section Break",
+      "label": "Enterprise Features & Multi-Site Federation"
+    },
+    {
+      "default": "Local Multi-Company (Single Database)",
+      "fieldname": "deployment_mode",
+      "fieldtype": "Select",
+      "label": "Deployment Architecture",
+      "options": "Local Multi-Company (Single Database)\nFederated Cross-Site (REST API)",
+      "description": "Choose Federated Cross-Site to synchronize intercompany transactions across independent Frappe/ERPNext servers via secure REST API."
+    },
+    {
+      "default": "1",
+      "fieldname": "enable_netting_engine",
+      "fieldtype": "Check",
+      "label": "Enable Multilateral Netting & Settlement Engine"
+    },
+    {
+      "default": "1",
+      "fieldname": "enable_elimination_engine",
+      "fieldtype": "Check",
+      "label": "Enable Financial Consolidation Elimination Engine"
+    },
+    {
+      "default": "1",
+      "fieldname": "enable_dispute_workflow",
+      "fieldtype": "Check",
+      "label": "Enable Intercompany Dispute & Discrepancy Workflow"
+    },
+    {
+      "depends_on": "eval:doc.deployment_mode=='Federated Cross-Site (REST API)'",
+      "fieldname": "remote_sites",
+      "fieldtype": "Table",
+      "label": "Federated Remote ERPNext Sites",
+      "options": "Inter Company Remote Site"
     }
   ],
   "issingle": 1,

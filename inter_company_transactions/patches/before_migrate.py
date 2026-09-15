@@ -57,7 +57,15 @@ def ensure_custom_doctypes():
         "Notification Settings",
         "Intercompany Item Mapping",
         "Inter Company Error Log",
-        "Inter Company Settings"
+        "Inter Company Settings",
+        "Inter Company Netting Cycle",
+        "Inter Company Netting Company",
+        "Inter Company Netting Invoice",
+        "Inter Company Netting Summary",
+        "Transfer Pricing Policy",
+        "Inter Company Elimination Run",
+        "Inter Company Dispute",
+        "Inter Company Remote Site"
     ]
     
     for doctype_name in custom_doctypes:

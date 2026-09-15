@@ -1,0 +1,78 @@
+{
+  "actions": [],
+  "creation": "2024-03-14 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "company",
+    "partner_company",
+    "invoice_type",
+    "invoice_name",
+    "outstanding_amount",
+    "currency",
+    "settled_amount"
+  ],
+  "fields": [
+    {
+      "fieldname": "company",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Company",
+      "options": "Company",
+      "reqd": 1
+    },
+    {
+      "fieldname": "partner_company",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Partner Company",
+      "options": "Company",
+      "reqd": 1
+    },
+    {
+      "fieldname": "invoice_type",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Invoice Type",
+      "options": "Sales Invoice\nPurchase Invoice",
+      "reqd": 1
+    },
+    {
+      "fieldname": "invoice_name",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Invoice Number",
+      "reqd": 1
+    },
+    {
+      "default": "0",
+      "fieldname": "outstanding_amount",
+      "fieldtype": "Currency",
+      "in_list_view": 1,
+      "label": "Outstanding Amount"
+    },
+    {
+      "fieldname": "currency",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Currency",
+      "options": "Currency"
+    },
+    {
+      "default": "0",
+      "fieldname": "settled_amount",
+      "fieldtype": "Currency",
+      "in_list_view": 1,
+      "label": "Settled in Cycle"
+    }
+  ],
+  "istable": 1,
+  "modified": "2024-03-14 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Inter Company Transactions",
+  "name": "Inter Company Netting Invoice",
+  "owner": "Administrator",
+  "permissions": [],
+  "sort_field": "modified",
+  "sort_order": "DESC"
+}

@@ -1,0 +1,165 @@
+{
+  "actions": [],
+  "allow_rename": 1,
+  "autoname": "format:TPP-{YYYY}-{#####}",
+  "creation": "2024-03-14 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "policy_name",
+    "is_active",
+    "methodology",
+    "section_break_scope",
+    "from_company",
+    "to_company",
+    "item_group",
+    "item_code",
+    "section_break_pricing",
+    "markup_percentage",
+    "fixed_rate",
+    "section_break_validity",
+    "effective_from",
+    "effective_to",
+    "section_break_compliance",
+    "oecd_compliance_notes"
+  ],
+  "fields": [
+    {
+      "fieldname": "policy_name",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Policy Title",
+      "reqd": 1
+    },
+    {
+      "default": "1",
+      "fieldname": "is_active",
+      "fieldtype": "Check",
+      "in_list_view": 1,
+      "label": "Is Active"
+    },
+    {
+      "default": "Cost-Plus Markup %",
+      "fieldname": "methodology",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "OECD Transfer Pricing Method",
+      "options": "Cost-Plus Markup %\nResale Price Method\nComparable Uncontrolled Price (CUP)\nFixed Transfer Rate",
+      "reqd": 1
+    },
+    {
+      "fieldname": "section_break_scope",
+      "fieldtype": "Section Break",
+      "label": "Scope & Entities"
+    },
+    {
+      "fieldname": "from_company",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Originating Company (Seller)",
+      "options": "Company",
+      "reqd": 1
+    },
+    {
+      "fieldname": "to_company",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Receiving Company (Buyer)",
+      "options": "Company",
+      "reqd": 1
+    },
+    {
+      "fieldname": "item_group",
+      "fieldtype": "Link",
+      "label": "Item Group Filter",
+      "options": "Item Group"
+    },
+    {
+      "fieldname": "item_code",
+      "fieldtype": "Link",
+      "label": "Specific Item Filter",
+      "options": "Item"
+    },
+    {
+      "fieldname": "section_break_pricing",
+      "fieldtype": "Section Break",
+      "label": "Pricing Calculation Rules"
+    },
+    {
+      "default": "10.0",
+      "depends_on": "eval:doc.methodology==='Cost-Plus Markup %' || doc.methodology==='Resale Price Method'",
+      "fieldname": "markup_percentage",
+      "fieldtype": "Percent",
+      "label": "Arm's Length Markup / Margin %"
+    },
+    {
+      "depends_on": "eval:doc.methodology==='Fixed Transfer Rate'",
+      "fieldname": "fixed_rate",
+      "fieldtype": "Currency",
+      "label": "Agreed Fixed Transfer Rate"
+    },
+    {
+      "fieldname": "section_break_validity",
+      "fieldtype": "Section Break",
+      "label": "Tax Period & Validity"
+    },
+    {
+      "default": "Today",
+      "fieldname": "effective_from",
+      "fieldtype": "Date",
+      "in_list_view": 1,
+      "label": "Effective From",
+      "reqd": 1
+    },
+    {
+      "fieldname": "effective_to",
+      "fieldtype": "Date",
+      "in_list_view": 1,
+      "label": "Effective To"
+    },
+    {
+      "fieldname": "section_break_compliance",
+      "fieldtype": "Section Break",
+      "label": "Tax Audit Dossier & Justification"
+    },
+    {
+      "fieldname": "oecd_compliance_notes",
+      "fieldtype": "Small Text",
+      "label": "BEPS / OECD Arm's-Length Justification Notes",
+      "description": "Provide economic analysis benchmark, comparable market data, and statutory documentation."
+    }
+  ],
+  "modified": "2024-03-14 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Inter Company Transactions",
+  "name": "Transfer Pricing Policy",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    },
+    {
+      "create": 1,
+      "delete": 0,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "Accounts Manager",
+      "share": 1,
+      "write": 1
+    }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC"
+}

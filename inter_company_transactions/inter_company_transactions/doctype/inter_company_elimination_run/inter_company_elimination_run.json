@@ -1,0 +1,188 @@
+{
+  "actions": [],
+  "allow_rename": 1,
+  "autoname": "format:ELIM-{YYYY}-{#####}",
+  "creation": "2024-03-14 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "title",
+    "consolidation_company",
+    "status",
+    "section_break_period",
+    "from_date",
+    "to_date",
+    "posting_date",
+    "elimination_type",
+    "section_break_results",
+    "total_receivables_eliminated",
+    "total_payables_eliminated",
+    "total_revenue_eliminated",
+    "total_cogs_eliminated",
+    "unrealized_inventory_profit",
+    "section_break_entry",
+    "elimination_journal_entry",
+    "amended_from"
+  ],
+  "fields": [
+    {
+      "fieldname": "title",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Consolidation Run Title",
+      "reqd": 1
+    },
+    {
+      "fieldname": "consolidation_company",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Consolidation / Parent Company",
+      "options": "Company",
+      "reqd": 1
+    },
+    {
+      "default": "Draft",
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Status",
+      "options": "Draft\nCalculated\nSubmitted\nCancelled",
+      "read_only": 1
+    },
+    {
+      "fieldname": "section_break_period",
+      "fieldtype": "Section Break",
+      "label": "Consolidation Period & Scope"
+    },
+    {
+      "fieldname": "from_date",
+      "fieldtype": "Date",
+      "in_list_view": 1,
+      "label": "From Date",
+      "reqd": 1
+    },
+    {
+      "fieldname": "to_date",
+      "fieldtype": "Date",
+      "in_list_view": 1,
+      "label": "To Date",
+      "reqd": 1
+    },
+    {
+      "default": "Today",
+      "fieldname": "posting_date",
+      "fieldtype": "Date",
+      "label": "Elimination Posting Date",
+      "reqd": 1
+    },
+    {
+      "default": "All (Full Consolidation)",
+      "fieldname": "elimination_type",
+      "fieldtype": "Select",
+      "label": "Elimination Scope",
+      "options": "All (Full Consolidation)\nIntercompany AR / AP Elimination\nIntercompany Revenue / COGS Elimination\nUnrealized Inventory Profit Elimination",
+      "reqd": 1
+    },
+    {
+      "fieldname": "section_break_results",
+      "fieldtype": "Section Break",
+      "label": "Calculated Elimination Summary"
+    },
+    {
+      "default": "0",
+      "fieldname": "total_receivables_eliminated",
+      "fieldtype": "Currency",
+      "label": "Intercompany Receivables Eliminated",
+      "read_only": 1
+    },
+    {
+      "default": "0",
+      "fieldname": "total_payables_eliminated",
+      "fieldtype": "Currency",
+      "label": "Intercompany Payables Eliminated",
+      "read_only": 1
+    },
+    {
+      "default": "0",
+      "fieldname": "total_revenue_eliminated",
+      "fieldtype": "Currency",
+      "label": "Intercompany Revenue Eliminated",
+      "read_only": 1
+    },
+    {
+      "default": "0",
+      "fieldname": "total_cogs_eliminated",
+      "fieldtype": "Currency",
+      "label": "Intercompany COGS Eliminated",
+      "read_only": 1
+    },
+    {
+      "default": "0",
+      "fieldname": "unrealized_inventory_profit",
+      "fieldtype": "Currency",
+      "label": "Unrealized Intercompany Margin in Inventory",
+      "read_only": 1
+    },
+    {
+      "fieldname": "section_break_entry",
+      "fieldtype": "Section Break",
+      "label": "Generated Elimination Voucher"
+    },
+    {
+      "fieldname": "elimination_journal_entry",
+      "fieldtype": "Link",
+      "label": "Consolidation Journal Entry",
+      "options": "Journal Entry",
+      "read_only": 1
+    },
+    {
+      "fieldname": "amended_from",
+      "fieldtype": "Link",
+      "label": "Amended From",
+      "no_copy": 1,
+      "options": "Inter Company Elimination Run",
+      "print_hide": 1,
+      "read_only": 1
+    }
+  ],
+  "is_submittable": 1,
+  "modified": "2024-03-14 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Inter Company Transactions",
+  "name": "Inter Company Elimination Run",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "amend": 1,
+      "cancel": 1,
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "submit": 1,
+      "write": 1
+    },
+    {
+      "amend": 1,
+      "cancel": 1,
+      "create": 1,
+      "delete": 0,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "Accounts Manager",
+      "share": 1,
+      "submit": 1,
+      "write": 1
+    }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC"
+}

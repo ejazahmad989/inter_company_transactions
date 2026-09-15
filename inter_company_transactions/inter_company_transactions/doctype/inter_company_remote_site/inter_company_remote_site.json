@@ -1,0 +1,80 @@
+{
+  "actions": [],
+  "creation": "2024-03-14 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "site_url",
+    "company_name",
+    "api_key",
+    "api_secret",
+    "hmac_secret",
+    "is_active",
+    "last_sync_time",
+    "sync_status"
+  ],
+  "fields": [
+    {
+      "fieldname": "site_url",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Remote Site URL",
+      "reqd": 1
+    },
+    {
+      "fieldname": "company_name",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Remote Company Name",
+      "reqd": 1
+    },
+    {
+      "fieldname": "api_key",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "API Key",
+      "reqd": 1
+    },
+    {
+      "fieldname": "api_secret",
+      "fieldtype": "Password",
+      "label": "API Secret",
+      "reqd": 1
+    },
+    {
+      "fieldname": "hmac_secret",
+      "fieldtype": "Password",
+      "label": "HMAC Webhook Secret"
+    },
+    {
+      "default": "1",
+      "fieldname": "is_active",
+      "fieldtype": "Check",
+      "in_list_view": 1,
+      "label": "Active"
+    },
+    {
+      "fieldname": "last_sync_time",
+      "fieldtype": "Datetime",
+      "label": "Last Handshake",
+      "read_only": 1
+    },
+    {
+      "default": "Connected",
+      "fieldname": "sync_status",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Status",
+      "options": "Connected\nDisconnected\nError"
+    }
+  ],
+  "istable": 1,
+  "modified": "2024-03-14 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Inter Company Transactions",
+  "name": "Inter Company Remote Site",
+  "owner": "Administrator",
+  "permissions": [],
+  "sort_field": "modified",
+  "sort_order": "DESC"
+}

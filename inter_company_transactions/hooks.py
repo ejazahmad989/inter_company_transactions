@@ -75,8 +75,15 @@ fixtures = [
                 "Inter Company Workflow Approver",
                 "Workflow Approval Request",
                 "Workflow Approval History",
-                "Notification Settings"
-             
+                "Notification Settings",
+                "Inter Company Netting Cycle",
+                "Inter Company Netting Company",
+                "Inter Company Netting Invoice",
+                "Inter Company Netting Summary",
+                "Transfer Pricing Policy",
+                "Inter Company Elimination Run",
+                "Inter Company Dispute",
+                "Inter Company Remote Site"
             ]]
         ]
     },

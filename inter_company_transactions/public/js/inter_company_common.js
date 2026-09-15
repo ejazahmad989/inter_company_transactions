@@ -34,6 +34,22 @@
 						__('Inter Company')
 					);
 
+					// Raise dispute button for enterprise dispute management
+					frm.add_custom_button(
+						__('Raise Dispute'),
+						function() {
+							frappe.new_doc('Inter Company Dispute', {
+								source_doctype: frm.doc.doctype,
+								source_name: frm.doc.name,
+								source_company: frm.doc.company,
+								target_company: targetCompany,
+								source_amount: frm.doc.grand_total || frm.doc.total || 0,
+								dispute_title: __('Dispute for {0} {1}', [frm.doc.doctype, frm.doc.name])
+							});
+						},
+						__('Inter Company')
+					);
+
 					// Add badge/intro banner in dashboard
 					if (frm.dashboard && frm.dashboard.set_headline_alert) {
 						frm.dashboard.set_headline_alert(

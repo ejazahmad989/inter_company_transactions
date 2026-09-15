@@ -1,0 +1,167 @@
+{
+  "actions": [],
+  "allow_rename": 1,
+  "autoname": "format:NET-CYCLE-{YYYY}-{#####}",
+  "creation": "2024-03-14 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "cycle_name",
+    "settlement_date",
+    "status",
+    "clearing_method",
+    "section_break_companies",
+    "participating_companies",
+    "section_break_invoices",
+    "invoices",
+    "section_break_summary",
+    "net_settlements",
+    "section_break_totals",
+    "total_gross_payables",
+    "total_gross_receivables",
+    "total_net_settled",
+    "amended_from"
+  ],
+  "fields": [
+    {
+      "fieldname": "cycle_name",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Cycle Title",
+      "reqd": 1
+    },
+    {
+      "default": "Today",
+      "fieldname": "settlement_date",
+      "fieldtype": "Date",
+      "in_list_view": 1,
+      "label": "Settlement Date",
+      "reqd": 1
+    },
+    {
+      "default": "Draft",
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Status",
+      "options": "Draft\nCalculated\nSettled\nCancelled",
+      "read_only": 1
+    },
+    {
+      "default": "Journal Entry",
+      "fieldname": "clearing_method",
+      "fieldtype": "Select",
+      "label": "Clearing Method",
+      "options": "Journal Entry\nPayment Entry",
+      "reqd": 1
+    },
+    {
+      "fieldname": "section_break_companies",
+      "fieldtype": "Section Break",
+      "label": "1. Participating Subsidiaries"
+    },
+    {
+      "fieldname": "participating_companies",
+      "fieldtype": "Table",
+      "label": "Participating Companies",
+      "options": "Inter Company Netting Company"
+    },
+    {
+      "fieldname": "section_break_invoices",
+      "fieldtype": "Section Break",
+      "label": "2. Open Intercompany Invoices"
+    },
+    {
+      "fieldname": "invoices",
+      "fieldtype": "Table",
+      "label": "Invoices Included in Netting",
+      "options": "Inter Company Netting Invoice"
+    },
+    {
+      "fieldname": "section_break_summary",
+      "fieldtype": "Section Break",
+      "label": "3. Multilateral Net Settlement Summary"
+    },
+    {
+      "fieldname": "net_settlements",
+      "fieldtype": "Table",
+      "label": "Net Cash / Entry Settlements",
+      "options": "Inter Company Netting Summary"
+    },
+    {
+      "fieldname": "section_break_totals",
+      "fieldtype": "Section Break",
+      "label": "Audit Totals & Savings"
+    },
+    {
+      "default": "0",
+      "fieldname": "total_gross_payables",
+      "fieldtype": "Currency",
+      "label": "Total Gross Payables",
+      "read_only": 1
+    },
+    {
+      "default": "0",
+      "fieldname": "total_gross_receivables",
+      "fieldtype": "Currency",
+      "label": "Total Gross Receivables",
+      "read_only": 1
+    },
+    {
+      "default": "0",
+      "fieldname": "total_net_settled",
+      "fieldtype": "Currency",
+      "label": "Total Net Settled (Bank Flow Required)",
+      "read_only": 1
+    },
+    {
+      "fieldname": "amended_from",
+      "fieldtype": "Link",
+      "label": "Amended From",
+      "no_copy": 1,
+      "options": "Inter Company Netting Cycle",
+      "print_hide": 1,
+      "read_only": 1
+    }
+  ],
+  "is_submittable": 1,
+  "modified": "2024-03-14 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Inter Company Transactions",
+  "name": "Inter Company Netting Cycle",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "amend": 1,
+      "cancel": 1,
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "submit": 1,
+      "write": 1
+    },
+    {
+      "amend": 1,
+      "cancel": 1,
+      "create": 1,
+      "delete": 0,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "Accounts Manager",
+      "share": 1,
+      "submit": 1,
+      "write": 1
+    }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC"
+}

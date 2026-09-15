@@ -660,13 +660,63 @@ def ensure_item_exists(item_code, target_company, settings=None):
 		logger.warning(f"Could not auto-create missing Item {item_code}: {str(e)}")
 
 
-def calculate_transfer_rate(item_doc, source_rate, source_company, settings):
+def calculate_transfer_rate(item_doc, source_rate, source_company, settings=None, target_company=None):
 	"""
-	Calculates the item rate based on configured transfer pricing rules:
-	1. Source Document Rate
-	2. Cost / Valuation Rate
-	3. Cost + Markup %
+	Calculates the item rate based on configured OECD Transfer Pricing Policies or global settings:
+	1. Active Transfer Pricing Policy (by Company pair, Item, Item Group, and OECD methodology)
+	2. Source Document Rate
+	3. Cost / Valuation Rate
+	4. Cost + Markup %
 	"""
+	item_code = item_doc.get("item_code")
+
+	# 1. Check for specific Transfer Pricing Policy
+	if target_company and frappe.db.exists("DocType", "Transfer Pricing Policy"):
+		try:
+			policies = frappe.get_all(
+				"Transfer Pricing Policy",
+				filters={
+					"is_active": 1,
+					"from_company": source_company,
+					"to_company": target_company,
+				},
+				fields=["name", "methodology", "item_code", "item_group", "markup_percentage", "fixed_rate"]
+			)
+			# Find best match (item match first, then item group, then general entity rule)
+			matched_policy = None
+			for pol in policies:
+				if pol.item_code and pol.item_code == item_code:
+					matched_policy = pol
+					break
+			if not matched_policy and policies:
+				matched_policy = policies[0]
+
+			if matched_policy:
+				method = matched_policy.methodology
+				if method == "Fixed Transfer Rate" and flt(matched_policy.fixed_rate) > 0:
+					return flt(matched_policy.fixed_rate)
+
+				# Retrieve valuation / cost rate
+				val_rate = 0.0
+				try:
+					val_rate = flt(frappe.db.get_value("Item", item_code, "valuation_rate"))
+				except Exception:
+					val_rate = flt(source_rate)
+				if not val_rate:
+					val_rate = flt(source_rate)
+
+				if method == "Cost-Plus Markup %":
+					markup = flt(matched_policy.markup_percentage or 10.0)
+					return round(flt(val_rate * (1.0 + (markup / 100.0))), 2)
+				elif method == "Resale Price Method":
+					margin = flt(matched_policy.markup_percentage or 10.0)
+					return round(flt(source_rate * (1.0 - (margin / 100.0))), 2)
+				elif method == "Comparable Uncontrolled Price (CUP)":
+					return val_rate
+		except Exception as pol_err:
+			logger.warning(f"Error evaluating Transfer Pricing Policy: {pol_err}")
+
+	# 2. Fallback to global settings
 	if not settings:
 		return flt(source_rate)
 
@@ -675,7 +725,6 @@ def calculate_transfer_rate(item_doc, source_rate, source_company, settings):
 		return flt(source_rate)
 
 	# Fetch item valuation rate from source company bin
-	item_code = item_doc.get("item_code")
 	val_rate = 0.0
 	try:
 		val_rate = flt(
@@ -727,7 +776,7 @@ def create_purchase_order(sales_order, mapping, linked_company, direction, setti
 	for item in sales_order.items:
 		target_item_code = get_target_item_code(item.item_code, sales_order.company, po.company)
 		ensure_item_exists(target_item_code, po.company, settings)
-		rate = calculate_transfer_rate(item, item.rate, sales_order.company, settings)
+		rate = calculate_transfer_rate(item, item.rate, sales_order.company, settings, target_company=po.company)
 		po.append(
 			"items",
 			{
@@ -776,7 +825,7 @@ def create_sales_order(purchase_order, mapping, linked_company, direction, setti
 	for item in purchase_order.items:
 		target_item_code = get_target_item_code(item.item_code, purchase_order.company, so.company)
 		ensure_item_exists(target_item_code, so.company, settings)
-		rate = calculate_transfer_rate(item, item.rate, purchase_order.company, settings)
+		rate = calculate_transfer_rate(item, item.rate, purchase_order.company, settings, target_company=so.company)
 		so.append(
 			"items",
 			{
@@ -848,7 +897,7 @@ def create_purchase_invoice(sales_invoice, mapping, linked_company, direction, s
 	for item in sales_invoice.items:
 		target_item_code = get_target_item_code(item.item_code, sales_invoice.company, pi.company)
 		ensure_item_exists(target_item_code, pi.company, settings)
-		rate = calculate_transfer_rate(item, item.rate, sales_invoice.company, settings)
+		rate = calculate_transfer_rate(item, item.rate, sales_invoice.company, settings, target_company=pi.company)
 		pi.append(
 			"items",
 			{
@@ -927,7 +976,7 @@ def create_sales_invoice(purchase_invoice, mapping, linked_company, direction, s
 	for item in purchase_invoice.items:
 		target_item_code = get_target_item_code(item.item_code, purchase_invoice.company, si.company)
 		ensure_item_exists(target_item_code, si.company, settings)
-		rate = calculate_transfer_rate(item, item.rate, purchase_invoice.company, settings)
+		rate = calculate_transfer_rate(item, item.rate, purchase_invoice.company, settings, target_company=si.company)
 		si.append(
 			"items",
 			{

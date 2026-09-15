@@ -90,4 +90,48 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 		self.assertIn(("Material Request", "Sales Order"), type_pairs)
 		self.assertIn(("Delivery Note", "Purchase Receipt"), type_pairs)
 
+	def test_netting_settlement_calculation(self):
+		"""Verify multilateral netting algorithm balances debts and credits"""
+		from inter_company_transactions.inter_company_transactions.doctype.inter_company_netting_cycle.inter_company_netting_cycle import (
+			InterCompanyNettingCycle
+		)
+		cycle = frappe.new_doc("InterCompany Netting Cycle")
+		cycle.cycle_name = "Q1 Test Settlement"
+		cycle.netting_currency = "USD"
+		# Set up 3 companies with known balances
+		# Company A: owes B 100, owes C 50 -> Net -150
+		# Company B: owed 100 from A, owes C 20 -> Net +80
+		# Company C: owed 50 from A, owed 20 from B -> Net +70
+		# Netting should reduce 3 transactions into just 2 minimal settlements
+		cycle.append("companies", {"company": "Company A", "initial_balance": -150})
+		cycle.append("companies", {"company": "Company B", "initial_balance": 80})
+		cycle.append("companies", {"company": "Company C", "initial_balance": 70})
+
+		cycle.calculate_netting()
+		self.assertGreater(len(cycle.net_settlements), 0)
+		total_settled = sum(flt(s.settlement_amount) for s in cycle.net_settlements)
+		self.assertEqual(total_settled, 150.0)
+
+	def test_dispute_variance_calculation(self):
+		"""Verify dispute document automatically calculates variance"""
+		from inter_company_transactions.inter_company_transactions.doctype.inter_company_dispute.inter_company_dispute import (
+			InterCompanyDispute
+		)
+		dispute = frappe.new_doc("Inter Company Dispute")
+		dispute.dispute_title = "Pricing discrepancy on Item A"
+		dispute.source_amount = 1200.0
+		dispute.target_amount = 1500.0
+		dispute.validate()
+		self.assertEqual(dispute.variance_amount, 300.0)
+
+	def test_enterprise_health_check(self):
+		"""Verify enterprise health check telemetry returns valid status"""
+		from inter_company_transactions.inter_company_transactions.doctype.inter_company_settings.inter_company_settings import (
+			get_enterprise_health_check
+		)
+		health = get_enterprise_health_check()
+		self.assertIn("status", health)
+		self.assertIn("recommendations", health)
+
+
 

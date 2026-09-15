@@ -1,0 +1,72 @@
+{
+  "actions": [],
+  "creation": "2024-03-14 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "company",
+    "clearing_account",
+    "gross_payables",
+    "gross_receivables",
+    "net_balance",
+    "settlement_position"
+  ],
+  "fields": [
+    {
+      "fieldname": "company",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Participating Company",
+      "options": "Company",
+      "reqd": 1
+    },
+    {
+      "fieldname": "clearing_account",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Clearing Account",
+      "options": "Account"
+    },
+    {
+      "default": "0",
+      "fieldname": "gross_payables",
+      "fieldtype": "Currency",
+      "in_list_view": 1,
+      "label": "Gross Payables",
+      "read_only": 1
+    },
+    {
+      "default": "0",
+      "fieldname": "gross_receivables",
+      "fieldtype": "Currency",
+      "in_list_view": 1,
+      "label": "Gross Receivables",
+      "read_only": 1
+    },
+    {
+      "default": "0",
+      "fieldname": "net_balance",
+      "fieldtype": "Currency",
+      "in_list_view": 1,
+      "label": "Net Position",
+      "read_only": 1
+    },
+    {
+      "default": "Balanced",
+      "fieldname": "settlement_position",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Position",
+      "options": "Net Debtor\nNet Creditor\nBalanced"
+    }
+  ],
+  "istable": 1,
+  "modified": "2024-03-14 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Inter Company Transactions",
+  "name": "Inter Company Netting Company",
+  "owner": "Administrator",
+  "permissions": [],
+  "sort_field": "modified",
+  "sort_order": "DESC"
+}

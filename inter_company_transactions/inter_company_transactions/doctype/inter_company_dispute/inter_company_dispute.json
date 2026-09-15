@@ -1,0 +1,192 @@
+{
+  "actions": [],
+  "allow_rename": 1,
+  "autoname": "format:DISP-{YYYY}-{#####}",
+  "creation": "2024-03-14 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "dispute_title",
+    "status",
+    "section_break_docs",
+    "source_doctype",
+    "source_name",
+    "source_company",
+    "target_company",
+    "section_break_variance",
+    "dispute_reason",
+    "source_amount",
+    "target_amount",
+    "variance_amount",
+    "description",
+    "section_break_resolution",
+    "resolution_action",
+    "resolution_document",
+    "resolution_notes",
+    "amended_from"
+  ],
+  "fields": [
+    {
+      "fieldname": "dispute_title",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Dispute Subject",
+      "reqd": 1
+    },
+    {
+      "default": "Open",
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Status",
+      "options": "Open\nUnder Investigation\nApproved\nResolved\nRejected"
+    },
+    {
+      "fieldname": "section_break_docs",
+      "fieldtype": "Section Break",
+      "label": "Transaction Information"
+    },
+    {
+      "fieldname": "source_doctype",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Document Type",
+      "options": "DocType",
+      "reqd": 1
+    },
+    {
+      "fieldname": "source_name",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Document Name",
+      "reqd": 1
+    },
+    {
+      "fieldname": "source_company",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Disputing Company",
+      "options": "Company",
+      "reqd": 1
+    },
+    {
+      "fieldname": "target_company",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Counterparty Company",
+      "options": "Company",
+      "reqd": 1
+    },
+    {
+      "fieldname": "section_break_variance",
+      "fieldtype": "Section Break",
+      "label": "Discrepancy Details"
+    },
+    {
+      "default": "Price Variance",
+      "fieldname": "dispute_reason",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Reason for Dispute",
+      "options": "Price Variance\nQuantity Discrepancy\nDamaged Goods\nTax / Fee Mismatch\nMissing Linked Document",
+      "reqd": 1
+    },
+    {
+      "default": "0",
+      "fieldname": "source_amount",
+      "fieldtype": "Currency",
+      "label": "Claimed / Expected Amount"
+    },
+    {
+      "default": "0",
+      "fieldname": "target_amount",
+      "fieldtype": "Currency",
+      "label": "Billed / Invoiced Amount"
+    },
+    {
+      "default": "0",
+      "fieldname": "variance_amount",
+      "fieldtype": "Currency",
+      "in_list_view": 1,
+      "label": "Variance Amount",
+      "read_only": 1
+    },
+    {
+      "fieldname": "description",
+      "fieldtype": "Small Text",
+      "label": "Discrepancy Explanation"
+    },
+    {
+      "fieldname": "section_break_resolution",
+      "fieldtype": "Section Break",
+      "label": "Resolution & Adjustment"
+    },
+    {
+      "default": "Issue Credit Note",
+      "fieldname": "resolution_action",
+      "fieldtype": "Select",
+      "label": "Resolution Method",
+      "options": "Issue Credit Note\nIssue Debit Note\nStock Adjustment\nJournal Adjustment\nAccept Variance"
+    },
+    {
+      "fieldname": "resolution_document",
+      "fieldtype": "Data",
+      "label": "Resolution Document Reference",
+      "read_only": 1
+    },
+    {
+      "fieldname": "resolution_notes",
+      "fieldtype": "Small Text",
+      "label": "Resolution Notes"
+    },
+    {
+      "fieldname": "amended_from",
+      "fieldtype": "Link",
+      "label": "Amended From",
+      "no_copy": 1,
+      "options": "Inter Company Dispute",
+      "print_hide": 1,
+      "read_only": 1
+    }
+  ],
+  "is_submittable": 1,
+  "modified": "2024-03-14 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Inter Company Transactions",
+  "name": "Inter Company Dispute",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "amend": 1,
+      "cancel": 1,
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "submit": 1,
+      "write": 1
+    },
+    {
+      "amend": 1,
+      "cancel": 1,
+      "create": 1,
+      "delete": 0,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "Accounts Manager",
+      "share": 1,
+      "submit": 1,
+      "write": 1
+    }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC"
+}
