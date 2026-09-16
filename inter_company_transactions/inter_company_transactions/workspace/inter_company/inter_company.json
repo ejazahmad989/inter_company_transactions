@@ -1,7 +1,7 @@
 {
   "category": "Modules",
   "charts": [],
-  "content": "[{\"id\":\"b_header\",\"type\":\"header\",\"data\":{\"text\":\"Inter-Company Central Hub\",\"level\":3}},{\"id\":\"b_card_setup\",\"type\":\"card\",\"data\":{\"card_name\":\"Setup & Configuration\"}},{\"id\":\"b_card_trans\",\"type\":\"card\",\"data\":{\"card_name\":\"Operations & Tracking\"}},{\"id\":\"b_card_recon\",\"type\":\"card\",\"data\":{\"card_name\":\"Reconciliation & Reports\"}}]",
+  "content": "[{\"id\":\"b_header\",\"type\":\"header\",\"data\":{\"text\":\"Inter-Company Central Hub\",\"level\":3}},{\"id\":\"b_card_setup\",\"type\":\"card\",\"data\":{\"card_name\":\"Setup & Configuration\"}},{\"id\":\"b_card_trans\",\"type\":\"card\",\"data\":{\"card_name\":\"Operations & Tracking\"}},{\"id\":\"b_card_enterprise\",\"type\":\"card\",\"data\":{\"card_name\":\"Netting, Pricing & Elimination\"}},{\"id\":\"b_card_recon\",\"type\":\"card\",\"data\":{\"card_name\":\"Reconciliation & Disputes\"}}]",
   "creation": "2024-03-14 00:00:00.000000",
   "custom_blocks": [],
   "docstatus": 0,
@@ -30,6 +30,46 @@
       "link_to": "Intercompany Transaction Link",
       "link_type": "DocType",
       "onboard": 1,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "Transfer Pricing Policy",
+      "link_count": 0,
+      "link_to": "Transfer Pricing Policy",
+      "link_type": "DocType",
+      "onboard": 1,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "Inter Company Netting Cycle",
+      "link_count": 0,
+      "link_to": "Inter Company Netting Cycle",
+      "link_type": "DocType",
+      "onboard": 1,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "Inter Company Elimination Run",
+      "link_count": 0,
+      "link_to": "Inter Company Elimination Run",
+      "link_type": "DocType",
+      "onboard": 1,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "Inter Company Dispute",
+      "link_count": 0,
+      "link_to": "Inter Company Dispute",
+      "link_type": "DocType",
+      "onboard": 0,
       "type": "Link"
     },
     {
@@ -81,6 +121,16 @@
       "link_type": "Report",
       "onboard": 1,
       "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 1,
+      "label": "Inter Company Transaction Matrix",
+      "link_count": 0,
+      "link_to": "Inter Company Transaction Matrix",
+      "link_type": "Report",
+      "onboard": 1,
+      "type": "Link"
     }
   ],
   "modified": "2024-03-14 00:00:00.000000",
@@ -105,17 +155,38 @@
   "sequence_id": 20.0,
   "shortcuts": [
     {
-      "color": "Grey",
+      "color": "Blue",
       "doc_view": "List",
       "label": "Transaction Links",
       "link_to": "Intercompany Transaction Link",
       "type": "DocType"
     },
     {
-      "color": "Grey",
+      "color": "Green",
       "doc_view": "List",
-      "label": "Global Settings",
-      "link_to": "Inter Company Settings",
+      "label": "Netting Cycles",
+      "link_to": "Inter Company Netting Cycle",
+      "type": "DocType"
+    },
+    {
+      "color": "Orange",
+      "doc_view": "List",
+      "label": "Transfer Pricing",
+      "link_to": "Transfer Pricing Policy",
+      "type": "DocType"
+    },
+    {
+      "color": "Purple",
+      "doc_view": "List",
+      "label": "Elimination Runs",
+      "link_to": "Inter Company Elimination Run",
+      "type": "DocType"
+    },
+    {
+      "color": "Red",
+      "doc_view": "List",
+      "label": "Dispute Center",
+      "link_to": "Inter Company Dispute",
       "type": "DocType"
     },
     {
@@ -128,15 +199,8 @@
     {
       "color": "Grey",
       "doc_view": "List",
-      "label": "Item Mappings",
-      "link_to": "Intercompany Item Mapping",
-      "type": "DocType"
-    },
-    {
-      "color": "Grey",
-      "doc_view": "List",
-      "label": "Sync Error Logs",
-      "link_to": "Inter Company Error Log",
+      "label": "Global Settings",
+      "link_to": "Inter Company Settings",
       "type": "DocType"
     }
   ],
