@@ -84,3 +84,45 @@
 .ict-status-pending {
     background-color: var(--alert-orange);
 }
+
+/* ICT Console Enhancements */
+.ict-console-wrapper {
+    min-height: 500px;
+}
+
+.ict-kpi-card {
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ict-kpi-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.08) !important;
+}
+
+.indicator-pill {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.indicator-pill.green {
+    background-color: #e6f4ea;
+    color: #137333;
+}
+
+.indicator-pill.orange {
+    background-color: #fef7e0;
+    color: #b06000;
+}
+
+.indicator-pill.red {
+    background-color: #fce8e6;
+    color: #c5221f;
+}
+
+.indicator-pill.blue {
+    background-color: #e8f0fe;
+    color: #1a73e8;
+}

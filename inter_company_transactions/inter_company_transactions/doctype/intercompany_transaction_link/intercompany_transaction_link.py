@@ -44,6 +44,34 @@ class IntercompanyTransactionLink(Document):
 
 		return added
 
+
+@frappe.whitelist()
+def trigger_manual_intercompany_sync(doctype, name):
+	"""
+	Manually triggers mirror creation from the desk form GUI.
+	"""
+	doc = frappe.get_doc(doctype, name)
+	if doc.docstatus != 1:
+		frappe.throw(_("Document must be submitted before intercompany mirroring can occur."))
+
+	_process_linked_documents(doc.doctype, doc.name)
+	doc.reload()
+	if doc.get("intercompany_linked_doc_name"):
+		return {
+			"success": True,
+			"target_doctype": doc.get("intercompany_linked_doc_doctype"),
+			"target_name": doc.get("intercompany_linked_doc_name"),
+			"message": _("Successfully created {0} {1}").format(
+				doc.get("intercompany_linked_doc_doctype"),
+				doc.get("intercompany_linked_doc_name")
+			)
+		}
+	else:
+		return {
+			"success": False,
+			"message": _("No applicable intercompany mapping matched for this document and counterparty.")
+		}
+
 	def validate(self):
 		self.validate_companies()
 		self.validate_parties()

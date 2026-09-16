@@ -132,3 +132,251 @@ def receive_intercompany_webhook(payload):
 		"received_doc": f"{source_doctype} {source_name}",
 		"target_company": target_company
 	}
+
+
+@frappe.whitelist()
+def get_console_dashboard_data():
+	"""
+	Retrieves live metrics, links topology, and recent intercompany transaction flow
+	for the interactive visual Inter-Company Console.
+	"""
+	data = {
+		"metrics": {
+			"companies_count": frappe.db.count("Company"),
+			"active_links": 0,
+			"synced_docs_count": 0,
+			"open_disputes": 0,
+			"failed_syncs": 0,
+			"total_settled_amount": 0.0,
+			"elimination_runs": 0,
+		},
+		"links": [],
+		"recent_transactions": [],
+		"deployment_mode": "Local Multi-Company (Single Database)",
+		"health_status": "Healthy"
+	}
+
+	try:
+		settings = frappe.get_cached_doc("Inter Company Settings")
+		data["deployment_mode"] = settings.deployment_mode or "Local Multi-Company (Single Database)"
+	except Exception:
+		pass
+
+	# Active Transaction Links
+	if frappe.db.exists("DocType", "Intercompany Transaction Link"):
+		links = frappe.get_all(
+			"Intercompany Transaction Link",
+			fields=["name", "main_company", "enabled", "creation", "modified"],
+			order_by="modified desc"
+		)
+		data["metrics"]["active_links"] = sum(1 for l in links if l.get("enabled"))
+		
+		# Enrich with linked counterparties
+		for l in links:
+			counterparties = frappe.get_all(
+				"Intercompany Linked Company",
+				filters={"parent": l.name},
+				pluck="company"
+			)
+			types_count = frappe.db.count("Intercompany Transaction Type", {"parent": l.name, "enabled": 1})
+			data["links"].append({
+				"name": l.name,
+				"main_company": l.main_company,
+				"enabled": l.enabled,
+				"counterparties": counterparties,
+				"active_types_count": types_count
+			})
+
+	# Synced Documents
+	if frappe.db.exists("DocType", "Inter Company Document Reference"):
+		data["metrics"]["synced_docs_count"] = frappe.db.count("Inter Company Document Reference")
+		recent = frappe.get_all(
+			"Inter Company Document Reference",
+			fields=[
+				"name",
+				"source_doctype",
+				"source_name",
+				"source_company",
+				"target_doctype",
+				"target_name",
+				"target_company",
+				"creation"
+			],
+			order_by="creation desc",
+			limit=8
+		)
+		data["recent_transactions"] = recent
+
+	# Open Disputes
+	if frappe.db.exists("DocType", "Inter Company Dispute"):
+		data["metrics"]["open_disputes"] = frappe.db.count(
+			"Inter Company Dispute",
+			{"status": ["in", ["Open", "Under Investigation"]]}
+		)
+
+	# Failed Error Logs
+	if frappe.db.exists("DocType", "Inter Company Error Log"):
+		failed_count = frappe.db.count("Inter Company Error Log", {"status": "Failed"})
+		data["metrics"]["failed_syncs"] = failed_count
+		if failed_count > 0:
+			data["health_status"] = "Attention Needed"
+
+	# Multilateral Netting Totals
+	if frappe.db.exists("DocType", "Inter Company Netting Cycle"):
+		netting_cycles = frappe.get_all(
+			"Inter Company Netting Cycle",
+			filters={"docstatus": 1},
+			fields=["name", "total_settlement_amount"]
+		)
+		data["metrics"]["total_settled_amount"] = sum(flt(nc.get("total_settlement_amount")) for nc in netting_cycles)
+
+	# Elimination runs
+	if frappe.db.exists("DocType", "Inter Company Elimination Run"):
+		data["metrics"]["elimination_runs"] = frappe.db.count("Inter Company Elimination Run", {"docstatus": 1})
+
+	return data
+
+
+@frappe.whitelist()
+def quick_setup_intercompany_pair(main_company, counterparty_company):
+	"""
+	1-Click Setup Wizard:
+	Effortlessly connects two sister companies, configures internal customer/supplier,
+	and activates standard bidirectional transaction mirroring rules.
+	"""
+	if not main_company or not counterparty_company:
+		frappe.throw(_("Both Main Company and Counterparty Company must be selected."))
+
+	if main_company == counterparty_company:
+		frappe.throw(_("Main Company and Counterparty Company cannot be the same entity."))
+
+	# 1. Find or create internal Customer in Main Company
+	main_cust = frappe.db.get_value("Customer", {"represents_company": counterparty_company}, "name")
+	if not main_cust:
+		cust_name = f"{counterparty_company} (Internal)"
+		if not frappe.db.exists("Customer", cust_name):
+			cust = frappe.new_doc("Customer")
+			cust.customer_name = cust_name
+			cust.customer_type = "Company"
+			cust.customer_group = frappe.db.get_value("Customer Group", {"is_group": 0}, "name") or "All Customer Groups"
+			cust.territory = frappe.db.get_value("Territory", {"is_group": 0}, "name") or "All Territories"
+			cust.is_internal_customer = 1
+			cust.represents_company = counterparty_company
+			cust.flags.ignore_permissions = True
+			cust.insert()
+			main_cust = cust.name
+		else:
+			main_cust = cust_name
+
+	# 2. Find or create internal Supplier in Main Company
+	main_supp = frappe.db.get_value("Supplier", {"represents_company": counterparty_company}, "name")
+	if not main_supp:
+		supp_name = f"{counterparty_company} (Internal)"
+		if not frappe.db.exists("Supplier", supp_name):
+			supp = frappe.new_doc("Supplier")
+			supp.supplier_name = supp_name
+			supp.supplier_type = "Company"
+			supp.supplier_group = frappe.db.get_value("Supplier Group", {"is_group": 0}, "name") or "All Supplier Groups"
+			supp.is_internal_supplier = 1
+			supp.represents_company = counterparty_company
+			supp.flags.ignore_permissions = True
+			supp.insert()
+			main_supp = supp.name
+		else:
+			main_supp = supp_name
+
+	# 3. Find or create internal Customer in Counterparty Company
+	other_cust = frappe.db.get_value("Customer", {"represents_company": main_company}, "name")
+	if not other_cust:
+		other_cust_name = f"{main_company} (Internal)"
+		if not frappe.db.exists("Customer", other_cust_name):
+			ocust = frappe.new_doc("Customer")
+			ocust.customer_name = other_cust_name
+			ocust.customer_type = "Company"
+			ocust.customer_group = frappe.db.get_value("Customer Group", {"is_group": 0}, "name") or "All Customer Groups"
+			ocust.territory = frappe.db.get_value("Territory", {"is_group": 0}, "name") or "All Territories"
+			ocust.is_internal_customer = 1
+			ocust.represents_company = main_company
+			ocust.flags.ignore_permissions = True
+			ocust.insert()
+			other_cust = ocust.name
+		else:
+			other_cust = other_cust_name
+
+	# 4. Find or create internal Supplier in Counterparty Company
+	other_supp = frappe.db.get_value("Supplier", {"represents_company": main_company}, "name")
+	if not other_supp:
+		other_supp_name = f"{main_company} (Internal)"
+		if not frappe.db.exists("Supplier", other_supp_name):
+			osupp = frappe.new_doc("Supplier")
+			osupp.supplier_name = other_supp_name
+			osupp.supplier_type = "Company"
+			osupp.supplier_group = frappe.db.get_value("Supplier Group", {"is_group": 0}, "name") or "All Supplier Groups"
+			osupp.is_internal_supplier = 1
+			osupp.represents_company = main_company
+			osupp.flags.ignore_permissions = True
+			osupp.insert()
+			other_supp = osupp.name
+		else:
+			other_supp = other_supp_name
+
+	# 5. Check if link already exists for main_company
+	existing_link = frappe.db.get_value("Intercompany Transaction Link", {"main_company": main_company}, "name")
+	
+	default_pairs = [
+		("Sales Order", "Purchase Order"),
+		("Purchase Order", "Sales Order"),
+		("Delivery Note", "Purchase Receipt"),
+		("Purchase Receipt", "Delivery Note"),
+		("Sales Invoice", "Purchase Invoice"),
+		("Purchase Invoice", "Sales Invoice"),
+		("Material Request", "Purchase Order"),
+		("Quotation", "Supplier Quotation"),
+		("Journal Entry", "Journal Entry"),
+	]
+
+	if existing_link:
+		link_doc = frappe.get_doc("Intercompany Transaction Link", existing_link)
+		# Check if counterparty already in child table
+		found = False
+		for row in link_doc.companies:
+			if row.company == counterparty_company:
+				found = True
+				break
+		if not found:
+			link_doc.append("companies", {
+				"company": counterparty_company,
+				"other_company_customer": other_cust,
+				"other_company_supplier": other_supp
+			})
+			link_doc.flags.ignore_permissions = True
+			link_doc.save()
+		link_name = link_doc.name
+	else:
+		link_doc = frappe.new_doc("Intercompany Transaction Link")
+		link_doc.main_company = main_company
+		link_doc.main_company_customer = main_cust
+		link_doc.main_company_supplier = main_supp
+		link_doc.enabled = 1
+		link_doc.auto_create_internal_parties = 1
+		link_doc.append("companies", {
+			"company": counterparty_company,
+			"other_company_customer": other_cust,
+			"other_company_supplier": other_supp
+		})
+		for src, tgt in default_pairs:
+			link_doc.append("transaction_types", {
+				"source_document_type": src,
+				"target_document_type": tgt,
+				"enabled": 1,
+				"auto_create": 1
+			})
+		link_doc.flags.ignore_permissions = True
+		link_doc.insert()
+		link_name = link_doc.name
+
+	return {
+		"success": True,
+		"link_name": link_name,
+		"message": _("Inter-Company link successfully established between {0} and {1}!").format(main_company, counterparty_company)
+	}

@@ -94,6 +94,13 @@ fixtures = [
             ["name", "in", ["Inter Company"]]
         ]
     },
+    # Pages
+    {
+        "doctype": "Page",
+        "filters": [
+            ["name", "in", ["inter-company-console"]]
+        ]
+    },
     # Custom Fields - All inter-company related fields
     {
         "doctype": "Custom Field",

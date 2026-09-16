@@ -63,6 +63,38 @@
 							'blue'
 						);
 					}
+				} else if (frm.doc.docstatus === 1) {
+					// Allow manual sync trigger for submitted documents
+					frm.add_custom_button(
+						__('Sync Mirror Now'),
+						function() {
+							frappe.call({
+								method: 'inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.trigger_manual_intercompany_sync',
+								args: {
+									doctype: frm.doc.doctype,
+									name: frm.doc.name
+								},
+								freeze: true,
+								freeze_message: __('Processing Inter-Company Mirroring...'),
+								callback: function(r) {
+									if (r.message && r.message.success) {
+										frappe.show_alert({
+											message: r.message.message,
+											indicator: 'green'
+										});
+										frm.reload_doc();
+									} else if (r.message) {
+										frappe.msgprint({
+											title: __('Inter-Company Sync Notice'),
+											indicator: 'orange',
+											message: r.message.message
+										});
+									}
+								}
+							});
+						},
+						__('Inter Company')
+					);
 				}
 
 				// Filter intercompany target company field so user cannot select current company

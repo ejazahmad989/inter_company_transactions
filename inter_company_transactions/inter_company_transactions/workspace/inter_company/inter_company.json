@@ -15,6 +15,16 @@
     {
       "hidden": 0,
       "is_query_report": 0,
+      "label": "Inter-Company Control Console",
+      "link_count": 0,
+      "link_to": "inter-company-console",
+      "link_type": "Page",
+      "onboard": 1,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
       "label": "Inter Company Settings",
       "link_count": 0,
       "link_to": "Inter Company Settings",
@@ -154,6 +164,13 @@
   ],
   "sequence_id": 20.0,
   "shortcuts": [
+    {
+      "color": "Purple",
+      "doc_view": "",
+      "label": "Control Console",
+      "link_to": "inter-company-console",
+      "type": "Page"
+    },
     {
       "color": "Blue",
       "doc_view": "List",
