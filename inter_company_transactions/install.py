@@ -50,6 +50,13 @@ def after_install():
         print(f"Notice during sample data creation: {e}")
         frappe.log_error(f"Error in create_sample_data: {e}", "App Installation")
     
+    try:
+        # Ensure page and workspace exist
+        create_page_and_workspace()
+    except Exception as e:
+        print(f"Notice during page/workspace creation: {e}")
+        frappe.log_error(f"Error in create_page_and_workspace: {e}", "App Installation")
+    
     print("Inter Company Transactions app installation completed successfully!")
 
 def create_custom_roles():
@@ -799,6 +806,123 @@ def create_doctypes():
                     "label": "Due Date"
                 }
             ]
+        },
+        
+        # 15. ICT Notification Setting
+        {
+            "doctype": "DocType",
+            "name": "ICT Notification Setting",
+            "module": "Inter Company Transactions",
+            "custom": 0,
+            "allow_import": 1,
+            "autoname": "field:user",
+            "fields": [
+                {
+                    "fieldname": "user",
+                    "fieldtype": "Link",
+                    "in_list_view": 1,
+                    "label": "User",
+                    "options": "User",
+                    "reqd": 1,
+                    "unique": 1
+                },
+                {
+                    "default": "1",
+                    "fieldname": "enabled",
+                    "fieldtype": "Check",
+                    "in_list_view": 1,
+                    "label": "Enabled"
+                },
+                {
+                    "fieldname": "section_break_channels",
+                    "fieldtype": "Section Break",
+                    "label": "Notification Channels"
+                },
+                {
+                    "default": "1",
+                    "fieldname": "email_notifications",
+                    "fieldtype": "Check",
+                    "label": "Email Notifications"
+                },
+                {
+                    "default": "1",
+                    "fieldname": "in_app_notifications",
+                    "fieldtype": "Check",
+                    "label": "In-App Notifications"
+                },
+                {
+                    "fieldname": "column_break_channels",
+                    "fieldtype": "Column Break"
+                },
+                {
+                    "default": "0",
+                    "fieldname": "sms_notifications",
+                    "fieldtype": "Check",
+                    "label": "SMS Notifications"
+                },
+                {
+                    "default": "0",
+                    "fieldname": "slack_notifications",
+                    "fieldtype": "Check",
+                    "label": "Slack / Webhook Notifications"
+                },
+                {
+                    "fieldname": "section_break_events",
+                    "fieldtype": "Section Break",
+                    "label": "Notification Triggers & Events"
+                },
+                {
+                    "default": "1",
+                    "fieldname": "approval_requests",
+                    "fieldtype": "Check",
+                    "label": "Approval Requests"
+                },
+                {
+                    "default": "1",
+                    "fieldname": "status_updates",
+                    "fieldtype": "Check",
+                    "label": "Status Updates"
+                },
+                {
+                    "fieldname": "column_break_events",
+                    "fieldtype": "Column Break"
+                },
+                {
+                    "default": "1",
+                    "fieldname": "dispute_alerts",
+                    "fieldtype": "Check",
+                    "label": "Dispute Alerts"
+                },
+                {
+                    "default": "1",
+                    "fieldname": "netting_cycle_alerts",
+                    "fieldtype": "Check",
+                    "label": "Netting Cycle Alerts"
+                },
+                {
+                    "default": "1",
+                    "fieldname": "elimination_alerts",
+                    "fieldtype": "Check",
+                    "label": "Elimination Run Alerts"
+                },
+                {
+                    "fieldname": "section_break_digest",
+                    "fieldtype": "Section Break",
+                    "label": "Frequency & Digest"
+                },
+                {
+                    "default": "0",
+                    "fieldname": "daily_summary",
+                    "fieldtype": "Check",
+                    "label": "Daily Summary Digest"
+                },
+                {
+                    "default": "0",
+                    "fieldname": "weekly_summary",
+                    "fieldtype": "Check",
+                    "label": "Weekly Summary Digest"
+                }
+            ]
         }
     ]
     
@@ -1525,6 +1649,27 @@ def set_default_permissions():
             "submit": 1, "cancel": 1, "amend": 1,
             "report": 1, "export": 1, "print": 1, "email": 1, "share": 1
         },
+        {
+            "doctype": "ICT Notification Setting",
+            "role": "System Manager",
+            "read": 1, "write": 1, "create": 1, "delete": 1,
+            "submit": 0, "cancel": 0, "amend": 0,
+            "report": 1, "export": 1, "print": 1, "email": 1, "share": 1
+        },
+        {
+            "doctype": "ICT Notification Setting",
+            "role": "Accounts Manager",
+            "read": 1, "write": 1, "create": 1, "delete": 0,
+            "submit": 0, "cancel": 0, "amend": 0,
+            "report": 1, "export": 1, "print": 1, "email": 1, "share": 1
+        },
+        {
+            "doctype": "ICT Notification Setting",
+            "role": "All",
+            "read": 1, "write": 1, "create": 1, "delete": 0,
+            "submit": 0, "cancel": 0, "amend": 0,
+            "report": 0, "export": 0, "print": 1, "email": 1, "share": 0
+        },
         
         # All Role - Read access to view DocTypes
         {
@@ -1652,6 +1797,45 @@ def create_sample_data():
             
     except Exception as e:
         print(f"Error creating sample data: {str(e)}")
+
+def create_page_and_workspace():
+    """Ensure Inter-Company Control Console page and Inter Company workspace exist in DB"""
+    try:
+        # 1. Page
+        if not frappe.db.exists("Page", "inter-company-console"):
+            page = frappe.new_doc("Page")
+            page.name = "inter-company-console"
+            page.page_name = "inter-company-console"
+            page.title = "Inter-Company Control Console"
+            page.module = "Inter Company Transactions"
+            page.standard = "Yes"
+            for r in ["System Manager", "Accounts Manager", "Accounts User"]:
+                page.append("roles", {"role": r})
+            page.flags.ignore_permissions = True
+            page.insert()
+            print("Created Page: inter-company-console")
+        else:
+            page = frappe.get_doc("Page", "inter-company-console")
+            roles = [r.role for r in page.roles]
+            for r in ["System Manager", "Accounts Manager", "Accounts User"]:
+                if r not in roles:
+                    page.append("roles", {"role": r})
+            page.flags.ignore_permissions = True
+            page.save()
+
+        # 2. Workspace
+        ws_file = os.path.join(os.path.dirname(__file__), "inter_company_transactions", "workspace", "inter_company", "inter_company.json")
+        if os.path.exists(ws_file):
+            with open(ws_file, "r") as f:
+                ws_data = json.load(f)
+            if not frappe.db.exists("Workspace", "Inter Company"):
+                ws_doc = frappe.get_doc(ws_data)
+                ws_doc.flags.ignore_permissions = True
+                ws_doc.insert()
+                print("Created Workspace: Inter Company")
+        frappe.db.commit()
+    except Exception as e:
+        print(f"Error creating page or workspace: {str(e)}")
 
 def before_uninstall():
     """Clean up before app uninstall"""

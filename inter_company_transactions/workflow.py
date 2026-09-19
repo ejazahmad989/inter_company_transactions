@@ -228,14 +228,24 @@ def get_approvers_for_mapping(approver_mapping, amount):
     return approvers
 
 def get_notification_settings(user):
-    """Get notification settings for a user without forcing creation"""
+    """Get ICT notification settings for a user without clashing with Frappe core"""
     if not user:
         return None
 
     try:
+        if frappe.db.table_exists("ICT Notification Setting"):
+            if frappe.db.exists("ICT Notification Setting", user):
+                return frappe.get_doc("ICT Notification Setting", user)
+            # Auto-provision ICT Notification Setting
+            from inter_company_transactions.inter_company_transactions.doctype.ict_notification_setting.ict_notification_setting import get_ict_notification_settings
+            return get_ict_notification_settings(user)
+    except Exception:
+        pass
+
+    try:
         return frappe.get_doc("Notification Settings", user)
-    except frappe.DoesNotExistError:
-        return None  # or return {} if preferred
+    except Exception:
+        return None
 
 def send_email_notification(user, approval_request, notification_type):
     """Send email notification"""

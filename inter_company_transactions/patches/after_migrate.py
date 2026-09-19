@@ -21,6 +21,12 @@ def after_migrate():
     # Ensure all users have valid Notification Settings
     ensure_notification_settings_for_all_users()
     
+    # Ensure ICT Notification Setting exists for all users
+    ensure_ict_notification_settings_for_all_users()
+
+    # Ensure Page and Workspace exist
+    ensure_page_and_workspace()
+    
     print("Post-migration tasks completed successfully!")
 
 def execute():
@@ -135,3 +141,67 @@ def ensure_notification_settings_for_all_users():
         print("Ensured all users have Notification Settings")
     except Exception as e:
         print(f"Error ensuring Notification Settings: {str(e)}")
+
+def ensure_ict_notification_settings_for_all_users():
+    """Ensure every existing User has a valid ICT Notification Setting record"""
+    try:
+        from inter_company_transactions.inter_company_transactions.doctype.ict_notification_setting.ict_notification_setting import get_ict_notification_settings
+        users = frappe.get_all("User", pluck="name")
+        for u in users:
+            if u and u not in ("Guest", "None"):
+                try:
+                    get_ict_notification_settings(u)
+                except Exception:
+                    pass
+        frappe.db.commit()
+        print("Ensured all users have ICT Notification Settings")
+    except Exception as e:
+        print(f"Error ensuring ICT Notification Settings: {str(e)}")
+
+def ensure_page_and_workspace():
+    """Ensure Page inter-company-console and Workspace Inter Company exist"""
+    import os
+    import json
+    try:
+        # Page
+        if not frappe.db.exists("Page", "inter-company-console"):
+            page = frappe.new_doc("Page")
+            page.name = "inter-company-console"
+            page.page_name = "inter-company-console"
+            page.title = "Inter-Company Control Console"
+            page.module = "Inter Company Transactions"
+            page.standard = "Yes"
+            for r in ["System Manager", "Accounts Manager", "Accounts User"]:
+                page.append("roles", {"role": r})
+            page.flags.ignore_permissions = True
+            page.insert()
+            print("Ensured Page: inter-company-console")
+        else:
+            page = frappe.get_doc("Page", "inter-company-console")
+            roles = [r.role for r in page.roles]
+            for r in ["System Manager", "Accounts Manager", "Accounts User"]:
+                if r not in roles:
+                    page.append("roles", {"role": r})
+            page.flags.ignore_permissions = True
+            page.save()
+
+        # Workspace
+        ws_file = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            "inter_company_transactions",
+            "workspace",
+            "inter_company",
+            "inter_company.json"
+        )
+        if os.path.exists(ws_file):
+            with open(ws_file, "r") as f:
+                ws_data = json.load(f)
+            if not frappe.db.exists("Workspace", "Inter Company"):
+                ws_doc = frappe.get_doc(ws_data)
+                ws_doc.flags.ignore_permissions = True
+                ws_doc.insert()
+                print("Ensured Workspace: Inter Company")
+        frappe.db.commit()
+    except Exception as e:
+        print(f"Error ensuring page or workspace: {str(e)}")
+

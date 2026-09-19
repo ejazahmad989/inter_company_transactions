@@ -322,61 +322,49 @@ def quick_setup_intercompany_pair(main_company, counterparty_company):
 
 	# 5. Check if link already exists for main_company
 	existing_link = frappe.db.get_value("Intercompany Transaction Link", {"main_company": main_company}, "name")
-	
-	default_pairs = [
-		("Sales Order", "Purchase Order"),
-		("Purchase Order", "Sales Order"),
-		("Delivery Note", "Purchase Receipt"),
-		("Purchase Receipt", "Delivery Note"),
-		("Sales Invoice", "Purchase Invoice"),
-		("Purchase Invoice", "Sales Invoice"),
-		("Material Request", "Purchase Order"),
-		("Quotation", "Supplier Quotation"),
-		("Journal Entry", "Journal Entry"),
-	]
 
 	if existing_link:
 		link_doc = frappe.get_doc("Intercompany Transaction Link", existing_link)
-		# Check if counterparty already in child table
+		# Check if counterparty already in linked_companies child table
 		found = False
-		for row in link_doc.companies:
+		for row in (link_doc.linked_companies or []):
 			if row.company == counterparty_company:
 				found = True
 				break
 		if not found:
-			link_doc.append("companies", {
+			link_doc.append("linked_companies", {
 				"company": counterparty_company,
+				"main_company_customer": main_cust,
+				"main_company_supplier": main_supp,
 				"other_company_customer": other_cust,
 				"other_company_supplier": other_supp
 			})
-			link_doc.flags.ignore_permissions = True
-			link_doc.save()
+		link_doc.populate_default_transaction_types()
+		link_doc.flags.ignore_permissions = True
+		link_doc.save()
 		link_name = link_doc.name
 	else:
 		link_doc = frappe.new_doc("Intercompany Transaction Link")
 		link_doc.main_company = main_company
-		link_doc.main_company_customer = main_cust
-		link_doc.main_company_supplier = main_supp
 		link_doc.enabled = 1
-		link_doc.auto_create_internal_parties = 1
-		link_doc.append("companies", {
+		link_doc.auto_create_draft = 1
+		link_doc.auto_cancel_linked_document = 1
+		link_doc.append("linked_companies", {
 			"company": counterparty_company,
+			"main_company_customer": main_cust,
+			"main_company_supplier": main_supp,
 			"other_company_customer": other_cust,
 			"other_company_supplier": other_supp
 		})
-		for src, tgt in default_pairs:
-			link_doc.append("transaction_types", {
-				"source_document_type": src,
-				"target_document_type": tgt,
-				"enabled": 1,
-				"auto_create": 1
-			})
+		link_doc.populate_default_transaction_types()
 		link_doc.flags.ignore_permissions = True
 		link_doc.insert()
 		link_name = link_doc.name
 
+	frappe.db.commit()
+
 	return {
 		"success": True,
 		"link_name": link_name,
-		"message": _("Inter-Company link successfully established between {0} and {1}!").format(main_company, counterparty_company)
+		"message": _("Intercompany relationship and transaction rules successfully established between {0} and {1}.").format(main_company, counterparty_company)
 	}

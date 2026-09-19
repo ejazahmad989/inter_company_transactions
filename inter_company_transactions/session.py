@@ -49,6 +49,20 @@ def before_request():
         user = getattr(getattr(frappe, "session", None), "user", None)
         if user and user not in ("Guest", "None"):
             ensure_user_notification_settings(user)
+            ensure_user_ict_notification_settings(user)
+    except Exception:
+        pass
+
+def ensure_user_ict_notification_settings(user=None):
+    """Ensure that the given user has an ICT Notification Setting document"""
+    try:
+        if not user:
+            user = getattr(getattr(frappe, "session", None), "user", None)
+        if not user or user in ("Guest", "None"):
+            return
+        
+        from inter_company_transactions.inter_company_transactions.doctype.ict_notification_setting.ict_notification_setting import get_ict_notification_settings
+        get_ict_notification_settings(user)
     except Exception:
         pass
 
@@ -57,6 +71,7 @@ def on_session_creation(login_manager):
     try:
         if frappe.session.user != "Guest":
             ensure_user_notification_settings(frappe.session.user)
+            ensure_user_ict_notification_settings(frappe.session.user)
             # Apply user theme
             from inter_company_transactions.enhanced_theme import apply_user_theme
             apply_user_theme()
