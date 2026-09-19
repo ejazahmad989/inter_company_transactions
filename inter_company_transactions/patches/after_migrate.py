@@ -95,11 +95,16 @@ def ensure_notification_settings_for_all_users():
             # Ensure module is Desk and not custom
             frappe.db.set_value("DocType", "Notification Settings", "module", "Desk")
             frappe.db.set_value("DocType", "Notification Settings", "custom", 0)
+            try:
+                frappe.reload_doctype("Notification Settings", force=True)
+            except Exception:
+                pass
             
-        users = frappe.get_all("User", filters={"enabled": 1}, pluck="name")
+        users = frappe.get_all("User", pluck="name")
         for u in users:
             if u and u not in ("Guest", "None"):
                 if not frappe.db.exists("Notification Settings", u):
+                    created = False
                     try:
                         doc = frappe.new_doc("Notification Settings")
                         doc.name = u
@@ -107,8 +112,25 @@ def ensure_notification_settings_for_all_users():
                         doc.flags.ignore_permissions = True
                         doc.flags.ignore_mandatory = True
                         doc.insert(ignore_permissions=True)
+                        created = True
                     except Exception:
                         pass
+                    
+                    if not created:
+                        try:
+                            frappe.db.sql("""
+                                INSERT IGNORE INTO `tabNotification Settings`
+                                (name, user, creation, modified, modified_by, owner, docstatus)
+                                VALUES (%s, %s, NOW(), NOW(), %s, %s, 0)
+                            """, (u, u, u, u))
+                        except Exception:
+                            pass
+                
+                try:
+                    frappe.clear_document_cache("Notification Settings", u)
+                except Exception:
+                    pass
+                    
         frappe.db.commit()
         print("Ensured all users have Notification Settings")
     except Exception as e:

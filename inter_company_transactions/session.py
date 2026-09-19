@@ -12,13 +12,34 @@ def ensure_user_notification_settings(user=None):
         
         if frappe.db and hasattr(frappe.db, "table_exists") and frappe.db.table_exists("Notification Settings"):
             if not frappe.db.exists("Notification Settings", user):
-                doc = frappe.new_doc("Notification Settings")
-                doc.name = user
-                doc.user = user
-                doc.flags.ignore_permissions = True
-                doc.flags.ignore_mandatory = True
-                doc.insert(ignore_permissions=True)
-                frappe.db.commit()
+                created = False
+                try:
+                    doc = frappe.new_doc("Notification Settings")
+                    doc.name = user
+                    doc.user = user
+                    doc.flags.ignore_permissions = True
+                    doc.flags.ignore_mandatory = True
+                    doc.insert(ignore_permissions=True)
+                    frappe.db.commit()
+                    created = True
+                except Exception:
+                    pass
+                
+                if not created:
+                    try:
+                        frappe.db.sql("""
+                            INSERT IGNORE INTO `tabNotification Settings`
+                            (name, user, creation, modified, modified_by, owner, docstatus)
+                            VALUES (%s, %s, NOW(), NOW(), %s, %s, 0)
+                        """, (user, user, user, user))
+                        frappe.db.commit()
+                    except Exception:
+                        pass
+                
+                try:
+                    frappe.clear_document_cache("Notification Settings", user)
+                except Exception:
+                    pass
     except Exception:
         pass
 
