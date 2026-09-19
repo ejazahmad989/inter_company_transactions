@@ -93,13 +93,6 @@ fixtures = [
             ["name", "in", ["Inter Company"]]
         ]
     },
-    # Pages
-    {
-        "doctype": "Page",
-        "filters": [
-            ["name", "in", ["inter-company-console"]]
-        ]
-    },
     # Email Templates for workflow notifications
     {
         "doctype": "Email Template",
@@ -109,16 +102,6 @@ fixtures = [
                 "approval_approved_email", 
                 "approval_rejected_email",
                 "escalation_email"
-            ]]
-        ]
-    },
-    # Print Formats if any
-    {
-        "doctype": "Print Format",
-        "filters": [
-            ["doc_type", "in", [
-                "Workflow Approval Request",
-                "Inter Company Workflow"
             ]]
         ]
     },
