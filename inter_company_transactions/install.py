@@ -1442,6 +1442,7 @@ def create_custom_fields():
                             "doctype": "Custom Field",
                             "name": field_name,
                             "dt": doctype,
+                            "module": "Inter Company Transactions",
                             "fieldname": field["fieldname"],
                             "label": field["label"],
                             "fieldtype": field["fieldtype"],
@@ -1461,6 +1462,8 @@ def create_custom_fields():
                         custom_field.insert()
                         print(f"Created Custom Field: {doctype} - {field['fieldname']}")
                     else:
+                        # Ensure module is set to Inter Company Transactions
+                        frappe.db.set_value("Custom Field", existing_cf, "module", "Inter Company Transactions", update_modified=False)
                         print(f"Custom Field already exists: {doctype} - {field['fieldname']}")
                         
                 except Exception as e:
