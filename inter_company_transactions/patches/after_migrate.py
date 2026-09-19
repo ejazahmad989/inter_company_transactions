@@ -18,6 +18,9 @@ def after_migrate():
     # Update permissions
     update_permissions()
     
+    # Ensure all users have valid Notification Settings
+    ensure_notification_settings_for_all_users()
+    
     print("Post-migration tasks completed successfully!")
 
 def execute():
@@ -84,3 +87,29 @@ def update_permissions():
         print("Updated permissions")
     except Exception as e:
         print(f"Error updating permissions: {str(e)}")
+
+def ensure_notification_settings_for_all_users():
+    """Ensure every existing User has a valid Notification Settings record"""
+    try:
+        if frappe.db.exists("DocType", "Notification Settings"):
+            # Ensure module is Desk and not custom
+            frappe.db.set_value("DocType", "Notification Settings", "module", "Desk")
+            frappe.db.set_value("DocType", "Notification Settings", "custom", 0)
+            
+        users = frappe.get_all("User", filters={"enabled": 1}, pluck="name")
+        for u in users:
+            if u and u not in ("Guest", "None"):
+                if not frappe.db.exists("Notification Settings", u):
+                    try:
+                        doc = frappe.new_doc("Notification Settings")
+                        doc.name = u
+                        doc.user = u
+                        doc.flags.ignore_permissions = True
+                        doc.flags.ignore_mandatory = True
+                        doc.insert(ignore_permissions=True)
+                    except Exception:
+                        pass
+        frappe.db.commit()
+        print("Ensured all users have Notification Settings")
+    except Exception as e:
+        print(f"Error ensuring Notification Settings: {str(e)}")

@@ -74,7 +74,6 @@ fixtures = [
                 "Inter Company Workflow Approver",
                 "Workflow Approval Request",
                 "Workflow Approval History",
-                "Notification Settings",
                 "Inter Company Netting Cycle",
                 "Inter Company Netting Company",
                 "Inter Company Netting Invoice",
@@ -418,6 +417,7 @@ before_uninstall = "inter_company_transactions.install.before_uninstall"
 
 # Startup hooks
 on_session_creation = "inter_company_transactions.session.on_session_creation"
+before_request = "inter_company_transactions.session.before_request"
 
 # Error handling hooks
 on_error = "inter_company_transactions.error_handler.handle_error"
