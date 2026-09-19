@@ -37,14 +37,14 @@ def get_company_theme(company=None):
         frappe.log_error(f"Error getting company theme: {str(e)}", "Theme Manager")
         return {}
 
-def apply_user_theme():
+def apply_user_theme(login_manager=None):
     """Apply theme on user login"""
     try:
-        if frappe.session.user == "Guest":
+        if not hasattr(frappe, "session") or frappe.session.user == "Guest":
             return
         
         theme = get_company_theme()
-        if theme:
+        if theme and hasattr(frappe, "local") and hasattr(frappe.local, "response"):
             # Set theme in session
             frappe.local.response["theme"] = theme
             

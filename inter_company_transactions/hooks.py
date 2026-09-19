@@ -22,8 +22,7 @@ app_include_js = [
     "/assets/inter_company_transactions/js/enhanced_workflow.js",
     "/assets/inter_company_transactions/js/inter_company_transaction_map.js",
     "/assets/inter_company_transactions/js/inter_company_common.js",
-    "/assets/inter_company_transactions/js/theme_manager.js",
-    "/assets/enhanced_theme_manager/js/custom_login.js"
+    "/assets/inter_company_transactions/js/theme_manager.js"
 ]
 
 # include js, css files in header of desk.html
@@ -341,13 +340,6 @@ jenv = {
     ]
 }
 
-# Website context - Enhanced branding
-website_context = {
-    "favicon": "/assets/inter_company_transactions/images/favicon.ico",
-    "splash_image": "/assets/inter_company_transactions/images/splash.png",
-    "brand_html": "Inter Company Transactions"
-}
-
 # Boot session - Add user-specific data on login
 boot_session = "inter_company_transactions.boot.boot_session"
 
@@ -391,11 +383,6 @@ notification_config = "inter_company_transactions.notifications.get_notification
 # Report hooks
 standard_queries = {
     "Workflow Approval Request": "inter_company_transactions.queries.workflow_approval_request_query"
-}
-
-# Translation hooks
-get_translated_dict = {
-    "doctype": "inter_company_transactions.translations.get_doctype_translations"
 }
 
 # Desk page hooks

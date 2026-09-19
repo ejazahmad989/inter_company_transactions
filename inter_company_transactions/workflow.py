@@ -546,3 +546,34 @@ def get_notification_message(doc):
         <p><strong>Due Date:</strong> {doc.due_date or 'Not specified'}</p>
         <p>Please review at: <a href="{get_url_to_form(doc.doctype, doc.name)}">{doc.name}</a></p>
     """
+
+def get_pending_approvals_count(user=None):
+    """Get count of pending approvals for a user"""
+    try:
+        if not user:
+            user = frappe.session.user
+        if not user or user == "Guest":
+            return 0
+        if not frappe.db.table_exists("Workflow Approval Request"):
+            return 0
+        return frappe.db.count("Workflow Approval Request", {"status": "Pending"})
+    except Exception:
+        return 0
+
+def get_user_approval_requests(user=None):
+    """Get list of pending approval requests for a user"""
+    try:
+        if not user:
+            user = frappe.session.user
+        if not user or user == "Guest":
+            return []
+        if not frappe.db.table_exists("Workflow Approval Request"):
+            return []
+        return frappe.get_all(
+            "Workflow Approval Request",
+            filters={"status": "Pending"},
+            fields=["name", "workflow", "document_type", "document_name", "priority", "creation"],
+            limit_page_length=20
+        )
+    except Exception:
+        return []

@@ -6,24 +6,29 @@ def boot_session(bootinfo):
     """Add custom data to boot session"""
     try:
         if frappe.session.user != "Guest":
-            # Add pending approvals count
-            bootinfo["pending_approvals"] = frappe.db.count(
-                "Workflow Approval Request",
-                {
-                    "status": "Pending",
-                    "workflow": ["in", get_user_workflows()]
-                }
-            )
+            # Add pending approvals count safely
+            bootinfo["pending_approvals"] = 0
+            if frappe.db.table_exists("Workflow Approval Request") and frappe.db.table_exists("Inter Company Workflow"):
+                workflows = get_user_workflows()
+                if workflows:
+                    bootinfo["pending_approvals"] = frappe.db.count(
+                        "Workflow Approval Request",
+                        {
+                            "status": "Pending",
+                            "workflow": ["in", workflows]
+                        }
+                    )
             
-            # Add active theme
-            theme = frappe.db.get_value(
-                "Enhanced Theme Manager",
-                {"is_active": 1},
-                ["name", "theme_name", "primary_color"],
-                as_dict=True
-            )
-            if theme:
-                bootinfo["active_theme"] = theme
+            # Add active theme safely
+            if frappe.db.table_exists("Enhanced Theme Manager"):
+                theme = frappe.db.get_value(
+                    "Enhanced Theme Manager",
+                    {"is_active": 1},
+                    ["name", "theme_name", "primary_color"],
+                    as_dict=True
+                )
+                if theme:
+                    bootinfo["active_theme"] = theme
                 
     except Exception as e:
         frappe.log_error(f"Error in boot session: {str(e)}", "Boot Session")

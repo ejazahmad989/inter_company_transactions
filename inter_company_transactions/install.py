@@ -8,23 +8,47 @@ def after_install():
     """Run after app installation"""
     print("Starting Inter Company Transactions app installation...")
     
-    # Create custom roles first
-    create_custom_roles()
+    try:
+        # Create custom roles first
+        create_custom_roles()
+    except Exception as e:
+        print(f"Notice during role creation: {e}")
+        frappe.log_error(f"Error in create_custom_roles: {e}", "App Installation")
     
-    # Create doctypes
-    create_doctypes()
+    try:
+        # Create doctypes
+        create_doctypes()
+    except Exception as e:
+        print(f"Notice during doctype creation: {e}")
+        frappe.log_error(f"Error in create_doctypes: {e}", "App Installation")
     
-    # Create custom fields
-    create_custom_fields()
+    try:
+        # Create custom fields
+        create_custom_fields()
+    except Exception as e:
+        print(f"Notice during custom fields creation: {e}")
+        frappe.log_error(f"Error in create_custom_fields: {e}", "App Installation")
     
-    # Create email templates
-    create_email_templates()
+    try:
+        # Create email templates
+        create_email_templates()
+    except Exception as e:
+        print(f"Notice during email templates creation: {e}")
+        frappe.log_error(f"Error in create_email_templates: {e}", "App Installation")
     
-    # Set default permissions
-    set_default_permissions()
+    try:
+        # Set default permissions
+        set_default_permissions()
+    except Exception as e:
+        print(f"Notice during permissions setup: {e}")
+        frappe.log_error(f"Error in set_default_permissions: {e}", "App Installation")
     
-    # Create sample data
-    create_sample_data()
+    try:
+        # Create sample data
+        create_sample_data()
+    except Exception as e:
+        print(f"Notice during sample data creation: {e}")
+        frappe.log_error(f"Error in create_sample_data: {e}", "App Installation")
     
     print("Inter Company Transactions app installation completed successfully!")
 
