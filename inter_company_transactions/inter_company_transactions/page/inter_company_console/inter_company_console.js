@@ -36,6 +36,10 @@ frappe.pages['inter-company-console'].on_page_load = function(wrapper) {
 		frappe.set_route('Form', 'Inter Company Settings');
 	});
 
+	page.add_inner_button(__('Download PDF Guide'), function() {
+		window.open('/assets/inter_company_transactions/Inter_Company_Transactions_User_Guide.pdf', '_blank');
+	});
+
 	wrapper.page = page;
 	render_console(wrapper);
 };
