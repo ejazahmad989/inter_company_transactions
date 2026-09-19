@@ -81,7 +81,8 @@ fixtures = [
                 "Transfer Pricing Policy",
                 "Inter Company Elimination Run",
                 "Inter Company Dispute",
-                "Inter Company Remote Site"
+                "Inter Company Remote Site",
+                "ICT Notification Setting"
             ]]
         ]
     },
@@ -97,45 +98,6 @@ fixtures = [
         "doctype": "Page",
         "filters": [
             ["name", "in", ["inter-company-console"]]
-        ]
-    },
-    # Custom Fields - All inter-company related fields
-    {
-        "doctype": "Custom Field",
-        "filters": [
-            ["fieldname", "in", [
-                "intercompany_linked_doc_doctype",
-                "intercompany_linked_doc_name",
-                "intercompany_linked_company",
-                "intercompany_target_company",
-                "ic_customer_group",
-                "ic_supplier_group",
-                "Form",
-                "custom_company"
-            ]]
-        ]
-    },
-    # Property Setter for custom field properties
-    {
-        "doctype": "Property Setter",
-        "filters": [
-            ["doc_type", "in", [
-                "Sales Order",
-                "Purchase Order",
-                "Sales Invoice",
-                "Purchase Invoice",
-                "Delivery Note",
-                "Purchase Receipt",
-                "Quotation",
-                "Supplier Quotation",
-                "Material Request",
-                "Journal Entry",
-                "Payment Entry",
-                "Customer",
-                "Supplier",
-                "Customer Group",
-                "Supplier Group"
-            ]]
         ]
     },
     # Email Templates for workflow notifications

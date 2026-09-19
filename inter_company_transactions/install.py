@@ -1430,9 +1430,17 @@ def create_custom_fields():
             for field in fields:
                 try:
                     field_name = f"{doctype}-{field['fieldname']}"
-                    if not frappe.db.exists("Custom Field", {"dt": doctype, "fieldname": field["fieldname"]}):
+                    # Check if Custom Field exists by name or by (dt, fieldname)
+                    existing_cf = None
+                    if frappe.db.exists("Custom Field", field_name):
+                        existing_cf = field_name
+                    elif frappe.db.exists("Custom Field", {"dt": doctype, "fieldname": field["fieldname"]}):
+                        existing_cf = frappe.db.get_value("Custom Field", {"dt": doctype, "fieldname": field["fieldname"]}, "name")
+
+                    if not existing_cf:
                         custom_field = frappe.get_doc({
                             "doctype": "Custom Field",
+                            "name": field_name,
                             "dt": doctype,
                             "fieldname": field["fieldname"],
                             "label": field["label"],
