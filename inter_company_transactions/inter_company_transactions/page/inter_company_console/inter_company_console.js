@@ -9,36 +9,48 @@ frappe.pages['inter-company-console'].on_page_load = function(wrapper) {
 	});
 
 	page.set_primary_action(
-		__('Quick Setup Wizard'),
+		__('Guided Setup Wizard'),
 		function() {
 			open_quick_setup_wizard(page);
 		},
 		'octicon octicon-zap'
 	);
 
-	page.add_inner_button(__('Health Audit'), function() {
-		run_health_audit();
-	});
-
-	page.add_inner_button(__('Netting Settlement'), function() {
-		frappe.new_doc('Inter Company Netting Cycle');
-	});
-
-	page.add_inner_button(__('Elimination Run'), function() {
-		frappe.new_doc('Inter Company Elimination Run');
-	});
-
-	page.add_inner_button(__('Reconciliation Matrix'), function() {
-		frappe.set_route('query-report', 'Inter Company Transaction Matrix');
-	});
-
-	page.add_inner_button(__('Settings'), function() {
-		frappe.set_route('Form', 'Inter Company Settings');
-	});
+	page.add_inner_button(__('Interactive Tutorial'), function() {
+		show_tutorial_dialog();
+	}, __('Learn & Guide'));
 
 	page.add_inner_button(__('Download PDF Guide'), function() {
 		window.open('/assets/inter_company_transactions/Inter_Company_Transactions_User_Guide.pdf', '_blank');
-	});
+	}, __('Learn & Guide'));
+
+	page.add_inner_button(__('Health Audit'), function() {
+		run_health_audit();
+	}, __('Tools'));
+
+	page.add_inner_button(__('Reconciliation Matrix'), function() {
+		frappe.set_route('query-report', 'Inter Company Transaction Matrix');
+	}, __('Tools'));
+
+	page.add_inner_button(__('Balance Reconciliation'), function() {
+		frappe.set_route('query-report', 'Inter Company Balance Reconciliation');
+	}, __('Tools'));
+
+	page.add_inner_button(__('Netting Settlement'), function() {
+		frappe.new_doc('Inter Company Netting Cycle');
+	}, __('Actions'));
+
+	page.add_inner_button(__('Elimination Run'), function() {
+		frappe.new_doc('Inter Company Elimination Run');
+	}, __('Actions'));
+
+	page.add_inner_button(__('Transfer Pricing'), function() {
+		frappe.set_route('List', 'Transfer Pricing Policy');
+	}, __('Actions'));
+
+	page.add_inner_button(__('Settings'), function() {
+		frappe.set_route('Form', 'Inter Company Settings');
+	}, __('Actions'));
 
 	wrapper.page = page;
 	render_console(wrapper);
@@ -73,47 +85,107 @@ function render_console(wrapper) {
 
 function build_console_ui($container, data) {
 	let m = data.metrics;
-	let healthColor = data.health_status === 'Healthy' ? '#28a745' : '#e06666';
+	let isHealthy = data.health_status === 'Healthy';
 
 	let html = `
 		<div class="ict-console-body" style="padding: 10px 0;">
+			<!-- Welcome / Quick Action Banner -->
+			<div class="card p-4 shadow-sm border-0 mb-4" style="border-radius: 8px; background: linear-gradient(135deg, #1f2937 0%, #111827 100%); color: #fff;">
+				<div class="row align-items-center">
+					<div class="col-lg-8 mb-3 mb-lg-0">
+						<div class="d-flex align-items-center mb-2">
+							<span class="badge ${isHealthy ? 'badge-success' : 'badge-warning'} mr-2" style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">
+								<i class="fa ${isHealthy ? 'fa-check-circle' : 'fa-exclamation-triangle'} mr-1"></i>${data.health_status || 'System Ready'}
+							</span>
+							<span class="text-muted" style="color: #9ca3af !important; font-size: 12px;">
+								${__('Deployment Mode')}: <strong class="text-light">${data.deployment_mode}</strong>
+							</span>
+						</div>
+						<h4 class="mb-1 font-weight-bold text-white">${__('Inter-Company Orchestration & Automation Hub')}</h4>
+						<p class="mb-0" style="color: #d1d5db; font-size: 13.5px; max-width: 720px;">
+							${__('Seamlessly mirror orders, shipments, and invoices between sister companies with automated party creation, OECD transfer pricing, multilateral netting, and period-end elimination.')}
+						</p>
+					</div>
+					<div class="col-lg-4 text-lg-right">
+						<button class="btn btn-primary btn-sm btn-quick-wizard mr-2 font-weight-bold shadow-sm" style="padding: 8px 16px;">
+							<i class="fa fa-magic mr-1"></i>${__('Launch Setup Wizard')}
+						</button>
+						<button class="btn btn-outline-light btn-sm btn-open-tutorial font-weight-bold" style="padding: 8px 14px; border-color: #4b5563; color: #e5e7eb;">
+							<i class="fa fa-book mr-1"></i>${__('Interactive Tutorial')}
+						</button>
+					</div>
+				</div>
+			</div>
+
 			<!-- Top KPI Summary Cards -->
 			<div class="row ict-stats-row mb-4">
 				<div class="col-md-3 col-sm-6 mb-3">
-					<div class="card p-3 shadow-sm border-0 ict-kpi-card" style="border-radius: 8px; border-left: 4px solid #5e64ff !important; background: var(--card-bg, #fff);">
+					<div class="card p-3 shadow-sm border-0 ict-kpi-card" style="border-radius: 8px; border-left: 4px solid #1b68ff !important; background: var(--card-bg, #fff);">
 						<div class="text-muted text-uppercase font-weight-bold" style="font-size: 11px; letter-spacing: 0.5px;">${__('Active Company Links')}</div>
 						<div class="d-flex align-items-center justify-content-between mt-2">
-							<h2 class="mb-0 font-weight-bold" style="color: #5e64ff;">${m.active_links}</h2>
+							<h2 class="mb-0 font-weight-bold" style="color: #1b68ff;">${m.active_links}</h2>
 							<span class="badge badge-pill badge-primary" style="font-size: 12px;">${m.companies_count} ${__('Entities')}</span>
 						</div>
 					</div>
 				</div>
 				<div class="col-md-3 col-sm-6 mb-3">
-					<div class="card p-3 shadow-sm border-0 ict-kpi-card" style="border-radius: 8px; border-left: 4px solid #28a745 !important; background: var(--card-bg, #fff);">
+					<div class="card p-3 shadow-sm border-0 ict-kpi-card" style="border-radius: 8px; border-left: 4px solid #16a34a !important; background: var(--card-bg, #fff);">
 						<div class="text-muted text-uppercase font-weight-bold" style="font-size: 11px; letter-spacing: 0.5px;">${__('Mirrored Documents')}</div>
 						<div class="d-flex align-items-center justify-content-between mt-2">
-							<h2 class="mb-0 font-weight-bold" style="color: #28a745;">${m.synced_docs_count}</h2>
+							<h2 class="mb-0 font-weight-bold" style="color: #16a34a;">${m.synced_docs_count}</h2>
 							<a href="/app/inter-company-document-reference" class="btn btn-xs btn-default">${__('View All')}</a>
 						</div>
 					</div>
 				</div>
 				<div class="col-md-3 col-sm-6 mb-3">
-					<div class="card p-3 shadow-sm border-0 ict-kpi-card" style="border-radius: 8px; border-left: 4px solid #17a2b8 !important; background: var(--card-bg, #fff);">
+					<div class="card p-3 shadow-sm border-0 ict-kpi-card" style="border-radius: 8px; border-left: 4px solid #0284c7 !important; background: var(--card-bg, #fff);">
 						<div class="text-muted text-uppercase font-weight-bold" style="font-size: 11px; letter-spacing: 0.5px;">${__('Netting Settled')}</div>
 						<div class="d-flex align-items-center justify-content-between mt-2">
-							<h3 class="mb-0 font-weight-bold" style="color: #17a2b8;">${format_currency(m.total_settled_amount)}</h3>
+							<h3 class="mb-0 font-weight-bold" style="color: #0284c7;">${format_currency(m.total_settled_amount)}</h3>
 							<span class="badge badge-pill badge-info" style="font-size: 12px;">${m.elimination_runs} ${__('Elim. Runs')}</span>
 						</div>
 					</div>
 				</div>
 				<div class="col-md-3 col-sm-6 mb-3">
-					<div class="card p-3 shadow-sm border-0 ict-kpi-card" style="border-radius: 8px; border-left: 4px solid ${m.open_disputes > 0 ? '#dc3545' : '#6c757d'} !important; background: var(--card-bg, #fff);">
+					<div class="card p-3 shadow-sm border-0 ict-kpi-card" style="border-radius: 8px; border-left: 4px solid ${m.open_disputes > 0 ? '#dc2626' : '#6b7280'} !important; background: var(--card-bg, #fff);">
 						<div class="text-muted text-uppercase font-weight-bold" style="font-size: 11px; letter-spacing: 0.5px;">${__('Open Disputes')}</div>
 						<div class="d-flex align-items-center justify-content-between mt-2">
-							<h2 class="mb-0 font-weight-bold" style="color: ${m.open_disputes > 0 ? '#dc3545' : '#6c757d'};">${m.open_disputes}</h2>
+							<h2 class="mb-0 font-weight-bold" style="color: ${m.open_disputes > 0 ? '#dc2626' : '#6b7280'};">${m.open_disputes}</h2>
 							<a href="/app/inter-company-dispute" class="btn btn-xs btn-default">${__('Disputes')}</a>
 						</div>
 					</div>
+				</div>
+			</div>
+
+			<!-- Quick Function Hub / Navigation Tiles -->
+			<div class="row mb-4">
+				<div class="col-6 col-md-3 mb-3">
+					<a href="/app/intercompany-transaction-link" class="ict-action-tile">
+						<div class="tile-icon text-primary"><i class="fa fa-sitemap"></i></div>
+						<div class="font-weight-bold">${__('Company Links')}</div>
+						<small class="text-muted d-block mt-1">${__('Entity topology & transaction routes')}</small>
+					</a>
+				</div>
+				<div class="col-6 col-md-3 mb-3">
+					<a href="/app/transfer-pricing-policy" class="ict-action-tile">
+						<div class="tile-icon text-success"><i class="fa fa-tags"></i></div>
+						<div class="font-weight-bold">${__('Transfer Pricing')}</div>
+						<small class="text-muted d-block mt-1">${__('OECD Cost-plus & resale margins')}</small>
+					</a>
+				</div>
+				<div class="col-6 col-md-3 mb-3">
+					<a href="/app/inter-company-netting-cycle" class="ict-action-tile">
+						<div class="tile-icon text-info"><i class="fa fa-balance-scale"></i></div>
+						<div class="font-weight-bold">${__('Netting Cycles')}</div>
+						<small class="text-muted d-block mt-1">${__('Multilateral cross-debt settlement')}</small>
+					</a>
+				</div>
+				<div class="col-6 col-md-3 mb-3">
+					<a href="/app/inter-company-elimination-run" class="ict-action-tile">
+						<div class="tile-icon text-warning"><i class="fa fa-compress"></i></div>
+						<div class="font-weight-bold">${__('Elimination Runs')}</div>
+						<small class="text-muted d-block mt-1">${__('Group holding consolidation & GL reversals')}</small>
+					</a>
 				</div>
 			</div>
 
@@ -132,7 +204,7 @@ function build_console_ui($container, data) {
 			</div>
 
 			<!-- Live Activity Stream -->
-			<div class="card p-4 shadow-sm border-0" style="border-radius: 8px; background: var(--card-bg, #fff);">
+			<div class="card p-4 shadow-sm border-0 mb-4" style="border-radius: 8px; background: var(--card-bg, #fff);">
 				<div class="d-flex justify-content-between align-items-center mb-3">
 					<div>
 						<h5 class="mb-1 font-weight-bold"><i class="fa fa-exchange mr-2 text-success"></i>${__('Live Mirroring Stream')}</h5>
@@ -159,6 +231,22 @@ function build_console_ui($container, data) {
 					</table>
 				</div>
 			</div>
+
+			<!-- Guided Educational Hub Footer -->
+			<div class="card p-4 shadow-sm border-0" style="border-radius: 8px; background: var(--bg-light-gray, #f8f9fa);">
+				<div class="row align-items-center">
+					<div class="col-md-9">
+						<h6 class="font-weight-bold mb-1"><i class="fa fa-graduation-cap text-primary mr-2"></i>${__('Need step-by-step guidance for enterprise deployment?')}</h6>
+						<p class="text-muted mb-0" style="font-size: 13px;">
+							${__('Explore real-world accounting scenarios (Order-to-Cash, Procure-to-Pay, Transfer Pricing margins, and Multilateral settlements) with the interactive walk-through or download the comprehensive PDF manual.')}
+						</p>
+					</div>
+					<div class="col-md-3 text-md-right mt-3 mt-md-0">
+						<button class="btn btn-sm btn-default btn-open-tutorial mr-1"><i class="fa fa-book mr-1"></i>${__('Tutorial')}</button>
+						<a href="/assets/inter_company_transactions/Inter_Company_Transactions_User_Guide.pdf" target="_blank" class="btn btn-sm btn-primary"><i class="fa fa-file-pdf-o mr-1"></i>${__('User Guide PDF')}</a>
+					</div>
+				</div>
+			</div>
 		</div>
 	`;
 
@@ -166,6 +254,10 @@ function build_console_ui($container, data) {
 
 	$container.find('.btn-quick-wizard').on('click', function() {
 		open_quick_setup_wizard();
+	});
+
+	$container.find('.btn-open-tutorial').on('click', function() {
+		show_tutorial_dialog();
 	});
 }
 
@@ -175,7 +267,7 @@ function render_links_cards(links) {
 			<div class="col-12 text-center p-4 text-muted">
 				<i class="fa fa-link fa-2x mb-2" style="opacity: 0.5;"></i>
 				<p class="mb-2">${__('No Intercompany Transaction Links configured yet.')}</p>
-				<button class="btn btn-sm btn-primary btn-quick-wizard">${__('Launch Quick Setup Wizard')}</button>
+				<button class="btn btn-sm btn-primary btn-quick-wizard">${__('Launch Setup Wizard')}</button>
 			</div>
 		`;
 	}
@@ -234,32 +326,102 @@ function render_recent_tx(txList) {
 }
 
 function open_quick_setup_wizard() {
+	let selectedPreset = 'full';
+
 	let d = new frappe.ui.Dialog({
-		title: __('Inter-Company Quick Setup Wizard'),
+		title: __('Inter-Company Guided Setup Wizard'),
+		size: 'large',
 		fields: [
 			{
 				fieldtype: 'HTML',
 				fieldname: 'wizard_intro',
 				options: `
-					<div class="alert alert-info" style="font-size: 12px; margin-bottom: 15px;">
+					<div class="ict-wizard-stepper">
+						<div class="ict-wizard-step active" id="step-tab-1"><i class="fa fa-building mr-1"></i>1. ${__('Select Entities')}</div>
+						<div class="ict-wizard-step" id="step-tab-2"><i class="fa fa-sliders mr-1"></i>2. ${__('Automation Preset')}</div>
+						<div class="ict-wizard-step" id="step-tab-3"><i class="fa fa-check mr-1"></i>3. ${__('Confirm & Activate')}</div>
+					</div>
+					<div class="alert alert-info" style="font-size: 12.5px; margin-bottom: 20px;">
 						<i class="fa fa-info-circle mr-1"></i>
-						${__('Select two sister entities. The wizard will automatically configure reciprocal internal parties (Customer & Supplier) and activate standard bidirectional transaction mirroring.')}
+						${__('The wizard will establish bidirectional trade between two sister companies, automatically generate Internal Customer and Supplier parties in each entity, detect clearing accounts, and configure mirroring rules.')}
 					</div>
 				`
 			},
 			{
-				label: __('Main Company (Entity A)'),
+				label: __('Main Company (Initiating Entity)'),
 				fieldname: 'main_company',
 				fieldtype: 'Link',
 				options: 'Company',
-				reqd: 1
+				reqd: 1,
+				description: __('The parent or selling company in this transaction pipeline')
 			},
 			{
-				label: __('Counterparty Company (Entity B)'),
+				label: __('Counterparty Company (Sister Entity)'),
 				fieldname: 'counterparty_company',
 				fieldtype: 'Link',
 				options: 'Company',
-				reqd: 1
+				reqd: 1,
+				description: __('The subsidiary or purchasing entity')
+			},
+			{
+				fieldtype: 'Section Break',
+				label: __('Automation & Transaction Profile')
+			},
+			{
+				fieldtype: 'HTML',
+				fieldname: 'preset_selector',
+				options: `
+					<div class="row">
+						<div class="col-md-6">
+							<div class="ict-preset-card selected" data-preset="full">
+								<div class="d-flex align-items-center justify-content-between mb-1">
+									<strong class="text-primary"><i class="fa fa-star mr-1"></i>${__('Full Enterprise Conglomerate')}</strong>
+									<span class="badge badge-primary">${__('Recommended')}</span>
+								</div>
+								<p class="text-muted mb-1" style="font-size: 12px;">
+									${__('Enables all trading rules (SO ↔ PO, DN ↔ PR, SI ↔ PI, Material Requests), financial vouchers (Journal Entries, Payments), and Stock Transfers.')}
+								</p>
+								<small class="text-success font-weight-bold"><i class="fa fa-check mr-1"></i>8 Transaction Rules</small>
+							</div>
+						</div>
+						<div class="col-md-6">
+							<div class="ict-preset-card" data-preset="trading">
+								<div class="d-flex align-items-center justify-content-between mb-1">
+									<strong><i class="fa fa-shopping-cart mr-1"></i>${__('Commercial Trading Only')}</strong>
+									<span class="badge badge-light border">${__('Order-to-Cash')}</span>
+								</div>
+								<p class="text-muted mb-1" style="font-size: 12px;">
+									${__('Focuses exclusively on commercial sales: Sales Orders, Invoices, Delivery Notes, and Quotations.')}
+								</p>
+								<small class="text-primary font-weight-bold"><i class="fa fa-check mr-1"></i>5 Trading Rules</small>
+							</div>
+						</div>
+						<div class="col-md-6">
+							<div class="ict-preset-card" data-preset="financial">
+								<div class="d-flex align-items-center justify-content-between mb-1">
+									<strong><i class="fa fa-university mr-1"></i>${__('Treasury & Financial Only')}</strong>
+									<span class="badge badge-light border">${__('GL & Payments')}</span>
+								</div>
+								<p class="text-muted mb-1" style="font-size: 12px;">
+									${__('Mirrors reciprocal Journal Entries and Payment Entries between sister entity clearing accounts.')}
+								</p>
+								<small class="text-info font-weight-bold"><i class="fa fa-check mr-1"></i>2 Treasury Rules</small>
+							</div>
+						</div>
+						<div class="col-md-6">
+							<div class="ict-preset-card" data-preset="inventory">
+								<div class="d-flex align-items-center justify-content-between mb-1">
+									<strong><i class="fa fa-truck mr-1"></i>${__('Logistics & Inventory Transfers')}</strong>
+									<span class="badge badge-light border">${__('Supply Chain')}</span>
+								</div>
+								<p class="text-muted mb-1" style="font-size: 12px;">
+									${__('Internal warehouse relocations and intercompany shipments via Delivery Notes and Stock Entries.')}
+								</p>
+								<small class="text-secondary font-weight-bold"><i class="fa fa-check mr-1"></i>2 Logistics Rules</small>
+							</div>
+						</div>
+					</div>
+				`
 			}
 		],
 		primary_action_label: __('Establish Connection'),
@@ -278,7 +440,8 @@ function open_quick_setup_wizard() {
 				method: 'inter_company_transactions.inter_company_transactions.doctype.inter_company_settings.inter_company_settings.quick_setup_intercompany_pair',
 				args: {
 					main_company: values.main_company,
-					counterparty_company: values.counterparty_company
+					counterparty_company: values.counterparty_company,
+					preset: selectedPreset
 				},
 				freeze: true,
 				freeze_message: __('Establishing intercompany relationship and transaction rules...'),
@@ -295,6 +458,175 @@ function open_quick_setup_wizard() {
 					}
 				}
 			});
+		}
+	});
+
+	d.show();
+
+	// Bind preset card selection
+	d.$wrapper.find('.ict-preset-card').on('click', function() {
+		d.$wrapper.find('.ict-preset-card').removeClass('selected');
+		$(this).addClass('selected');
+		selectedPreset = $(this).data('preset');
+	});
+}
+
+function show_tutorial_dialog() {
+	let d = new frappe.ui.Dialog({
+		title: __('Inter-Company Transactions: Practical Tutorials & Examples'),
+		size: 'large',
+		fields: [
+			{
+				fieldtype: 'HTML',
+				fieldname: 'tutorial_content',
+				options: `
+					<div class="p-2" style="max-height: 550px; overflow-y: auto;">
+						<!-- Example A: Order-to-Cash Mirroring -->
+						<div class="ict-tutorial-card">
+							<div class="ict-tutorial-header">
+								<div>
+									<span class="badge badge-primary mr-2">Example A</span>
+									<strong style="font-size: 14px;">Order-to-Cash & Procure-to-Pay Automated Mirroring</strong>
+								</div>
+								<span class="badge badge-success">Automated</span>
+							</div>
+							<div class="ict-tutorial-body">
+								<p class="text-muted mb-3">
+									<strong>Scenario:</strong> Entity A (<em>Acme Manufacturing</em>) sells 100 units of "Industrial Widget" to sister company Entity B (<em>Acme Distribution</em>) at $50/unit.
+								</p>
+								<div class="ict-flow-step">
+									<div class="ict-flow-num">1</div>
+									<div>
+										<strong>Create Sales Order in Entity A:</strong> Go to <span class="ict-code-pill">Sales Order &gt; New</span>. Set Customer to <span class="ict-code-pill">Acme Distribution (Internal)</span>, Item to "Industrial Widget", Qty: 100, Rate: $50.
+									</div>
+								</div>
+								<div class="ict-flow-step">
+									<div class="ict-flow-num">2</div>
+									<div>
+										<strong>Submit Document:</strong> Upon submission, the engine checks company links and automatically creates a linked <span class="ict-code-pill">Purchase Order</span> in Entity B with Supplier <span class="ict-code-pill">Acme Manufacturing (Internal)</span>.
+									</div>
+								</div>
+								<div class="ict-flow-step">
+									<div class="ict-flow-num">3</div>
+									<div>
+										<strong>Fulfill & Invoice:</strong> Submitting a Delivery Note automatically creates a Purchase Receipt in Entity B. Submitting a Sales Invoice generates a Purchase Invoice. Zero duplicate data entry!
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<!-- Example B: Transfer Pricing (OECD) -->
+						<div class="ict-tutorial-card">
+							<div class="ict-tutorial-header">
+								<div>
+									<span class="badge badge-info mr-2">Example B</span>
+									<strong style="font-size: 14px;">Transfer Pricing Policy & Automatic Margin Calculation</strong>
+								</div>
+								<span class="badge badge-light border">OECD Compliant</span>
+							</div>
+							<div class="ict-tutorial-body">
+								<p class="text-muted mb-3">
+									<strong>Scenario:</strong> Headquarters manufactures a product at a valuation cost of $200. Tax regulations mandate an arm's-length <strong>15% Cost-Plus markup</strong> when selling to international subsidiaries.
+								</p>
+								<div class="ict-flow-step">
+									<div class="ict-flow-num">1</div>
+									<div>
+										<strong>Define Policy:</strong> In <span class="ict-code-pill">Transfer Pricing Policy</span>, select Source Company: <em>Acme HQ</em>, Target Company: <em>Acme Europe</em>. Method: <em>Cost Plus Markup %</em>, Markup: <strong>15%</strong>.
+									</div>
+								</div>
+								<div class="ict-flow-step">
+									<div class="ict-flow-num">2</div>
+									<div>
+										<strong>Automated Calculation:</strong> When a Sales Order is placed, the engine queries the source warehouse valuation rate ($200) and calculates: <span class="ict-code-pill">$200 × 1.15 = $230.00</span>.
+									</div>
+								</div>
+								<div class="ict-flow-step">
+									<div class="ict-flow-num">3</div>
+									<div>
+										<strong>Regulatory Audit Trail:</strong> The calculated margin is permanently attached to the mirrored Purchase Order and logged in the Inter Company Document Reference audit record.
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<!-- Example C: Multilateral Netting -->
+						<div class="ict-tutorial-card">
+							<div class="ict-tutorial-header">
+								<div>
+									<span class="badge badge-success mr-2">Example C</span>
+									<strong style="font-size: 14px;">Multilateral Netting & Liquidity Optimization</strong>
+								</div>
+								<span class="badge badge-info">Treasury</span>
+							</div>
+							<div class="ict-tutorial-body">
+								<p class="text-muted mb-3">
+									<strong>Scenario:</strong> Three entities have circular trade debt: Company A owes B $100k, A owes C $50k, and B owes C $20k (Gross debt: $170k requiring 3 bank wires).
+								</p>
+								<div class="ict-flow-step">
+									<div class="ict-flow-num">1</div>
+									<div>
+										<strong>Create Netting Cycle:</strong> Open <span class="ict-code-pill">Inter Company Netting Cycle &gt; New</span> and select the participant entities.
+									</div>
+								</div>
+								<div class="ict-flow-step">
+									<div class="ict-flow-num">2</div>
+									<div>
+										<strong>Fetch Invoices & Calculate:</strong> Click <em>Fetch Invoices</em>, then <em>Calculate Netting</em>. The optimization algorithm reduces the gross $170k debt to just 2 transactions totaling $150k (a $20,000 liquidity saving).
+									</div>
+								</div>
+								<div class="ict-flow-step">
+									<div class="ict-flow-num">3</div>
+									<div>
+										<strong>1-Click Settlement:</strong> Click <em>Generate Settlement Journal Entries</em> to balance reciprocal AR/AP accounts across all three company ledgers instantly.
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<!-- Example D: Dispute Resolution -->
+						<div class="ict-tutorial-card">
+							<div class="ict-tutorial-header">
+								<div>
+									<span class="badge badge-warning mr-2">Example D</span>
+									<strong style="font-size: 14px;">Raising & Resolving Intercompany Disputes</strong>
+								</div>
+								<span class="badge badge-secondary">Discrepancy</span>
+							</div>
+							<div class="ict-tutorial-body">
+								<p class="text-muted mb-3">
+									<strong>Scenario:</strong> Sister company was billed $1,500 on an invoice, but received $300 worth of damaged goods.
+								</p>
+								<div class="ict-flow-step">
+									<div class="ict-flow-num">1</div>
+									<div>
+										<strong>Raise Dispute from Desk:</strong> From the Sales/Purchase Invoice form, click <span class="ict-code-pill">Inter Company &gt; Raise Dispute</span>.
+									</div>
+								</div>
+								<div class="ict-flow-step">
+									<div class="ict-flow-num">2</div>
+									<div>
+										<strong>Automatic Variance Calculation:</strong> Enter the target received amount ($1,200). The system computes the $300 variance automatically and locks the document for investigation.
+									</div>
+								</div>
+								<div class="ict-flow-step">
+									<div class="ict-flow-num">3</div>
+									<div>
+										<strong>Execute Resolution:</strong> Choose <em>Issue Credit Note</em> or <em>Journal Adjustment</em> and click <em>Execute Resolution</em>. The correction documents are created and posted automatically.
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+				`
+			}
+		],
+		primary_action_label: __('Open PDF Manual'),
+		primary_action: function() {
+			window.open('/assets/inter_company_transactions/Inter_Company_Transactions_User_Guide.pdf', '_blank');
+		},
+		secondary_action_label: __('Close'),
+		secondary_action: function() {
+			d.hide();
 		}
 	});
 

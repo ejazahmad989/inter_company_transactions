@@ -4,6 +4,7 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
+from frappe.utils import flt, cint
 import json
 import urllib.request
 import urllib.error
@@ -178,7 +179,7 @@ def get_console_dashboard_data():
 				filters={"parent": l.name},
 				pluck="company"
 			)
-			types_count = frappe.db.count("Intercompany Transaction Type", {"parent": l.name, "enabled": 1})
+			types_count = frappe.db.count("Intercompany Transaction Type", {"parent": l.name})
 			data["links"].append({
 				"name": l.name,
 				"main_company": l.main_company,
@@ -238,11 +239,11 @@ def get_console_dashboard_data():
 
 
 @frappe.whitelist()
-def quick_setup_intercompany_pair(main_company, counterparty_company):
+def quick_setup_intercompany_pair(main_company, counterparty_company, preset="full", custom_rules=None):
 	"""
 	1-Click Setup Wizard:
 	Effortlessly connects two sister companies, configures internal customer/supplier,
-	and activates standard bidirectional transaction mirroring rules.
+	intelligent clearing accounts, and activates selected transaction mirroring rules.
 	"""
 	if not main_company or not counterparty_company:
 		frappe.throw(_("Both Main Company and Counterparty Company must be selected."))
@@ -320,12 +321,74 @@ def quick_setup_intercompany_pair(main_company, counterparty_company):
 		else:
 			other_supp = other_supp_name
 
-	# 5. Check if link already exists for main_company
+	# 5. Find default intercompany clearing accounts if available
+	main_clearing_account = frappe.db.get_value(
+		"Account",
+		{
+			"company": main_company,
+			"is_group": 0,
+			"account_name": ["like", "%Inter%Company%"]
+		},
+		"name"
+	) or frappe.db.get_value(
+		"Account",
+		{
+			"company": main_company,
+			"is_group": 0,
+			"account_type": ["in", ["Temporary", "Current Asset", "Current Liability"]]
+		},
+		"name"
+	)
+
+	other_clearing_account = frappe.db.get_value(
+		"Account",
+		{
+			"company": counterparty_company,
+			"is_group": 0,
+			"account_name": ["like", "%Inter%Company%"]
+		},
+		"name"
+	) or frappe.db.get_value(
+		"Account",
+		{
+			"company": counterparty_company,
+			"is_group": 0,
+			"account_type": ["in", ["Temporary", "Current Asset", "Current Liability"]]
+		},
+		"name"
+	)
+
+	# 6. Determine mapping rules to apply based on preset
+	trading_rules = [
+		("Sales Order", "Purchase Order", "Both"),
+		("Sales Invoice", "Purchase Invoice", "Both"),
+		("Delivery Note", "Purchase Receipt", "Both"),
+		("Quotation", "Supplier Quotation", "Both"),
+		("Material Request", "Sales Order", "Both")
+	]
+	financial_rules = [
+		("Journal Entry", "Journal Entry", "Both"),
+		("Payment Entry", "Payment Entry", "Both")
+	]
+	stock_rules = [
+		("Stock Entry", "Stock Entry", "Both")
+	]
+
+	selected_mappings = []
+	if preset == "trading":
+		selected_mappings = trading_rules
+	elif preset == "financial":
+		selected_mappings = financial_rules
+	elif preset == "inventory":
+		selected_mappings = stock_rules + [("Delivery Note", "Purchase Receipt", "Both")]
+	else:
+		selected_mappings = trading_rules + financial_rules + stock_rules
+
+	# 7. Check if link already exists for main_company
 	existing_link = frappe.db.get_value("Intercompany Transaction Link", {"main_company": main_company}, "name")
 
 	if existing_link:
 		link_doc = frappe.get_doc("Intercompany Transaction Link", existing_link)
-		# Check if counterparty already in linked_companies child table
 		found = False
 		for row in (link_doc.linked_companies or []):
 			if row.company == counterparty_company:
@@ -336,10 +399,24 @@ def quick_setup_intercompany_pair(main_company, counterparty_company):
 				"company": counterparty_company,
 				"main_company_customer": main_cust,
 				"main_company_supplier": main_supp,
+				"main_company_account": main_clearing_account,
 				"other_company_customer": other_cust,
-				"other_company_supplier": other_supp
+				"other_company_supplier": other_supp,
+				"other_company_account": other_clearing_account
 			})
-		link_doc.populate_default_transaction_types()
+
+		existing_pairs = set()
+		for row in (link_doc.transaction_types or []):
+			existing_pairs.add((row.source_type, row.target_type))
+
+		for src, tgt, direction in selected_mappings:
+			if (src, tgt) not in existing_pairs:
+				link_doc.append("transaction_types", {
+					"source_type": src,
+					"target_type": tgt,
+					"direction": direction
+				})
+
 		link_doc.flags.ignore_permissions = True
 		link_doc.save()
 		link_name = link_doc.name
@@ -353,10 +430,19 @@ def quick_setup_intercompany_pair(main_company, counterparty_company):
 			"company": counterparty_company,
 			"main_company_customer": main_cust,
 			"main_company_supplier": main_supp,
+			"main_company_account": main_clearing_account,
 			"other_company_customer": other_cust,
-			"other_company_supplier": other_supp
+			"other_company_supplier": other_supp,
+			"other_company_account": other_clearing_account
 		})
-		link_doc.populate_default_transaction_types()
+
+		for src, tgt, direction in selected_mappings:
+			link_doc.append("transaction_types", {
+				"source_type": src,
+				"target_type": tgt,
+				"direction": direction
+			})
+
 		link_doc.flags.ignore_permissions = True
 		link_doc.insert()
 		link_name = link_doc.name
