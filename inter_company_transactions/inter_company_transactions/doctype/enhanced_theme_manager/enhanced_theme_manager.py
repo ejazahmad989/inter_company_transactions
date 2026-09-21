@@ -7,9 +7,57 @@ from inter_company_transactions.enhanced_theme import get_theme_palette, format_
 
 
 class EnhancedThemeManager(Document):
+    VALID_BORDER_RADII = [
+        "0px (Sharp)",
+        "4px (Slightly Rounded)",
+        "8px (Rounded)",
+        "12px (Very Rounded)",
+        "16px (Highly Rounded)",
+        "20px (Extra Rounded)",
+    ]
+
     def validate(self):
         self.populate_default_colors()
+        self.normalize_border_radius()
         self.ensure_single_default()
+
+    def normalize_border_radius(self):
+        """Map raw values like '8px' or '6px' to valid DocType Select options"""
+        if not self.border_radius:
+            self.border_radius = "8px (Rounded)"
+            return
+
+        if self.border_radius in self.VALID_BORDER_RADII:
+            return
+
+        radius_map = {
+            "0": "0px (Sharp)",
+            "0px": "0px (Sharp)",
+            "4": "4px (Slightly Rounded)",
+            "4px": "4px (Slightly Rounded)",
+            "6": "8px (Rounded)",
+            "6px": "8px (Rounded)",
+            "8": "8px (Rounded)",
+            "8px": "8px (Rounded)",
+            "12": "12px (Very Rounded)",
+            "12px": "12px (Very Rounded)",
+            "16": "16px (Highly Rounded)",
+            "16px": "16px (Highly Rounded)",
+            "20": "20px (Extra Rounded)",
+            "20px": "20px (Extra Rounded)",
+        }
+
+        val = str(self.border_radius).strip().lower()
+        if val in radius_map:
+            self.border_radius = radius_map[val]
+            return
+
+        for k, v in radius_map.items():
+            if k in val:
+                self.border_radius = v
+                return
+
+        self.border_radius = "8px (Rounded)"
 
     def populate_default_colors(self):
         """Auto-populate standard colors if blank based on selected theme_name"""

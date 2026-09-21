@@ -15,7 +15,7 @@ frappe.inter_company_theme.PRESETS = {
         navbar_color: '#0077C5',
         navbar_text_color: '#FFFFFF',
         text_color: '#333333',
-        border_radius: '6px',
+        border_radius: '8px (Rounded)',
         css_class: 'quickbooks-classic-theme quickbooks-theme'
     },
     'QuickBooks Modern': {
@@ -28,7 +28,7 @@ frappe.inter_company_theme.PRESETS = {
         navbar_color: '#FFFFFF',
         navbar_text_color: '#172B4D',
         text_color: '#172B4D',
-        border_radius: '8px',
+        border_radius: '8px (Rounded)',
         css_class: 'quickbooks-modern-theme quickbooks-theme'
     },
     'QuickBooks Pro': {
@@ -41,7 +41,7 @@ frappe.inter_company_theme.PRESETS = {
         navbar_color: '#13253A',
         navbar_text_color: '#FFFFFF',
         text_color: '#172B4D',
-        border_radius: '8px',
+        border_radius: '8px (Rounded)',
         css_class: 'quickbooks-pro-theme quickbooks-theme'
     },
     'Sage Green': {
@@ -54,7 +54,7 @@ frappe.inter_company_theme.PRESETS = {
         navbar_color: '#00A651',
         navbar_text_color: '#FFFFFF',
         text_color: '#2E7D32',
-        border_radius: '6px',
+        border_radius: '8px (Rounded)',
         css_class: 'sage-green-theme'
     },
     'Xero Blue': {
@@ -67,7 +67,7 @@ frappe.inter_company_theme.PRESETS = {
         navbar_color: '#13B5EA',
         navbar_text_color: '#FFFFFF',
         text_color: '#0D47A1',
-        border_radius: '6px',
+        border_radius: '8px (Rounded)',
         css_class: 'xero-blue-theme'
     },
     'FreshBooks Orange': {
@@ -80,7 +80,7 @@ frappe.inter_company_theme.PRESETS = {
         navbar_color: '#F56500',
         navbar_text_color: '#FFFFFF',
         text_color: '#E65100',
-        border_radius: '6px',
+        border_radius: '8px (Rounded)',
         css_class: 'freshbooks-orange-theme'
     },
     'Zoho Purple': {
@@ -93,7 +93,7 @@ frappe.inter_company_theme.PRESETS = {
         navbar_color: '#7B1FA2',
         navbar_text_color: '#FFFFFF',
         text_color: '#4A148C',
-        border_radius: '6px',
+        border_radius: '8px (Rounded)',
         css_class: 'zoho-purple-theme'
     },
     'Wave Teal': {
@@ -106,7 +106,7 @@ frappe.inter_company_theme.PRESETS = {
         navbar_color: '#00695C',
         navbar_text_color: '#FFFFFF',
         text_color: '#004D40',
-        border_radius: '6px',
+        border_radius: '8px (Rounded)',
         css_class: 'wave-teal-theme'
     },
     'Fintech Dark': {
@@ -119,7 +119,7 @@ frappe.inter_company_theme.PRESETS = {
         navbar_color: '#1A1D3A',
         navbar_text_color: '#FFFFFF',
         text_color: '#FFFFFF',
-        border_radius: '8px',
+        border_radius: '8px (Rounded)',
         css_class: 'fintech-dark-theme'
     },
     'Corporate Elite': {
@@ -132,7 +132,7 @@ frappe.inter_company_theme.PRESETS = {
         navbar_color: '#1565C0',
         navbar_text_color: '#FFFFFF',
         text_color: '#263238',
-        border_radius: '6px',
+        border_radius: '8px (Rounded)',
         css_class: 'corporate-elite-theme'
     }
 };

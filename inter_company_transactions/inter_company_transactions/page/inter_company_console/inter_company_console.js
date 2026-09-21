@@ -616,6 +616,82 @@ function show_tutorial_dialog() {
 								</div>
 							</div>
 						</div>
+
+						<!-- Example E: Supported vs Non-Supported Mirror Transactions -->
+						<div class="ict-tutorial-card">
+							<div class="ict-tutorial-header">
+								<div>
+									<span class="badge badge-primary mr-2">Guide E</span>
+									<strong style="font-size: 14px;">Mirror Transactions: What Can Be Mirrored vs. What Cannot (and Why)</strong>
+								</div>
+								<span class="badge badge-success">Architecture</span>
+							</div>
+							<div class="ict-tutorial-body">
+								<h6 class="font-weight-bold text-success mb-2"><i class="fa fa-check-circle mr-1"></i> What It CAN Mirror Automatically:</h6>
+								<ul class="mb-3" style="font-size: 13px; padding-left: 20px;">
+									<li><strong>Sales Order &harr; Purchase Order:</strong> Creates reciprocal purchase/sale order with line items, delivery dates, and transfer pricing.</li>
+									<li><strong>Sales Invoice &harr; Purchase Invoice:</strong> Mirrors billing with matching items, rates, taxes, and automatic elimination tags.</li>
+									<li><strong>Delivery Note &harr; Purchase Receipt:</strong> Incoming goods receipt generated directly upon shipment dispatch.</li>
+									<li><strong>Quotation &harr; Supplier Quotation:</strong> Intercompany sales estimate matched to supplier RFQ.</li>
+									<li><strong>Material Request &rarr; Sales Order / Purchase Order:</strong> Stock requisition in Subsidiary B creates order in Parent A.</li>
+									<li><strong>Stock Entry &harr; Stock Entry:</strong> Material Issue in Company A creates Material Receipt in Company B.</li>
+									<li><strong>Journal Entry &harr; Journal Entry:</strong> Intercompany GL transfer voucher with auto-swapped debit/credit accounts.</li>
+									<li><strong>Payment Entry &harr; Payment Entry:</strong> Intercompany payment matched to receipt voucher.</li>
+								</ul>
+
+								<h6 class="font-weight-bold text-danger mb-2"><i class="fa fa-times-circle mr-1"></i> What It CANNOT Do Directly & Why It Is a MUST:</h6>
+								<ul class="mb-0" style="font-size: 13px; padding-left: 20px;">
+									<li><strong>Landed Cost Voucher (LCV):</strong> <em>Why:</em> LCV is strictly an entity-internal inventory valuation tool to capitalize freight/customs into inventory value. It does not create external claims. <em>Must do instead:</em> The sister company providing logistics bills via a standard <code>Sales Invoice</code> &rarr; <code>Purchase Invoice</code>.</li>
+									<li><strong>Subcontracting Order:</strong> <em>Why:</em> Subcontracting in ERPNext v15 requires entity-internal BOM explosion and supplied item tracking. <em>Must do instead:</em> Create paired <code>Purchase Order</code> (Subcontracted) &rarr; <code>Sales Order</code> (Manufacturing).</li>
+									<li><strong>Fixed Asset Movements / Depreciation:</strong> <em>Why:</em> Fixed assets belong to statutory legal entity registers. <em>Must do instead:</em> Sell asset via <code>Sales Invoice</code> (Disposal) and receive in sister company via <code>Purchase Invoice</code>.</li>
+									<li><strong>Payroll Entry / Salary Slip:</strong> <em>Why:</em> Governed by legal entity tax and social security laws. <em>Must do instead:</em> Shared management costs are recharged via <code>Journal Entry</code> (Intercompany JV) or management fee <code>Sales Invoice</code>.</li>
+								</ul>
+							</div>
+						</div>
+
+						<!-- Example F: Inter Company Customer Group -->
+						<div class="ict-tutorial-card">
+							<div class="ict-tutorial-header">
+								<div>
+									<span class="badge badge-info mr-2">Guide F</span>
+									<strong style="font-size: 14px;">Inter Company Customer Group: Purpose & Step-by-Step Example</strong>
+								</div>
+								<span class="badge badge-primary">Accounting Setup</span>
+							</div>
+							<div class="ict-tutorial-body">
+								<p class="text-muted mb-2">
+									<strong>What is it?</strong> An <strong>Inter Company Customer Group</strong> is a dedicated Customer Group in ERPNext (e.g., <em>"Inter Company Trading"</em> or <em>"Group Entities"</em>) specifically assigned to internal customers that represent sister companies.
+								</p>
+								<div class="alert alert-info py-2 px-3 mb-3" style="font-size: 12.5px;">
+									<strong>Why is it mandatory for professional enterprise accounting?</strong>
+									<ul class="mb-0 mt-1 pl-3">
+										<li><strong>Financial Isolation:</strong> Prevents internal transfer turnover from inflating third-party trade revenue on Accounts Receivable Aging reports.</li>
+										<li><strong>Automated Consolidation Elimination:</strong> Allows the <em>Inter Company Elimination Run</em> to isolate and eliminate all internal receivables and payables without risk of touching external customer balances.</li>
+										<li><strong>Exemptions:</strong> Sister entities can be given 0% internal transfer pricing rules, unlimited credit limits, and custom intercompany GL clearing accounts.</li>
+										<li><strong>DocType Custom Field (<code>ic_customer_group</code>):</strong> Enables the app's routing engine to recognize and validate internal partner entities.</li>
+									</ul>
+								</div>
+
+								<div class="ict-flow-step">
+									<div class="ict-flow-num">1</div>
+									<div>
+										<strong>Create Customer Group:</strong> Navigate to <span class="ict-code-pill">Customer Group &gt; New</span>. Set Name to <strong>Inter Company Group</strong>, Parent Group to <em>All Customer Groups</em>. Leave <em>Is Group</em> unchecked.
+									</div>
+								</div>
+								<div class="ict-flow-step">
+									<div class="ict-flow-num">2</div>
+									<div>
+										<strong>Assign to Internal Customer:</strong> Open the internal customer (e.g., <em>Distribution LLC (Internal)</em>). Set <strong>Customer Group</strong> (or <strong>Inter Company Customer Group</strong>) to <em>Inter Company Group</em>. Check <em>Is Internal Customer</em> and set <em>Represents Company</em>.
+									</div>
+								</div>
+								<div class="ict-flow-step">
+									<div class="ict-flow-num">3</div>
+									<div>
+										<strong>Ready for Clean Consolidation:</strong> All sales invoices issued to this customer are now segregated in group accounts and ready for automated period-end elimination!
+									</div>
+								</div>
+							</div>
+						</div>
 					</div>
 				`
 			}

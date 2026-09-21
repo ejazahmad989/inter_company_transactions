@@ -188,7 +188,7 @@ def create_doctypes():
                     "fieldtype": "Select",
                     "in_list_view": 1,
                     "label": "Source Transaction Type",
-                    "options": "Journal Entry\nPayment Entry\nSales Order\nPurchase Order",
+                    "options": "Sales Order\nPurchase Order\nSales Invoice\nPurchase Invoice\nDelivery Note\nPurchase Receipt\nStock Entry\nJournal Entry\nPayment Entry\nQuotation\nSupplier Quotation\nMaterial Request\nRequest for Quotation\nSubcontracting Order\nLanded Cost Voucher",
                     "reqd": 1
                 },
                 {
@@ -196,7 +196,7 @@ def create_doctypes():
                     "fieldtype": "Select",
                     "in_list_view": 1,
                     "label": "Target Transaction Type",
-                    "options": "Journal Entry\nPayment Entry\nSales Order\nPurchase Order",
+                    "options": "Sales Order\nPurchase Order\nSales Invoice\nPurchase Invoice\nDelivery Note\nPurchase Receipt\nStock Entry\nJournal Entry\nPayment Entry\nQuotation\nSupplier Quotation\nMaterial Request\nRequest for Quotation\nSubcontracting Order\nLanded Cost Voucher",
                     "reqd": 1
                 },
                 {

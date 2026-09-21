@@ -79,6 +79,55 @@ In ERPNext Desk, navigate to **Workspace > Inter Company** or enter the route di
   - `Companies Table`: Child table listing counterparty entities, their specific Internal Customer ID, and Internal Supplier ID.
   - `Transaction Types Table`: Defines specific document routing pairs, whether target docs are created as Draft or automatically Submitted, and custom account overrides.
 
+#### 3.1.1 Comprehensive Matrix of Supported Mirror Transactions (What It CAN Do)
+The engine supports real-time, automated document mirroring across all standard trade and accounting workflows in ERPNext:
+
+| # | Initiating (Source) DocType | Target (Mirror) DocType | Direction | Business Process & Behavior |
+|---|---|---|---|---|
+| 1 | **Sales Order** | **Purchase Order** | Bi-directional | Customer order in selling company generates reciprocal vendor order in buying company with identical items, quantities, pricing, and required dates. |
+| 2 | **Purchase Order** | **Sales Order** | Bi-directional | Procurement order in subsidiary generates fulfillment order in parent/sister manufacturing entity. |
+| 3 | **Delivery Note** | **Purchase Receipt** | Bi-directional | Dispatch of goods from seller automatically creates incoming Goods Receipt at destination warehouse (reduces in-transit latency). |
+| 4 | **Purchase Receipt** | **Delivery Note** | Bi-directional | Receiving goods at destination can trigger delivery note completion at source entity. |
+| 5 | **Sales Invoice** | **Purchase Invoice** | Bi-directional | Commercial billing in seller creates reciprocal accounts payable invoice with identical line item breakdown, taxes, and intercompany tags. |
+| 6 | **Purchase Invoice** | **Sales Invoice** | Bi-directional | Supplier invoice in buying company creates reciprocal accounts receivable billing in sister company. |
+| 7 | **Quotation** | **Supplier Quotation** | Bi-directional | Internal sales estimate generates vendor quotation for purchasing approvals. |
+| 8 | **Material Request** | **Sales Order / Purchase Order** | Forward | Stock replenishment requisition in a branch automatically initiates order creation in the central warehouse company. |
+| 9 | **Stock Entry** | **Stock Entry** | Bi-directional | *Material Issue* in Company A triggers an automated *Material Receipt* in Company B at the designated transfer valuation rate. |
+| 10 | **Journal Entry** | **Journal Entry** | Bi-directional | Cross-entity fund transfers or expense allocations automatically generate balancing voucher with reversed debit/credit accounts. |
+| 11 | **Payment Entry** | **Payment Entry** | Bi-directional | Payment made from Company A to Company B creates a matching Receipt voucher in Company B linked to the open intercompany invoice. |
+
+---
+
+#### 3.1.2 Unsupported Cross-Entity Transactions (What It CANNOT Do and WHY It Is a MUST)
+In enterprise multi-company accounting, certain ERPNext DocTypes **cannot and must not** be mirrored directly between separate legal entities. Attempting to mirror these documents directly would violate statutory financial compliance, corporate tax laws, and GAAP/IFRS standards:
+
+1. **Landed Cost Voucher (LCV)**
+   - *Why It Cannot Be Mirrored:* A Landed Cost Voucher is strictly an **internal inventory valuation adjustment tool** within a single legal entity. Its sole purpose is to capitalize freight, customs, or handling costs into the moving-average or FIFO valuation rate of an existing Purchase Receipt. It does **not** create legal debtor/creditor claims.
+   - *What Is a MUST (Statutory Compliance):* If Sister Company A provides logistics, freight, or clearance services to Sister Company B:
+     - Company A **MUST** issue a standard service **Sales Invoice** to Company B.
+     - The engine mirrors this into a **Purchase Invoice** (Freight & Handling) in Company B.
+     - Company B can then optionally reference this Purchase Invoice inside its own internal Landed Cost Voucher if it wishes to capitalize those freight costs into inventory.
+
+2. **Subcontracting Order**
+   - *Why It Cannot Be Mirrored Directly:* A Subcontracting Order in ERPNext v15 is bound to a single entity's internal Bill of Materials (BOM), supplied raw material tracking, and subcontracting receipt valuation algorithms. Sister entities operate independent inventory ledgers and separate tax jurisdictions.
+   - *What Is a MUST:* Intercompany subcontracting must be conducted via:
+     - Step 1: Subcontracting entity creates a standard **Purchase Order** (Subcontracted) &rarr; mirrored to **Sales Order** (Job Work) in the manufacturing sister company.
+     - Step 2: Raw materials transferred using **Stock Entry** (Material Transfer) &rarr; mirrored to **Stock Entry** (Material Receipt) in the manufacturer.
+     - Step 3: Finished items delivered via **Delivery Note** &rarr; **Subcontracting Receipt**.
+
+3. **Fixed Asset Movements & Depreciation Entries**
+   - *Why It Cannot Be Mirrored Directly:* Fixed assets are governed by entity-specific asset registers, tax depreciation schedules, and legal ownership titles. An automated transfer would corrupt statutory tax depreciation books.
+   - *What Is a MUST:* Asset transfers between sister companies must be executed as an arm's-length asset sale:
+     - Seller entity raises a **Sales Invoice** (Asset Sale / Disposal).
+     - Buying entity books a **Purchase Invoice** with *Asset Category* assignment to initialize the new statutory asset book.
+
+4. **Payroll Entry & Salary Slips**
+   - *Why It Cannot Be Mirrored:* Payroll is strictly subject to jurisdiction-specific labor laws, statutory withholding taxes, social security contributions, and local employment contracts.
+   - *What Is a MUST:* When management or staff costs are shared across subsidiaries, the employing entity reallocates costs using an arm's-length **Management Services Agreement (MSA)**:
+     - Employing entity bills the subsidiary via a **Sales Invoice (Management Services)** or an **Intercompany Journal Entry (Shared Expense Recharge)**.
+
+---
+
 ### 3.2 Inter Company Settings
 * **Location:** `Inter Company > Inter Company Settings`
 * **Purpose:** Global environment configurations.
@@ -131,6 +180,52 @@ In ERPNext Desk, navigate to **Workspace > Inter Company** or enter the route di
 * **Location:** `Inter Company > Inter Company Remote Site`
 * **Purpose:** Cross-site federation connecting disparate Frappe sites via REST API.
 * **Features:** API key / secret token management, automated handshake verification (`Test Connection`), and inbound webhook receiver endpoint.
+
+### 3.8 Inter Company Customer Group
+* **Location:** `Selling > Customer Group` and `Selling > Customer` (`ic_customer_group`)
+* **Purpose:** Accounting isolation and automated elimination segregation.
+
+#### 3.8.1 Why Do We Need an "Inter Company Customer Group"?
+In standard ERP systems, sales to external third-party buyers and sales to sister companies often get co-mingled in the same default *"All Customer Groups"* or general Accounts Receivable (Debtors) accounts. This creates serious financial problems:
+1. **Financial Statement Distortion:** External revenue looks falsely inflated on management dashboards because internal stock transfers look like external commercial sales.
+2. **AR Aging Misrepresentation:** Overdue intercompany balances sit in the standard Accounts Receivable aging report alongside external clients, distorting DSO (Days Sales Outstanding) metrics.
+3. **Complex Year-End Consolidation:** External auditors must spend days manually sorting through thousands of invoices to extract internal transactions for elimination.
+4. **Credit Limits & Tax Policies:** External customers have strict credit limits and standard sales tax (VAT/GST) rules. Sister companies require unlimited credit lines, zero-rated internal transfer pricing, and specific Intercompany Clearing GL accounts.
+
+By creating a designated **Inter Company Customer Group** and tagging it via the app's custom field `ic_customer_group`, ERPNext automatically segregates internal debtors, enables automated period-end elimination, and prevents internal orders from being blocked by standard retail credit policies.
+
+#### 3.8.2 Practical Real-World Setup Example
+**Scenario:**
+- **Parent Entity:** *Apex Global Industrial Ltd.* (Manufacturing & R&D)
+- **Sister Subsidiary:** *Apex Middle East Distribution LLC* (Regional Sales Office)
+
+**Step-by-Step Implementation:**
+1. **Create the Inter Company Customer Group:**
+   - Go to **Selling > Customer Group > New**.
+   - `Customer Group Name`: **Inter Company Trading Group**
+   - `Parent Customer Group`: **All Customer Groups**
+   - `Is Group`: **No** (Unchecked)
+   - Save.
+
+2. **Configure Dedicated Intercompany Clearing Accounts (Recommended):**
+   - In the newly created Customer Group form, expand the **Credit Limit and Default Accounts** table:
+     - `Company`: *Apex Global Industrial Ltd.*
+     - `Default Account`: `1310 - Intercompany Receivables - Apex ME` (instead of standard `1300 - Accounts Receivable Debtors`)
+   - Save.
+
+3. **Assign to Internal Customer:**
+   - Go to **Selling > Customer > New** (or open existing internal customer):
+     - `Customer Name`: **Apex Middle East Distribution LLC (Internal)**
+     - `Customer Group`: **Inter Company Trading Group**
+     - Under *Inter Company Information*:
+       - `Is Internal Customer`: **Checked**
+       - `Represents Company`: **Apex Middle East Distribution LLC**
+       - `Inter Company Customer Group` (`ic_customer_group`): **Inter Company Trading Group**
+   - Save.
+
+4. **Outcome in Trade & Reporting:**
+   - When *Apex Global* issues a $100,000 Sales Invoice to *Apex ME*, it posts to `1310 - Intercompany Receivables` rather than third-party trade receivables.
+   - On the **Inter Company Elimination Run**, selecting `Customer Group: Inter Company Trading Group` isolates 100% of inter-group invoices and generates the elimination journal entry with zero risk of touching external client balances.
 
 ---
 

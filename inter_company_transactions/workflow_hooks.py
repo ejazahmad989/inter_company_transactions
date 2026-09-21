@@ -1,8 +1,14 @@
 import frappe
 
+SUPPORTED_DOCTYPES = [
+    "Sales Order", "Purchase Order", "Sales Invoice", "Purchase Invoice",
+    "Delivery Note", "Purchase Receipt", "Stock Entry", "Journal Entry",
+    "Payment Entry", "Quotation", "Supplier Quotation", "Material Request"
+]
+
 def on_submit(doc, method):
     """Trigger workflow request on submission"""
-    if doc.doctype in ["Sales Order", "Purchase Order", "Journal Entry", "Payment Entry"]:
+    if doc.doctype in SUPPORTED_DOCTYPES:
         create_workflow_request(doc)
 
 def create_workflow_request(source_doc):
