@@ -23,6 +23,7 @@ class IntercompanyTransactionLink(Document):
 			("Delivery Note", "Purchase Receipt", "Both"),
 			("Quotation", "Supplier Quotation", "Both"),
 			("Material Request", "Sales Order", "Both"),
+			("Material Request", "Purchase Order", "Both"),
 			("Stock Entry", "Stock Entry", "Both"),
 			("Journal Entry", "Journal Entry", "Both"),
 			("Payment Entry", "Payment Entry", "Both"),

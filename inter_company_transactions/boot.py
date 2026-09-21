@@ -20,15 +20,13 @@ def boot_session(bootinfo):
                     )
             
             # Add active theme safely
-            if frappe.db.table_exists("Enhanced Theme Manager"):
-                theme = frappe.db.get_value(
-                    "Enhanced Theme Manager",
-                    {"is_active": 1},
-                    ["name", "theme_name", "primary_color"],
-                    as_dict=True
-                )
+            try:
+                from inter_company_transactions.enhanced_theme import get_company_theme
+                theme = get_company_theme()
                 if theme:
                     bootinfo["active_theme"] = theme
+            except Exception as te:
+                frappe.log_error(f"Error getting boot active theme: {str(te)}", "Boot Session Theme")
                 
     except Exception as e:
         frappe.log_error(f"Error in boot session: {str(e)}", "Boot Session")

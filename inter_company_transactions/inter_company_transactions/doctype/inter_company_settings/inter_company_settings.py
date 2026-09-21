@@ -224,12 +224,19 @@ def get_console_dashboard_data():
 
 	# Multilateral Netting Totals
 	if frappe.db.exists("DocType", "Inter Company Netting Cycle"):
-		netting_cycles = frappe.get_all(
-			"Inter Company Netting Cycle",
-			filters={"docstatus": 1},
-			fields=["name", "total_settlement_amount"]
-		)
-		data["metrics"]["total_settled_amount"] = sum(flt(nc.get("total_settlement_amount")) for nc in netting_cycles)
+		try:
+			field_to_sum = "total_net_settled" if frappe.db.has_column("Inter Company Netting Cycle", "total_net_settled") else None
+			if field_to_sum:
+				netting_cycles = frappe.get_all(
+					"Inter Company Netting Cycle",
+					filters={"docstatus": 1},
+					fields=["name", field_to_sum]
+				)
+				data["metrics"]["total_settled_amount"] = sum(flt(nc.get(field_to_sum)) for nc in netting_cycles)
+			else:
+				data["metrics"]["total_settled_amount"] = 0.0
+		except Exception:
+			data["metrics"]["total_settled_amount"] = 0.0
 
 	# Elimination runs
 	if frappe.db.exists("DocType", "Inter Company Elimination Run"):
