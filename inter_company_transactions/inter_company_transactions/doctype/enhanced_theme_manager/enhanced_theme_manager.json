@@ -425,7 +425,7 @@
       "fieldname": "border_radius",
       "fieldtype": "Select",
       "label": "Border Radius",
-      "options": "0px (Sharp)\n4px (Slightly Rounded)\n8px (Rounded)\n12px (Very Rounded)\n16px (Highly Rounded)\n20px (Extra Rounded)"
+      "options": "8px (Rounded)\n8px\n4px (Slightly Rounded)\n4px\n0px (Sharp)\n0px\n6px\n12px (Very Rounded)\n12px\n16px (Highly Rounded)\n16px\n20px (Extra Rounded)\n20px"
     },
     {
       "fieldname": "box_shadow",

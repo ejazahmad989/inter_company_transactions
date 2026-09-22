@@ -112,9 +112,13 @@ frappe.ui.form.on('Intercompany Transaction Type', {
 function preload_standard_transaction_types(frm) {
 	let mappings = [
 		{ source_type: "Sales Order", target_type: "Purchase Order", direction: "Both" },
+		{ source_type: "Purchase Order", target_type: "Sales Order", direction: "Both" },
 		{ source_type: "Sales Invoice", target_type: "Purchase Invoice", direction: "Both" },
+		{ source_type: "Purchase Invoice", target_type: "Sales Invoice", direction: "Both" },
 		{ source_type: "Delivery Note", target_type: "Purchase Receipt", direction: "Both" },
+		{ source_type: "Purchase Receipt", target_type: "Delivery Note", direction: "Both" },
 		{ source_type: "Quotation", target_type: "Supplier Quotation", direction: "Both" },
+		{ source_type: "Supplier Quotation", target_type: "Quotation", direction: "Both" },
 		{ source_type: "Material Request", target_type: "Sales Order", direction: "Both" },
 		{ source_type: "Material Request", target_type: "Purchase Order", direction: "Both" },
 		{ source_type: "Stock Entry", target_type: "Stock Entry", direction: "Both" },

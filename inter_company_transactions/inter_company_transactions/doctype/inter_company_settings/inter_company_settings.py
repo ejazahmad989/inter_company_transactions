@@ -368,10 +368,15 @@ def quick_setup_intercompany_pair(main_company, counterparty_company, preset="fu
 	# 6. Determine mapping rules to apply based on preset
 	trading_rules = [
 		("Sales Order", "Purchase Order", "Both"),
+		("Purchase Order", "Sales Order", "Both"),
 		("Sales Invoice", "Purchase Invoice", "Both"),
+		("Purchase Invoice", "Sales Invoice", "Both"),
 		("Delivery Note", "Purchase Receipt", "Both"),
+		("Purchase Receipt", "Delivery Note", "Both"),
 		("Quotation", "Supplier Quotation", "Both"),
-		("Material Request", "Sales Order", "Both")
+		("Supplier Quotation", "Quotation", "Both"),
+		("Material Request", "Sales Order", "Both"),
+		("Material Request", "Purchase Order", "Both"),
 	]
 	financial_rules = [
 		("Journal Entry", "Journal Entry", "Both"),

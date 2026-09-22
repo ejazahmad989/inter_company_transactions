@@ -19,9 +19,13 @@ class IntercompanyTransactionLink(Document):
 		"""Pre-populates the standard inter-company transaction mappings"""
 		default_mappings = [
 			("Sales Order", "Purchase Order", "Both"),
+			("Purchase Order", "Sales Order", "Both"),
 			("Sales Invoice", "Purchase Invoice", "Both"),
+			("Purchase Invoice", "Sales Invoice", "Both"),
 			("Delivery Note", "Purchase Receipt", "Both"),
+			("Purchase Receipt", "Delivery Note", "Both"),
 			("Quotation", "Supplier Quotation", "Both"),
+			("Supplier Quotation", "Quotation", "Both"),
 			("Material Request", "Sales Order", "Both"),
 			("Material Request", "Purchase Order", "Both"),
 			("Stock Entry", "Stock Entry", "Both"),
@@ -131,6 +135,43 @@ def trigger_manual_intercompany_sync(doctype, name):
 					)
 
 
+def fix_legacy_custom_fields():
+	"""
+	Self-healing check: Cleans up any legacy custom fields that contain JavaScript expressions
+	(like && or ||) in mandatory_depends_on or read_only_depends_on, which cause Python safe_eval SyntaxErrors.
+	"""
+	try:
+		if hasattr(frappe, "db") and frappe.db and frappe.db.table_exists("Custom Field"):
+			bad_fields = frappe.db.sql(
+				"""
+				SELECT name, dt, fieldname, mandatory_depends_on, read_only_depends_on
+				FROM `tabCustom Field`
+				WHERE fieldname = 'intercompany_target_company'
+				  AND (mandatory_depends_on LIKE '%&&%' OR read_only_depends_on LIKE '%||%' OR mandatory_depends_on LIKE '%===%')
+				""",
+				as_dict=True,
+			)
+			if bad_fields:
+				frappe.db.sql(
+					"""
+					UPDATE `tabCustom Field`
+					SET mandatory_depends_on = 'is_intercompany',
+					    read_only_depends_on = NULL
+					WHERE fieldname = 'intercompany_target_company'
+					  AND (mandatory_depends_on LIKE '%&&%' OR read_only_depends_on LIKE '%||%' OR mandatory_depends_on LIKE '%===%')
+					"""
+				)
+				frappe.db.commit()
+				for bf in bad_fields:
+					try:
+						frappe.clear_cache(doctype=bf.dt)
+					except Exception:
+						pass
+				frappe.clear_cache()
+	except Exception as e:
+		logger.debug(f"Self-healing custom fields check notice: {e}")
+
+
 def validate_intercompany_transaction(doc, method=None):
 	"""
 	Enforce Is Intercompany validation rules:
@@ -140,6 +181,8 @@ def validate_intercompany_transaction(doc, method=None):
 		- intercompany_target_company is mandatory
 		- intercompany_target_company CANNOT be the same as doc.company
 	"""
+	fix_legacy_custom_fields()
+
 	if not hasattr(doc, "company") or not doc.company:
 		return
 
@@ -177,6 +220,8 @@ def create_linked_documents(doc, method=None):
 	Hook called on_submit of supported documents.
 	Supports both Synchronous execution and Asynchronous (Background Queue) execution.
 	"""
+	fix_legacy_custom_fields()
+
 	# Check global Inter Company Settings toggle
 	settings = get_settings()
 	if settings and not settings.get("enabled", 1):
@@ -284,12 +329,13 @@ def _process_linked_documents(doc_doctype, doc_name):
 			if linked_doc.meta.has_field("intercompany_target_company"):
 				linked_doc.intercompany_target_company = doc.company
 
-			# Bypass user permissions for cross-company automated document creation
+			# Bypass user permissions and validation constraints for cross-company automated document creation
 			linked_doc.flags.ignore_permissions = True
+			linked_doc.flags.ignore_mandatory = True
 			linked_doc.flags.intercompany_auto_create = True
 			linked_doc.docstatus = 0  # Draft
 
-			linked_doc.insert()
+			linked_doc.insert(ignore_permissions=True, ignore_mandatory=True)
 
 			# Record relationship in Inter Company Document Reference
 			create_document_reference(doc, linked_doc)
@@ -521,17 +567,34 @@ def find_applicable_mappings(doc):
 						match_by_party = False
 
 				if match_by_explicit or match_by_party:
+					matched_tts = []
 					for tt in link.transaction_types:
 						if tt.source_type == doc.doctype and tt.direction in ["Main to Other", "Both"]:
-							mappings.append(
-								{
-									"mapping": link,
-									"transaction_type": tt,
-									"company": lc.company,
-									"linked_company": lc,
-									"direction": "main_to_other",
-								}
-							)
+							matched_tts.append(tt)
+
+					# Reciprocal fallback: if no direct source_type match and rule has target_type == doc.doctype with direction Both
+					if not matched_tts:
+						for tt in link.transaction_types:
+							if tt.target_type == doc.doctype and tt.direction == "Both":
+								matched_tts.append(
+									frappe._dict(
+										source_type=doc.doctype,
+										target_type=tt.source_type,
+										direction=tt.direction,
+										name=getattr(tt, "name", None),
+									)
+								)
+
+					for tt_match in matched_tts:
+						mappings.append(
+							{
+								"mapping": link,
+								"transaction_type": tt_match,
+								"company": lc.company,
+								"linked_company": lc,
+								"direction": "main_to_other",
+							}
+						)
 		else:
 			matching_lc = next((lc for lc in link.linked_companies if lc.company == doc.company), None)
 			if matching_lc:
@@ -562,17 +625,34 @@ def find_applicable_mappings(doc):
 						match_by_party = False
 
 				if match_by_explicit or match_by_party:
+					matched_tts = []
 					for tt in link.transaction_types:
 						if tt.source_type == doc.doctype and tt.direction in ["Other to Main", "Both"]:
-							mappings.append(
-								{
-									"mapping": link,
-									"transaction_type": tt,
-									"company": link.main_company,
-									"linked_company": matching_lc,
-									"direction": "other_to_main",
-								}
-							)
+							matched_tts.append(tt)
+
+					# Reciprocal fallback: if no direct source_type match and rule has target_type == doc.doctype with direction Both
+					if not matched_tts:
+						for tt in link.transaction_types:
+							if tt.target_type == doc.doctype and tt.direction == "Both":
+								matched_tts.append(
+									frappe._dict(
+										source_type=doc.doctype,
+										target_type=tt.source_type,
+										direction=tt.direction,
+										name=getattr(tt, "name", None),
+									)
+								)
+
+					for tt_match in matched_tts:
+						mappings.append(
+							{
+								"mapping": link,
+								"transaction_type": tt_match,
+								"company": link.main_company,
+								"linked_company": matching_lc,
+								"direction": "other_to_main",
+							}
+						)
 
 	return mappings
 

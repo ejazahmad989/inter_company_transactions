@@ -983,8 +983,7 @@ def create_custom_fields():
                         "options": "Company",
                         "insert_after": "is_intercompany",
                         "description": "Select the target company for inter-company transaction (editable only when Is Intercompany is checked)",
-                        "mandatory_depends_on": "eval:doc.is_intercompany && doc.docstatus===0",
-                        "read_only_depends_on": "eval:!doc.is_intercompany || doc.docstatus===1",
+                        "mandatory_depends_on": "is_intercompany",
                         "in_list_view": 1,
                         "in_standard_filter": 1,
                         "fetch_if_empty": 1
