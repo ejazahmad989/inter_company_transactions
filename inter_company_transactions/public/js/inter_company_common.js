@@ -14,12 +14,67 @@
 		'Material Request',
 		'Stock Entry',
 		'Journal Entry',
-		'Payment Entry'
+		'Payment Entry',
+		'Request for Quotation'
 	];
+
+	function sync_intercompany_state(frm) {
+		if (!frm.fields_dict.is_intercompany || !frm.fields_dict.intercompany_target_company) {
+			return;
+		}
+
+		const is_intercompany = cint(frm.doc.is_intercompany);
+		const current_company = frm.doc.company || '';
+
+		if (!is_intercompany) {
+			// Normal internal transaction:
+			// 1. Target company is read-only
+			frm.set_df_property('intercompany_target_company', 'read_only', 1);
+			frm.set_df_property('intercompany_target_company', 'reqd', 0);
+
+			// 2. Target company reflects same company as document
+			if (current_company && frm.doc.intercompany_target_company !== current_company) {
+				if (frm.doc.docstatus === 0) {
+					frm.set_value('intercompany_target_company', current_company);
+				}
+			}
+
+			// Clear filter query so current company does not get blocked if viewed
+			frm.set_query('intercompany_target_company', function() {
+				return {};
+			});
+		} else {
+			// Intercompany transaction:
+			// 1. Target company is editable (if draft) and mandatory
+			if (frm.doc.docstatus === 0) {
+				frm.set_df_property('intercompany_target_company', 'read_only', 0);
+				frm.set_df_property('intercompany_target_company', 'reqd', 1);
+
+				// 2. If it is currently holding the source company, clear it to prompt user selection
+				if (frm.doc.intercompany_target_company && frm.doc.intercompany_target_company === current_company) {
+					frm.set_value('intercompany_target_company', '');
+				}
+			}
+
+			// 3. Filter query so user can ONLY select other sister companies
+			frm.set_query('intercompany_target_company', function() {
+				return {
+					filters: [
+						['Company', 'name', '!=', current_company]
+					]
+				};
+			});
+		}
+	}
 
 	supportedDocTypes.forEach(function(dt) {
 		frappe.ui.form.on(dt, {
+			onload: function(frm) {
+				sync_intercompany_state(frm);
+			},
 			refresh: function(frm) {
+				sync_intercompany_state(frm);
+
 				// Show navigation button to linked document if one exists
 				if (frm.doc.intercompany_linked_doc_name && frm.doc.intercompany_linked_doc_doctype) {
 					const targetDocType = frm.doc.intercompany_linked_doc_doctype;
@@ -63,8 +118,8 @@
 							'blue'
 						);
 					}
-				} else if (frm.doc.docstatus === 1) {
-					// Allow manual sync trigger for submitted documents
+				} else if (frm.doc.docstatus === 1 && cint(frm.doc.is_intercompany)) {
+					// Allow manual sync trigger for submitted documents ONLY IF is_intercompany is checked
 					frm.add_custom_button(
 						__('Sync Mirror Now'),
 						function() {
@@ -96,18 +151,60 @@
 						__('Inter Company')
 					);
 				}
-
-				// Filter intercompany target company field so user cannot select current company
-				if (frm.fields_dict.intercompany_target_company) {
-					frm.set_query('intercompany_target_company', function() {
-						return {
-							filters: [
-								['Company', 'name', '!=', frm.doc.company || '']
-							]
-						};
+			},
+			is_intercompany: function(frm) {
+				sync_intercompany_state(frm);
+				if (cint(frm.doc.is_intercompany)) {
+					frappe.show_alert({
+						message: __('Intercompany mode enabled: Select target sister company in Intercompany Target Company.'),
+						indicator: 'blue'
 					});
+				} else {
+					frappe.show_alert({
+						message: __('Standard internal transaction: Intercompany Target Company set to {0}.', [frm.doc.company || '']),
+						indicator: 'gray'
+					});
+				}
+			},
+			company: function(frm) {
+				if (!cint(frm.doc.is_intercompany)) {
+					if (frm.doc.company) {
+						frm.set_value('intercompany_target_company', frm.doc.company);
+					}
+				} else {
+					if (frm.doc.intercompany_target_company === frm.doc.company) {
+						frm.set_value('intercompany_target_company', '');
+					}
+				}
+				sync_intercompany_state(frm);
+			},
+			validate: function(frm) {
+				if (cint(frm.doc.is_intercompany)) {
+					if (!frm.doc.intercompany_target_company) {
+						frappe.msgprint({
+							title: __('Intercompany Target Company Required'),
+							indicator: 'red',
+							message: __('Please select an Intercompany Target Company for this inter-company transaction.')
+						});
+						frappe.validated = false;
+						return false;
+					}
+					if (frm.doc.company && frm.doc.intercompany_target_company === frm.doc.company) {
+						frappe.msgprint({
+							title: __('Invalid Intercompany Target Company'),
+							indicator: 'red',
+							message: __('For an inter-company transaction, Target Company cannot be the same as Source Company ({0}). Please choose another sister company.', [frm.doc.company])
+						});
+						frappe.validated = false;
+						return false;
+					}
+				} else {
+					if (frm.doc.company && frm.fields_dict.intercompany_target_company && frm.doc.intercompany_target_company !== frm.doc.company) {
+						frm.set_value('intercompany_target_company', frm.doc.company);
+					}
 				}
 			}
 		});
 	});
 })();
+

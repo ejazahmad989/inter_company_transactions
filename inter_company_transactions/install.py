@@ -957,433 +957,66 @@ def create_custom_fields():
                 custom_fields = json.load(f)
         else:
             # Fallback custom fields definition
+            tx_doctypes = [
+                "Sales Order", "Purchase Order", "Journal Entry", "Payment Entry",
+                "Sales Invoice", "Purchase Invoice", "Delivery Note", "Purchase Receipt",
+                "Stock Entry", "Quotation", "Supplier Quotation", "Material Request",
+                "Request for Quotation"
+            ]
+
+            def _get_fallback_tx_fields():
+                return [
+                    {
+                        "fieldname": "is_intercompany",
+                        "label": "Is Intercompany",
+                        "fieldtype": "Check",
+                        "default": "0",
+                        "insert_after": "company",
+                        "description": "Check if this transaction is with a sister company",
+                        "in_list_view": 1,
+                        "in_standard_filter": 1
+                    },
+                    {
+                        "fieldname": "intercompany_target_company",
+                        "label": "Intercompany Target Company",
+                        "fieldtype": "Link",
+                        "options": "Company",
+                        "insert_after": "is_intercompany",
+                        "description": "Select the target company for inter-company transaction (editable only when Is Intercompany is checked)",
+                        "mandatory_depends_on": "eval:doc.is_intercompany && doc.docstatus===0",
+                        "read_only_depends_on": "eval:!doc.is_intercompany || doc.docstatus===1",
+                        "in_list_view": 1,
+                        "in_standard_filter": 1,
+                        "fetch_if_empty": 1
+                    },
+                    {
+                        "fieldname": "intercompany_linked_doc_doctype",
+                        "label": "Linked Document Type",
+                        "fieldtype": "Data",
+                        "insert_after": "intercompany_target_company",
+                        "read_only": 1,
+                        "hidden": 1
+                    },
+                    {
+                        "fieldname": "intercompany_linked_doc_name",
+                        "label": "Linked Document",
+                        "fieldtype": "Data",
+                        "insert_after": "intercompany_linked_doc_doctype",
+                        "read_only": 1,
+                        "hidden": 1
+                    },
+                    {
+                        "fieldname": "intercompany_linked_company",
+                        "label": "Linked Company",
+                        "fieldtype": "Link",
+                        "options": "Company",
+                        "insert_after": "intercompany_linked_doc_name",
+                        "read_only": 1,
+                        "hidden": 1
+                    }
+                ]
+
             custom_fields = {
-                "Sales Order": [
-                    {
-                        "fieldname": "intercompany_target_company",
-                        "label": "Inter Company Target",
-                        "fieldtype": "Link",
-                        "options": "Company",
-                        "insert_after": "company",
-                        "description": "Select the target company for inter-company transaction",
-                        "depends_on": "eval:doc.docstatus===0",
-                        "mandatory_depends_on": "eval:doc.docstatus===0",
-                        "read_only_depends_on": "eval:doc.docstatus===1",
-                        "in_list_view": 1,
-                        "in_standard_filter": 1
-                    },
-                    {
-                        "fieldname": "intercompany_linked_doc_doctype",
-                        "label": "Linked Document Type",
-                        "fieldtype": "Data",
-                        "insert_after": "intercompany_target_company",
-                        "read_only": 1,
-                        "hidden": 1
-                    },
-                    {
-                        "fieldname": "intercompany_linked_doc_name",
-                        "label": "Linked Document",
-                        "fieldtype": "Data",
-                        "insert_after": "intercompany_linked_doc_doctype",
-                        "read_only": 1,
-                        "hidden": 1
-                    },
-                    {
-                        "fieldname": "intercompany_linked_company",
-                        "label": "Linked Company",
-                        "fieldtype": "Link",
-                        "options": "Company",
-                        "insert_after": "intercompany_linked_doc_name",
-                        "read_only": 1,
-                        "hidden": 1
-                    }
-                ],
-                "Purchase Order": [
-                    {
-                        "fieldname": "intercompany_target_company",
-                        "label": "Inter Company Target",
-                        "fieldtype": "Link",
-                        "options": "Company",
-                        "insert_after": "company",
-                        "description": "Select the target company for inter-company transaction",
-                        "depends_on": "eval:doc.docstatus===0",
-                        "mandatory_depends_on": "eval:doc.docstatus===0",
-                        "read_only_depends_on": "eval:doc.docstatus===1",
-                        "in_list_view": 1,
-                        "in_standard_filter": 1
-                    },
-                    {
-                        "fieldname": "intercompany_linked_doc_doctype",
-                        "label": "Linked Document Type",
-                        "fieldtype": "Data",
-                        "insert_after": "intercompany_target_company",
-                        "read_only": 1,
-                        "hidden": 1
-                    },
-                    {
-                        "fieldname": "intercompany_linked_doc_name",
-                        "label": "Linked Document",
-                        "fieldtype": "Data",
-                        "insert_after": "intercompany_linked_doc_doctype",
-                        "read_only": 1,
-                        "hidden": 1
-                    },
-                    {
-                        "fieldname": "intercompany_linked_company",
-                        "label": "Linked Company",
-                        "fieldtype": "Link",
-                        "options": "Company",
-                        "insert_after": "intercompany_linked_doc_name",
-                        "read_only": 1,
-                        "hidden": 1
-                    }
-                ],
-                "Journal Entry": [
-                    {
-                        "fieldname": "intercompany_target_company",
-                        "label": "Inter Company Target",
-                        "fieldtype": "Link",
-                        "options": "Company",
-                        "insert_after": "company",
-                        "description": "Select the target company for inter-company transaction",
-                        "depends_on": "eval:doc.docstatus===0",
-                        "mandatory_depends_on": "eval:doc.docstatus===0",
-                        "read_only_depends_on": "eval:doc.docstatus===1",
-                        "in_list_view": 1,
-                        "in_standard_filter": 1
-                    },
-                    {
-                        "fieldname": "intercompany_linked_doc_doctype",
-                        "label": "Linked Document Type",
-                        "fieldtype": "Data",
-                        "insert_after": "intercompany_target_company",
-                        "read_only": 1,
-                        "hidden": 1
-                    },
-                    {
-                        "fieldname": "intercompany_linked_doc_name",
-                        "label": "Linked Document",
-                        "fieldtype": "Data",
-                        "insert_after": "intercompany_linked_doc_doctype",
-                        "read_only": 1,
-                        "hidden": 1
-                    },
-                    {
-                        "fieldname": "intercompany_linked_company",
-                        "label": "Linked Company",
-                        "fieldtype": "Link",
-                        "options": "Company",
-                        "insert_after": "intercompany_linked_doc_name",
-                        "read_only": 1,
-                        "hidden": 1
-                    }
-                ],
-                "Payment Entry": [
-                    {
-                        "fieldname": "intercompany_target_company",
-                        "label": "Inter Company Target",
-                        "fieldtype": "Link",
-                        "options": "Company",
-                        "insert_after": "company",
-                        "description": "Select the target company for inter-company transaction",
-                        "depends_on": "eval:doc.docstatus===0",
-                        "mandatory_depends_on": "eval:doc.docstatus===0",
-                        "read_only_depends_on": "eval:doc.docstatus===1",
-                        "in_list_view": 1,
-                        "in_standard_filter": 1
-                    },
-                    {
-                        "fieldname": "intercompany_linked_doc_doctype",
-                        "label": "Linked Document Type",
-                        "fieldtype": "Data",
-                        "insert_after": "intercompany_target_company",
-                        "read_only": 1,
-                        "hidden": 1
-                    },
-                    {
-                        "fieldname": "intercompany_linked_doc_name",
-                        "label": "Linked Document",
-                        "fieldtype": "Data",
-                        "insert_after": "intercompany_linked_doc_doctype",
-                        "read_only": 1,
-                        "hidden": 1
-                    },
-                    {
-                        "fieldname": "intercompany_linked_company",
-                        "label": "Linked Company",
-                        "fieldtype": "Link",
-                        "options": "Company",
-                        "insert_after": "intercompany_linked_doc_name",
-                        "read_only": 1,
-                        "hidden": 1
-                    }
-                ],
-                "Sales Invoice": [
-                    {
-                        "fieldname": "intercompany_target_company",
-                        "label": "Inter Company Target",
-                        "fieldtype": "Link",
-                        "options": "Company",
-                        "insert_after": "company",
-                        "description": "Select the target company for inter-company transaction",
-                        "depends_on": "eval:doc.docstatus===0",
-                        "in_list_view": 1,
-                        "in_standard_filter": 1
-                    },
-                    {
-                        "fieldname": "intercompany_linked_doc_doctype",
-                        "label": "Linked Document Type",
-                        "fieldtype": "Data",
-                        "insert_after": "intercompany_target_company",
-                        "read_only": 1,
-                        "hidden": 1
-                    },
-                    {
-                        "fieldname": "intercompany_linked_doc_name",
-                        "label": "Linked Document",
-                        "fieldtype": "Data",
-                        "insert_after": "intercompany_linked_doc_doctype",
-                        "read_only": 1,
-                        "hidden": 1
-                    },
-                    {
-                        "fieldname": "intercompany_linked_company",
-                        "label": "Linked Company",
-                        "fieldtype": "Link",
-                        "options": "Company",
-                        "insert_after": "intercompany_linked_doc_name",
-                        "read_only": 1,
-                        "hidden": 1
-                    }
-                ],
-                "Purchase Invoice": [
-                    {
-                        "fieldname": "intercompany_target_company",
-                        "label": "Inter Company Target",
-                        "fieldtype": "Link",
-                        "options": "Company",
-                        "insert_after": "company",
-                        "description": "Select the target company for inter-company transaction",
-                        "depends_on": "eval:doc.docstatus===0",
-                        "in_list_view": 1,
-                        "in_standard_filter": 1
-                    },
-                    {
-                        "fieldname": "intercompany_linked_doc_doctype",
-                        "label": "Linked Document Type",
-                        "fieldtype": "Data",
-                        "insert_after": "intercompany_target_company",
-                        "read_only": 1,
-                        "hidden": 1
-                    },
-                    {
-                        "fieldname": "intercompany_linked_doc_name",
-                        "label": "Linked Document",
-                        "fieldtype": "Data",
-                        "insert_after": "intercompany_linked_doc_doctype",
-                        "read_only": 1,
-                        "hidden": 1
-                    },
-                    {
-                        "fieldname": "intercompany_linked_company",
-                        "label": "Linked Company",
-                        "fieldtype": "Link",
-                        "options": "Company",
-                        "insert_after": "intercompany_linked_doc_name",
-                        "read_only": 1,
-                        "hidden": 1
-                    }
-                ],
-                "Delivery Note": [
-                    {
-                        "fieldname": "intercompany_target_company",
-                        "label": "Inter Company Target",
-                        "fieldtype": "Link",
-                        "options": "Company",
-                        "insert_after": "company",
-                        "description": "Select the target company for inter-company transaction",
-                        "depends_on": "eval:doc.docstatus===0",
-                        "in_list_view": 1,
-                        "in_standard_filter": 1
-                    },
-                    {
-                        "fieldname": "intercompany_linked_doc_doctype",
-                        "label": "Linked Document Type",
-                        "fieldtype": "Data",
-                        "insert_after": "intercompany_target_company",
-                        "read_only": 1,
-                        "hidden": 1
-                    },
-                    {
-                        "fieldname": "intercompany_linked_doc_name",
-                        "label": "Linked Document",
-                        "fieldtype": "Data",
-                        "insert_after": "intercompany_linked_doc_doctype",
-                        "read_only": 1,
-                        "hidden": 1
-                    },
-                    {
-                        "fieldname": "intercompany_linked_company",
-                        "label": "Linked Company",
-                        "fieldtype": "Link",
-                        "options": "Company",
-                        "insert_after": "intercompany_linked_doc_name",
-                        "read_only": 1,
-                        "hidden": 1
-                    }
-                ],
-                "Purchase Receipt": [
-                    {
-                        "fieldname": "intercompany_target_company",
-                        "label": "Inter Company Target",
-                        "fieldtype": "Link",
-                        "options": "Company",
-                        "insert_after": "company",
-                        "description": "Select the target company for inter-company transaction",
-                        "depends_on": "eval:doc.docstatus===0",
-                        "in_list_view": 1,
-                        "in_standard_filter": 1
-                    },
-                    {
-                        "fieldname": "intercompany_linked_doc_doctype",
-                        "label": "Linked Document Type",
-                        "fieldtype": "Data",
-                        "insert_after": "intercompany_target_company",
-                        "read_only": 1,
-                        "hidden": 1
-                    },
-                    {
-                        "fieldname": "intercompany_linked_doc_name",
-                        "label": "Linked Document",
-                        "fieldtype": "Data",
-                        "insert_after": "intercompany_linked_doc_doctype",
-                        "read_only": 1,
-                        "hidden": 1
-                    },
-                    {
-                        "fieldname": "intercompany_linked_company",
-                        "label": "Linked Company",
-                        "fieldtype": "Link",
-                        "options": "Company",
-                        "insert_after": "intercompany_linked_doc_name",
-                        "read_only": 1,
-                        "hidden": 1
-                    }
-                ],
-                "Quotation": [
-                    {
-                        "fieldname": "intercompany_target_company",
-                        "label": "Inter Company Target",
-                        "fieldtype": "Link",
-                        "options": "Company",
-                        "insert_after": "company",
-                        "description": "Select the target company for inter-company transaction",
-                        "depends_on": "eval:doc.docstatus===0",
-                        "in_list_view": 1,
-                        "in_standard_filter": 1
-                    },
-                    {
-                        "fieldname": "intercompany_linked_doc_doctype",
-                        "label": "Linked Document Type",
-                        "fieldtype": "Data",
-                        "insert_after": "intercompany_target_company",
-                        "read_only": 1,
-                        "hidden": 1
-                    },
-                    {
-                        "fieldname": "intercompany_linked_doc_name",
-                        "label": "Linked Document",
-                        "fieldtype": "Data",
-                        "insert_after": "intercompany_linked_doc_doctype",
-                        "read_only": 1,
-                        "hidden": 1
-                    },
-                    {
-                        "fieldname": "intercompany_linked_company",
-                        "label": "Linked Company",
-                        "fieldtype": "Link",
-                        "options": "Company",
-                        "insert_after": "intercompany_linked_doc_name",
-                        "read_only": 1,
-                        "hidden": 1
-                    }
-                ],
-                "Supplier Quotation": [
-                    {
-                        "fieldname": "intercompany_target_company",
-                        "label": "Inter Company Target",
-                        "fieldtype": "Link",
-                        "options": "Company",
-                        "insert_after": "company",
-                        "description": "Select the target company for inter-company transaction",
-                        "depends_on": "eval:doc.docstatus===0",
-                        "in_list_view": 1,
-                        "in_standard_filter": 1
-                    },
-                    {
-                        "fieldname": "intercompany_linked_doc_doctype",
-                        "label": "Linked Document Type",
-                        "fieldtype": "Data",
-                        "insert_after": "intercompany_target_company",
-                        "read_only": 1,
-                        "hidden": 1
-                    },
-                    {
-                        "fieldname": "intercompany_linked_doc_name",
-                        "label": "Linked Document",
-                        "fieldtype": "Data",
-                        "insert_after": "intercompany_linked_doc_doctype",
-                        "read_only": 1,
-                        "hidden": 1
-                    },
-                    {
-                        "fieldname": "intercompany_linked_company",
-                        "label": "Linked Company",
-                        "fieldtype": "Link",
-                        "options": "Company",
-                        "insert_after": "intercompany_linked_doc_name",
-                        "read_only": 1,
-                        "hidden": 1
-                    }
-                ],
-                "Material Request": [
-                    {
-                        "fieldname": "intercompany_target_company",
-                        "label": "Inter Company Target",
-                        "fieldtype": "Link",
-                        "options": "Company",
-                        "insert_after": "company",
-                        "description": "Select the target company for inter-company transaction",
-                        "depends_on": "eval:doc.docstatus===0",
-                        "in_list_view": 1,
-                        "in_standard_filter": 1
-                    },
-                    {
-                        "fieldname": "intercompany_linked_doc_doctype",
-                        "label": "Linked Document Type",
-                        "fieldtype": "Data",
-                        "insert_after": "intercompany_target_company",
-                        "read_only": 1,
-                        "hidden": 1
-                    },
-                    {
-                        "fieldname": "intercompany_linked_doc_name",
-                        "label": "Linked Document",
-                        "fieldtype": "Data",
-                        "insert_after": "intercompany_linked_doc_doctype",
-                        "read_only": 1,
-                        "hidden": 1
-                    },
-                    {
-                        "fieldname": "intercompany_linked_company",
-                        "label": "Linked Company",
-                        "fieldtype": "Link",
-                        "options": "Company",
-                        "insert_after": "intercompany_linked_doc_name",
-                        "read_only": 1,
-                        "hidden": 1
-                    }
-                ],
                 "Customer": [
                     {
                         "fieldname": "ic_customer_group",
@@ -1425,6 +1058,8 @@ def create_custom_fields():
                     }
                 ]
             }
+            for dt in tx_doctypes:
+                custom_fields[dt] = _get_fallback_tx_fields()
             
         for doctype, fields in custom_fields.items():
             for field in fields:
@@ -1447,6 +1082,7 @@ def create_custom_fields():
                             "label": field["label"],
                             "fieldtype": field["fieldtype"],
                             "options": field.get("options"),
+                            "default": field.get("default"),
                             "insert_after": field.get("insert_after", "amended_from"),
                             "description": field.get("description", ""),
                             "read_only": field.get("read_only", 0),
@@ -1462,9 +1098,25 @@ def create_custom_fields():
                         custom_field.insert()
                         print(f"Created Custom Field: {doctype} - {field['fieldname']}")
                     else:
-                        # Ensure module is set to Inter Company Transactions
-                        frappe.db.set_value("Custom Field", existing_cf, "module", "Inter Company Transactions", update_modified=False)
-                        print(f"Custom Field already exists: {doctype} - {field['fieldname']}")
+                        # Ensure module is set to Inter Company Transactions and sync dependencies
+                        cf_doc = frappe.get_doc("Custom Field", existing_cf)
+                        cf_doc.module = "Inter Company Transactions"
+                        if "label" in field:
+                            cf_doc.label = field["label"]
+                        if "insert_after" in field:
+                            cf_doc.insert_after = field["insert_after"]
+                        if "description" in field:
+                            cf_doc.description = field["description"]
+                        if "default" in field:
+                            cf_doc.default = field["default"]
+                        cf_doc.mandatory_depends_on = field.get("mandatory_depends_on", "")
+                        cf_doc.read_only_depends_on = field.get("read_only_depends_on", "")
+                        cf_doc.depends_on = field.get("depends_on", "")
+                        cf_doc.in_list_view = field.get("in_list_view", cf_doc.in_list_view)
+                        cf_doc.in_standard_filter = field.get("in_standard_filter", cf_doc.in_standard_filter)
+                        cf_doc.flags.ignore_permissions = True
+                        cf_doc.save(ignore_permissions=True)
+                        print(f"Updated Custom Field: {doctype} - {field['fieldname']}")
                         
                 except Exception as e:
                     print(f"Error creating custom field {field['fieldname']} for {doctype}: {str(e)}")

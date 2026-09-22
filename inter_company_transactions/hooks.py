@@ -137,54 +137,46 @@ doc_events = {
             #"inter_company_transactions.workflow.create_approval_request_if_required"
         ],
         "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
-        "validate": "inter_company_transactions.date_validation_hooks.validate_backdate",
+        "validate": [
+            "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_transaction",
+            "inter_company_transactions.date_validation_hooks.validate_backdate"
+        ],
         "before_insert": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
         "before_save": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
         "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
-        # "validate": "inter_company_transactions.doctype.backdate_permission.backdate_permission.validate_posting_date"
     },
     "Purchase Order": {
         "on_submit": [ 
             "inter_company_transactions.workflow.create_workflow_request",
             "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
-            
-            #"inter_company_transactions.workflow.create_approval_request_if_required"
         ],
         "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
+        "validate": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_transaction",
         "before_insert": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
         "before_save":   "inter_company_transactions.date_control.date_validator.validate_transaction_date",
         "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
-        #"validate":  "inter_company_transactions.date_validation_hooks.validate_backdate"
-        # "validate": "inter_company_transactions.doctype.backdate_permission.backdate_permission.validate_posting_date"
     },
     "Journal Entry": {
         "on_submit": [
             "inter_company_transactions.workflow.create_workflow_request",
             "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
-
-            # "inter_company_transactions.workflow.create_approval_request_if_required"
         ],
         "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
-       # "validate": "inter_company_transactions.date_validation_hooks.validate_backdate"
-       # "validate": "inter_company_transactions.doctype.backdate_permission.backdate_permission.validate_posting_date"
+        "validate": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_transaction",
         "before_insert": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
         "before_save":   "inter_company_transactions.date_control.date_validator.validate_transaction_date",
         "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
-
     },
     "Payment Entry": {
         "on_submit": [
             "inter_company_transactions.workflow.create_workflow_request",
             "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
-
-            #"inter_company_transactions.workflow.create_approval_request_if_required"
         ],
         "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
+        "validate": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_transaction",
         "before_insert": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
         "before_save":   "inter_company_transactions.date_control.date_validator.validate_transaction_date",
         "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
-        #"validate": "inter_company_transactions.date_validation_hooks.validate_backdate"
-        # "validate": "inter_company_transactions.doctype.backdate_permission.backdate_permission.validate_posting_date"
     },
     "Sales Invoice": {
           "on_submit": [
@@ -192,7 +184,10 @@ doc_events = {
               "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents"
           ],
           "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
-          "validate": "inter_company_transactions.date_validation_hooks.validate_backdate",
+          "validate": [
+              "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_transaction",
+              "inter_company_transactions.date_validation_hooks.validate_backdate"
+          ],
           "before_insert": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
           "before_save":   "inter_company_transactions.date_control.date_validator.validate_transaction_date",
           "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
@@ -203,7 +198,10 @@ doc_events = {
               "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents"
           ],
           "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
-          "validate": "inter_company_transactions.date_validation_hooks.validate_backdate",
+          "validate": [
+              "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_transaction",
+              "inter_company_transactions.date_validation_hooks.validate_backdate"
+          ],
           "before_insert": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
           "before_save":   "inter_company_transactions.date_control.date_validator.validate_transaction_date",
           "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
@@ -213,7 +211,10 @@ doc_events = {
               "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents"
           ],
           "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
-          "validate": "inter_company_transactions.date_validation_hooks.validate_backdate",
+          "validate": [
+              "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_transaction",
+              "inter_company_transactions.date_validation_hooks.validate_backdate"
+          ],
           "before_insert": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
           "before_save":   "inter_company_transactions.date_control.date_validator.validate_transaction_date",
           "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
@@ -223,7 +224,10 @@ doc_events = {
               "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents"
           ],
           "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
-          "validate": "inter_company_transactions.date_validation_hooks.validate_backdate",
+          "validate": [
+              "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_transaction",
+              "inter_company_transactions.date_validation_hooks.validate_backdate"
+          ],
           "before_insert": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
           "before_save":   "inter_company_transactions.date_control.date_validator.validate_transaction_date",
           "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
@@ -233,7 +237,10 @@ doc_events = {
               "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents"
           ],
           "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
-          "validate": "inter_company_transactions.date_validation_hooks.validate_backdate",
+          "validate": [
+              "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_transaction",
+              "inter_company_transactions.date_validation_hooks.validate_backdate"
+          ],
           "before_insert": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
           "before_save":   "inter_company_transactions.date_control.date_validator.validate_transaction_date",
           "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
@@ -242,19 +249,29 @@ doc_events = {
           "on_submit": [
               "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents"
           ],
-          "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents"
+          "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
+          "validate": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_transaction"
     },
     "Supplier Quotation": {
           "on_submit": [
               "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents"
           ],
-          "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents"
+          "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
+          "validate": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_transaction"
     },
     "Material Request": {
           "on_submit": [
               "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents"
           ],
-          "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents"
+          "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
+          "validate": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_transaction"
+    },
+    "Request for Quotation": {
+          "on_submit": [
+              "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents"
+          ],
+          "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
+          "validate": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_transaction"
     }
 }
 

@@ -79,6 +79,19 @@ In ERPNext Desk, navigate to **Workspace > Inter Company** or enter the route di
   - `Companies Table`: Child table listing counterparty entities, their specific Internal Customer ID, and Internal Supplier ID.
   - `Transaction Types Table`: Defines specific document routing pairs, whether target docs are created as Draft or automatically Submitted, and custom account overrides.
 
+#### 3.1.0 Transaction Form Behavior: "Is Intercompany" & Dynamic Sister Company Selection
+In normal operations, almost all daily transactions (Payment Entry, Journal Entry, Sales Invoices, etc.) belong strictly to the local company. To prevent accidental mirror creation:
+1. **Unchecked by Default (`is_intercompany = 0`)**:
+   - Every transaction form has the **Is Intercompany** checkbox unticked.
+   - The **Intercompany Target Company** field is rendered **read-only** and automatically defaults to the source company name (e.g. *Acme Manufacturing Ltd*).
+   - Upon save or submission, it is treated strictly as an internal transaction; no mirror voucher is generated in sister companies.
+2. **Checked Mode (`is_intercompany = 1`)**:
+   - When user ticks **Is Intercompany**, the **Intercompany Target Company** field immediately becomes **editable and mandatory**.
+   - If it was populated with the source company, it automatically clears so the user can select the target sister company.
+   - The field lookup dynamically excludes the current company, preventing circular or self-directed intercompany errors.
+   - If unticked, it resets to read-only with the current company name.
+   - Upon submission, the engine creates the reciprocal mirror entry in the chosen target company.
+
 #### 3.1.1 Comprehensive Matrix of Supported Mirror Transactions (What It CAN Do)
 The engine supports real-time, automated document mirroring across all standard trade and accounting workflows in ERPNext:
 
@@ -91,10 +104,12 @@ The engine supports real-time, automated document mirroring across all standard 
 | 5 | **Sales Invoice** | **Purchase Invoice** | Bi-directional | Commercial billing in seller creates reciprocal accounts payable invoice with identical line item breakdown, taxes, and intercompany tags. |
 | 6 | **Purchase Invoice** | **Sales Invoice** | Bi-directional | Supplier invoice in buying company creates reciprocal accounts receivable billing in sister company. |
 | 7 | **Quotation** | **Supplier Quotation** | Bi-directional | Internal sales estimate generates vendor quotation for purchasing approvals. |
-| 8 | **Material Request** | **Sales Order / Purchase Order** | Forward | Stock replenishment requisition in a branch automatically initiates order creation in the central warehouse company. |
-| 9 | **Stock Entry** | **Stock Entry** | Bi-directional | *Material Issue* in Company A triggers an automated *Material Receipt* in Company B at the designated transfer valuation rate. |
-| 10 | **Journal Entry** | **Journal Entry** | Bi-directional | Cross-entity fund transfers or expense allocations automatically generate balancing voucher with reversed debit/credit accounts. |
-| 11 | **Payment Entry** | **Payment Entry** | Bi-directional | Payment made from Company A to Company B creates a matching Receipt voucher in Company B linked to the open intercompany invoice. |
+| 8 | **Supplier Quotation** | **Quotation** | Bi-directional | Vendor quote from sister company creates sales quotation. |
+| 9 | **Material Request** | **Sales Order / Purchase Order** | Forward | Stock replenishment requisition in a branch automatically initiates order creation in the central warehouse company. |
+| 10 | **Request for Quotation** | **Supplier Quotation** | Bi-directional | Formal procurement inquiry creates supplier quote in sister sales department. |
+| 11 | **Stock Entry** | **Stock Entry** | Bi-directional | *Material Issue* in Company A triggers an automated *Material Receipt* in Company B at the designated transfer valuation rate. |
+| 12 | **Journal Entry** | **Journal Entry** | Bi-directional | Cross-entity fund transfers or expense allocations automatically generate balancing voucher with reversed debit/credit accounts. |
+| 13 | **Payment Entry** | **Payment Entry** | Bi-directional | Payment made from Company A to Company B creates a matching Receipt voucher in Company B linked to the open intercompany invoice. |
 
 ---
 

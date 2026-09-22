@@ -131,6 +131,47 @@ def trigger_manual_intercompany_sync(doctype, name):
 					)
 
 
+def validate_intercompany_transaction(doc, method=None):
+	"""
+	Enforce Is Intercompany validation rules:
+	- If is_intercompany is unchecked (0):
+		- intercompany_target_company is read-only and automatically kept in sync with doc.company
+	- If is_intercompany is checked (1):
+		- intercompany_target_company is mandatory
+		- intercompany_target_company CANNOT be the same as doc.company
+	"""
+	if not hasattr(doc, "company") or not doc.company:
+		return
+
+	has_ic_field = doc.meta.has_field("is_intercompany")
+	has_target_field = doc.meta.has_field("intercompany_target_company")
+
+	if not has_ic_field and not has_target_field:
+		return
+
+	is_ic = cint(doc.get("is_intercompany")) if has_ic_field else 0
+	target_company = doc.get("intercompany_target_company") if has_target_field else None
+
+	if not is_ic:
+		# Internal transaction: ensure target company mirrors source company
+		if has_target_field and target_company != doc.company:
+			doc.intercompany_target_company = doc.company
+	else:
+		# Intercompany transaction: target company must be selected and cannot be same company
+		if not target_company:
+			frappe.throw(
+				_("Please select an Intercompany Target Company for this inter-company transaction."),
+				title=_("Intercompany Target Company Required"),
+			)
+		if target_company == doc.company:
+			frappe.throw(
+				_("For an inter-company transaction, Intercompany Target Company cannot be the same as Source Company ({0}). Please choose another sister company.").format(
+					frappe.bold(doc.company)
+				),
+				title=_("Invalid Intercompany Target Company"),
+			)
+
+
 def create_linked_documents(doc, method=None):
 	"""
 	Hook called on_submit of supported documents.
@@ -145,6 +186,16 @@ def create_linked_documents(doc, method=None):
 	# Avoid recursive loops if triggered by automated creation
 	if doc.flags.get("intercompany_auto_create"):
 		logger.debug(f"Skipping {doc.doctype} {doc.name}: triggered by intercompany auto create flag")
+		return
+
+	# Only proceed if is_intercompany is checked (if field exists on DocType)
+	if doc.meta.has_field("is_intercompany") and not cint(doc.get("is_intercompany")):
+		logger.debug(f"Skipping {doc.doctype} {doc.name}: is_intercompany is not checked")
+		return
+
+	# Skip if target company is same as source company (internal transaction)
+	if doc.get("intercompany_target_company") and doc.get("intercompany_target_company") == doc.company:
+		logger.debug(f"Skipping {doc.doctype} {doc.name}: target company is same as source company")
 		return
 
 	if doc.get("intercompany_linked_doc_name") and doc.get("intercompany_linked_doc_doctype"):
@@ -180,6 +231,15 @@ def _process_linked_documents(doc_doctype, doc_name):
 		return
 
 	doc = frappe.get_doc(doc_doctype, doc_name)
+
+	# Verify is_intercompany check
+	if doc.meta.has_field("is_intercompany") and not cint(doc.get("is_intercompany")):
+		logger.debug(f"Skipping {doc.doctype} {doc.name}: is_intercompany is not checked")
+		return
+
+	if doc.get("intercompany_target_company") and doc.get("intercompany_target_company") == doc.company:
+		logger.debug(f"Skipping {doc.doctype} {doc.name}: target company is same as source company")
+		return
 	settings = get_settings()
 
 	mappings = find_applicable_mappings(doc)
@@ -219,6 +279,8 @@ def _process_linked_documents(doc_doctype, doc_name):
 				linked_doc.intercompany_linked_doc_name = doc.name
 			if linked_doc.meta.has_field("intercompany_linked_company"):
 				linked_doc.intercompany_linked_company = doc.company
+			if linked_doc.meta.has_field("is_intercompany"):
+				linked_doc.is_intercompany = 1
 			if linked_doc.meta.has_field("intercompany_target_company"):
 				linked_doc.intercompany_target_company = doc.company
 
@@ -410,6 +472,15 @@ def find_applicable_mappings(doc):
 	Identify all valid Intercompany Transaction Link configurations that match
 	the given document by company, linked company, party, and transaction type.
 	"""
+	# If the document has is_intercompany field and it is not ticked, no intercompany mapping applies
+	if doc.meta.has_field("is_intercompany") and not cint(doc.get("is_intercompany")):
+		return []
+
+	# If target company is equal to source company, it is an internal transaction
+	target_company_from_doc = doc.get("intercompany_target_company")
+	if target_company_from_doc and target_company_from_doc == doc.company:
+		return []
+
 	mappings = []
 	links = frappe.get_all("Intercompany Transaction Link", filters={"enabled": 1}, fields=["name"])
 
