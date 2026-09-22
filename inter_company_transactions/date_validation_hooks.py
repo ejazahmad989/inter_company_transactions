@@ -11,8 +11,8 @@ def validate_backdate(doc, method):
     if current_user == "Administrator":
         return
 
-    # ? Get posting date (supports both posting_date or transaction_date)
-    posting_date = getattr(doc, 'posting_date', None) or getattr(doc, 'transaction_date', None)
+    # 🛡️ Get posting date (supports posting_date, transaction_date, or date)
+    posting_date = getattr(doc, 'posting_date', None) or getattr(doc, 'transaction_date', None) or getattr(doc, 'date', None)
     if not posting_date:
         return
 
