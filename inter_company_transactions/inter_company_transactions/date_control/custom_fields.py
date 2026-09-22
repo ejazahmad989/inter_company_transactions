@@ -9,14 +9,14 @@ def add_custom_fields():
                 label="Backdate Reason",
                 fieldtype="Small Text",
                 insert_after="posting_date",
-                depends_on="eval:doc.posting_date && (frappe.datetime.get_diff(frappe.datetime.nowdate(), doc.posting_date) > 0)"
+                depends_on=""
             ),
             dict(
                 fieldname="futuredate_reason",
                 label="Future Date Reason",
                 fieldtype="Small Text",
                 insert_after="posting_date",
-                depends_on="eval:doc.posting_date && (frappe.datetime.get_diff(frappe.datetime.nowdate(), doc.posting_date) < 0)"
+                depends_on=""
             )
         ],
         "Journal Entry": [
@@ -25,14 +25,14 @@ def add_custom_fields():
                 label="Backdate Reason",
                 fieldtype="Small Text",
                 insert_after="posting_date",
-                depends_on="eval:doc.posting_date && (frappe.datetime.get_diff(frappe.datetime.nowdate(), doc.posting_date) > 0)"
+                depends_on=""
             ),
             dict(
                 fieldname="futuredate_reason",
                 label="Future Date Reason",
                 fieldtype="Small Text",
                 insert_after="posting_date",
-                depends_on="eval:doc.posting_date && (frappe.datetime.get_diff(frappe.datetime.nowdate(), doc.posting_date) < 0)"
+                depends_on=""
             )
         ],
         "Sales Order": [
@@ -41,14 +41,14 @@ def add_custom_fields():
                 label="Backdate Reason",
                 fieldtype="Small Text",
                 insert_after="posting_date",
-                depends_on="eval:doc.posting_date && (frappe.datetime.get_diff(frappe.datetime.nowdate(), doc.posting_date) > 0)"
+                depends_on=""
             ),
             dict(
                 fieldname="futuredate_reason",
                 label="Future Date Reason",
                 fieldtype="Small Text",
                 insert_after="posting_date",
-                depends_on="eval:doc.posting_date && (frappe.datetime.get_diff(frappe.datetime.nowdate(), doc.posting_date) < 0)"
+                depends_on=""
             )
         ],
         "Sales Invoice": [
@@ -57,14 +57,14 @@ def add_custom_fields():
                 label="Backdate Reason",
                 fieldtype="Small Text",
                 insert_after="posting_date",
-                depends_on="eval:doc.posting_date && (frappe.datetime.get_diff(frappe.datetime.nowdate(), doc.posting_date) > 0)"
+                depends_on=""
             ),
             dict(
                 fieldname="futuredate_reason",
                 label="Future Date Reason",
                 fieldtype="Small Text",
                 insert_after="posting_date",
-                depends_on="eval:doc.posting_date && (frappe.datetime.get_diff(frappe.datetime.nowdate(), doc.posting_date) < 0)"
+                depends_on=""
             )
         ],
         "Delivery Note": [
@@ -73,14 +73,14 @@ def add_custom_fields():
                 label="Backdate Reason",
                 fieldtype="Small Text",
                 insert_after="posting_date",
-                depends_on="eval:doc.posting_date && (frappe.datetime.get_diff(frappe.datetime.nowdate(), doc.posting_date) > 0)"
+                depends_on=""
             ),
             dict(
                 fieldname="futuredate_reason",
                 label="Future Date Reason",
                 fieldtype="Small Text",
                 insert_after="posting_date",
-                depends_on="eval:doc.posting_date && (frappe.datetime.get_diff(frappe.datetime.nowdate(), doc.posting_date) < 0)"
+                depends_on=""
             )
         ],
         "Purchase Order": [
@@ -89,14 +89,14 @@ def add_custom_fields():
                 label="Backdate Reason",
                 fieldtype="Small Text",
                 insert_after="posting_date",
-                depends_on="eval:doc.posting_date && (frappe.datetime.get_diff(frappe.datetime.nowdate(), doc.posting_date) > 0)"
+                depends_on=""
             ),
             dict(
                 fieldname="futuredate_reason",
                 label="Future Date Reason",
                 fieldtype="Small Text",
                 insert_after="posting_date",
-                depends_on="eval:doc.posting_date && (frappe.datetime.get_diff(frappe.datetime.nowdate(), doc.posting_date) < 0)"
+                depends_on=""
             )
         ],
         "Purchase invoice": [
@@ -105,14 +105,14 @@ def add_custom_fields():
                 label="Backdate Reason",
                 fieldtype="Small Text",
                 insert_after="posting_date",
-                depends_on="eval:doc.posting_date && (frappe.datetime.get_diff(frappe.datetime.nowdate(), doc.posting_date) > 0)"
+                depends_on=""
             ),
             dict(
                 fieldname="futuredate_reason",
                 label="Future Date Reason",
                 fieldtype="Small Text",
                 insert_after="posting_date",
-                depends_on="eval:doc.posting_date && (frappe.datetime.get_diff(frappe.datetime.nowdate(), doc.posting_date) < 0)"
+                depends_on=""
             )
         ],
         "Purchase Receipt": [
@@ -121,14 +121,14 @@ def add_custom_fields():
                 label="Backdate Reason",
                 fieldtype="Small Text",
                 insert_after="posting_date",
-                depends_on="eval:doc.posting_date && (frappe.datetime.get_diff(frappe.datetime.nowdate(), doc.posting_date) > 0)"
+                depends_on=""
             ),
             dict(
                 fieldname="futuredate_reason",
                 label="Future Date Reason",
                 fieldtype="Small Text",
                 insert_after="posting_date",
-                depends_on="eval:doc.posting_date && (frappe.datetime.get_diff(frappe.datetime.nowdate(), doc.posting_date) < 0)"
+                depends_on=""
             )
         ],
         

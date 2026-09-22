@@ -36,7 +36,7 @@
       "reqd": 1
     },
     {
-      "depends_on": "eval:doc.approver_type === 'User'",
+      "depends_on": "eval:doc.approver_type == 'User'",
       "fieldname": "approver_user",
       "fieldtype": "Link",
       "in_list_view": 1,
@@ -48,7 +48,7 @@
       "fieldtype": "Column Break"
     },
     {
-      "depends_on": "eval:doc.approver_type === 'Role'",
+      "depends_on": "eval:doc.approver_type == 'Role'",
       "fieldname": "approver_role",
       "fieldtype": "Link",
       "label": "Approver Role",

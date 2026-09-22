@@ -5,7 +5,14 @@ import frappe
 def before_migrate():
     """Execute before migration to preserve doctypes"""
     print("Running pre-migration tasks for Inter Company Transactions...")
-    
+
+    # Sanitize custom fields and doctypes before migration begins
+    try:
+        from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import fix_legacy_custom_fields
+        fix_legacy_custom_fields(force=True)
+    except Exception as e:
+        print(f"Error sanitizing custom fields before migration: {e}")
+
     # Backup important data before migration
     backup_custom_data()
     

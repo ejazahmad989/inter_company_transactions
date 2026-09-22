@@ -14,6 +14,12 @@ def get_primary_date(doc):
 
 
 def validate_transaction_date(doc, method=None):
+    try:
+        from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import fix_legacy_custom_fields
+        fix_legacy_custom_fields()
+    except Exception:
+        pass
+
     # Administrator bypass: allow all dates immediately
     if frappe.session.user == "Administrator":
         return

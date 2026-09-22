@@ -371,7 +371,10 @@ def process_approved_request(approval_request):
         )
         
         # Create the target document
-        from intercompany_transaction_link import create_linked_documents
+        try:
+            from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import create_linked_documents
+        except ImportError:
+            from intercompany_transaction_link import create_linked_documents
         create_linked_documents(source_doc, "on_submit")
         
         # Update approval request with target document info

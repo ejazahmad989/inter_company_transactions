@@ -295,14 +295,14 @@ def create_doctypes():
                     "fieldtype": "Link",
                     "label": "Approver User",
                     "options": "User",
-                    "depends_on": "eval:doc.approver_type === 'User'"
+                    "depends_on": "eval:doc.approver_type == 'User'"
                 },
                 {
                     "fieldname": "approver_role",
                     "fieldtype": "Link",
                     "label": "Approver Role",
                     "options": "Role",
-                    "depends_on": "eval:doc.approver_type === 'Role'"
+                    "depends_on": "eval:doc.approver_type == 'Role'"
                 },
                 {
                     "fieldname": "amount_threshold",
@@ -422,7 +422,7 @@ def create_doctypes():
                     "fieldtype": "Table",
                     "label": "Specific Companies",
                     "options": "Backdate Permission Company",
-                    "depends_on": "eval:!doc.applies_to_all_companies"
+                    "depends_on": "eval:not doc.applies_to_all_companies"
                 },
                 {
                     "fieldname": "allow_backdate",

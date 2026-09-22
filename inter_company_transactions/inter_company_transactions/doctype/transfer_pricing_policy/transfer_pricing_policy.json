@@ -87,13 +87,13 @@
     },
     {
       "default": "10.0",
-      "depends_on": "eval:doc.methodology==='Cost-Plus Markup %' || doc.methodology==='Resale Price Method'",
+      "depends_on": "eval:doc.methodology in ['Cost-Plus Markup %', 'Resale Price Method']",
       "fieldname": "markup_percentage",
       "fieldtype": "Percent",
       "label": "Arm's Length Markup / Margin %"
     },
     {
-      "depends_on": "eval:doc.methodology==='Fixed Transfer Rate'",
+      "depends_on": "eval:doc.methodology == 'Fixed Transfer Rate'",
       "fieldname": "fixed_rate",
       "fieldtype": "Currency",
       "label": "Agreed Fixed Transfer Rate"

@@ -2,19 +2,19 @@
   "actions": [
     {
       "label": "Approve",
-      "condition": "eval:doc.status === 'Pending'",
+      "condition": "doc.status == 'Pending'",
       "action": "frappe.ui.form.on('Workflow Approval Request', { approve: function(frm) { frm.call('approve').then(() => frm.reload_doc()); } });",
       "group": "Workflow"
     },
     {
       "label": "Reject",
-      "condition": "eval:doc.status === 'Pending'",
+      "condition": "doc.status == 'Pending'",
       "action": "frappe.ui.form.on('Workflow Approval Request', { reject: function(frm) { frm.call('reject').then(() => frm.reload_doc()); } });",
       "group": "Workflow"
     },
     {
       "label": "Delegate",
-      "condition": "eval:doc.status === 'Pending'",
+      "condition": "doc.status == 'Pending'",
       "action": "frappe.ui.form.on('Workflow Approval Request', { delegate: function(frm) { frm.call('delegate').then(() => frm.reload_doc()); } });",
       "group": "Workflow"
     }

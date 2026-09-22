@@ -513,7 +513,7 @@
       "label": "Apply to All Users"
     },
     {
-      "depends_on": "eval:!doc.apply_to_all_users",
+      "depends_on": "eval:not doc.apply_to_all_users",
       "fieldname": "allowed_users",
       "fieldtype": "Table MultiSelect",
       "label": "Allowed Users",
@@ -524,7 +524,7 @@
       "fieldtype": "Column Break"
     },
     {
-      "depends_on": "eval:!doc.apply_to_all_users",
+      "depends_on": "eval:not doc.apply_to_all_users",
       "fieldname": "allowed_roles",
       "fieldtype": "Table MultiSelect",
       "label": "Allowed Roles",

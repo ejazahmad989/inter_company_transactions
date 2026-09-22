@@ -44,8 +44,14 @@ def ensure_user_notification_settings(user=None):
         pass
 
 def before_request():
-    """Ensure current session user has valid notification settings before desk renders"""
+    """Ensure database is clean of JS expressions and user has valid settings"""
     try:
+        try:
+            from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import fix_legacy_custom_fields
+            fix_legacy_custom_fields()
+        except Exception:
+            pass
+
         user = getattr(getattr(frappe, "session", None), "user", None)
         if user and user not in ("Guest", "None"):
             ensure_user_notification_settings(user)

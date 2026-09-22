@@ -5,6 +5,12 @@ import frappe
 def boot_session(bootinfo):
     """Add custom data to boot session"""
     try:
+        try:
+            from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import fix_legacy_custom_fields
+            fix_legacy_custom_fields()
+        except Exception:
+            pass
+
         if frappe.session.user != "Guest":
             # Add pending approvals count safely
             bootinfo["pending_approvals"] = 0

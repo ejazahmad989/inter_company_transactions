@@ -6,6 +6,13 @@ def after_migrate():
     """Execute after migration to restore data"""
     print("Running post-migration tasks for Inter Company Transactions...")
     
+    # Sanitize custom fields and doctypes to prevent SyntaxError
+    try:
+        from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import fix_legacy_custom_fields
+        fix_legacy_custom_fields(force=True)
+    except Exception as e:
+        print(f"Error sanitizing custom fields: {e}")
+
     # Restore backed up data
     restore_custom_data()
     
