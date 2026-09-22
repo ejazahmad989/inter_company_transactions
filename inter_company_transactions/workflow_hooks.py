@@ -1,4 +1,5 @@
 import frappe
+from frappe.utils import cint
 
 SUPPORTED_DOCTYPES = [
     "Sales Order", "Purchase Order", "Sales Invoice", "Purchase Invoice",
@@ -6,12 +7,31 @@ SUPPORTED_DOCTYPES = [
     "Payment Entry", "Quotation", "Supplier Quotation", "Material Request"
 ]
 
-def on_submit(doc, method):
+def on_submit(doc, method=None, *args, **kwargs):
     """Trigger workflow request on submission"""
     if doc.doctype in SUPPORTED_DOCTYPES:
-        create_workflow_request(doc)
+        create_workflow_request(doc, method, *args, **kwargs)
 
-def create_workflow_request(source_doc):
+def create_workflow_request(source_doc, method=None, *args, **kwargs):
+    if not source_doc:
+        return
+
+    # Check if ignore_workflow flag is set
+    if getattr(source_doc, "flags", None) and getattr(source_doc.flags, "ignore_workflow", False):
+        return
+
+    # Skip linked documents
+    if source_doc.get("intercompany_linked_doc_doctype"):
+        return
+
+    # Skip non-intercompany documents
+    if hasattr(source_doc, "meta") and source_doc.meta.has_field("is_intercompany") and not cint(source_doc.get("is_intercompany")):
+        return
+
+    target_company = source_doc.get("intercompany_target_company")
+    if target_company and target_company == source_doc.company:
+        return
+
     workflows = frappe.get_all("Inter Company Workflow",
         filters={
             "source_document_type": source_doc.doctype,

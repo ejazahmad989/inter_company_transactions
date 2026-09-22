@@ -1,16 +1,30 @@
 import frappe
 from frappe import _
-from frappe.utils import now_datetime, add_to_date, get_datetime, time_diff_in_hours
+from frappe.utils import cint, now_datetime, add_to_date, get_datetime, time_diff_in_hours
 import json
 
 @frappe.whitelist()
-def create_workflow_request(doc, method=None):
+def create_workflow_request(doc, method=None, *args, **kwargs):
     """Create workflow request when document is submitted"""
-    if doc.flags.ignore_workflow:
+    if not doc:
+        return
+
+    # Check if ignore_workflow flag is set
+    if getattr(doc, "flags", None) and getattr(doc.flags, "ignore_workflow", False):
         return
         
-    # Check if this is already a linked document
+    # Check if this is already a linked document (avoid re-triggering workflow)
     if doc.get("intercompany_linked_doc_doctype"):
+        return
+
+    # If document has is_intercompany field and it is not ticked (non-intercompany entry), skip workflow
+    has_ic = hasattr(doc, "meta") and doc.meta.has_field("is_intercompany")
+    if has_ic and not cint(doc.get("is_intercompany")):
+        return
+
+    # If target company is same as source company, not an intercompany transaction
+    target_company = doc.get("intercompany_target_company")
+    if target_company and target_company == doc.company:
         return
         
     # Find applicable workflow
@@ -43,12 +57,29 @@ def create_workflow_request(doc, method=None):
 
 def get_applicable_workflow(doc):
     """Find workflow matching this document"""
+    # If not an intercompany transaction, no intercompany workflow applies
+    has_ic = hasattr(doc, "meta") and doc.meta.has_field("is_intercompany")
+    if has_ic and not cint(doc.get("is_intercompany")):
+        return None
+
+    target_company = doc.get("intercompany_target_company")
+    if target_company and target_company == doc.company:
+        return None
+
+    filters = {
+        "source_document_type": doc.doctype,
+        "source_company": doc.company,
+        "enabled": 1
+    }
+    if target_company:
+        workflows = frappe.get_all("Inter Company Workflow",
+            filters={**filters, "target_company": target_company},
+            fields=["name"])
+        if workflows:
+            return frappe.get_doc("Inter Company Workflow", workflows[0].name)
+
     workflows = frappe.get_all("Inter Company Workflow",
-        filters={
-            "source_document_type": doc.doctype,
-            "source_company": doc.company,
-            "enabled": 1
-        },
+        filters=filters,
         fields=["name"])
         
     if workflows:
@@ -491,52 +522,16 @@ def cleanup_old_notifications():
         frappe.log_error(f"Error cleaning up old notifications: {str(e)}", "Cleanup Error")
 
 
-import frappe
-
 SUPPORTED_WORKFLOW_DOCTYPES = [
     "Sales Order", "Purchase Order", "Sales Invoice", "Purchase Invoice",
     "Delivery Note", "Purchase Receipt", "Stock Entry", "Journal Entry",
     "Payment Entry", "Quotation", "Supplier Quotation", "Material Request"
 ]
 
-def on_submit(doc, method):
+def on_submit(doc, method=None, *args, **kwargs):
     """Trigger workflow request on submission"""
     if doc.doctype in SUPPORTED_WORKFLOW_DOCTYPES:
-        create_workflow_request(doc)
-
-def create_workflow_request(source_doc):
-    workflows = frappe.get_all("Inter Company Workflow",
-        filters={
-            "source_document_type": source_doc.doctype,
-            "source_company": source_doc.company,
-            "enabled": 1
-        })
-
-    if not workflows:
-        return  # No workflow exists for this combination
-
-    workflow = frappe.get_doc("Inter Company Workflow", workflows[0].name)
-
-    request = frappe.new_doc("Workflow Approval Request")
-    request.update({
-        "workflow": workflow.name,
-        "document_type": source_doc.doctype,
-        "document_name": source_doc.name,
-        "source_company": source_doc.company,
-        "target_company": workflow.target_company,
-        "requested_by": frappe.session.user,
-        "required_approvals": workflow.approval_levels,
-        "status": "Pending",
-        "priority": "Medium"
-    })
-
-    if workflow.escalation_enabled:
-        request.due_date = frappe.utils.add_days(
-            frappe.utils.now_datetime(), workflow.escalation_hours / 24
-        )
-
-    request.insert()
-    request.notify_next_approvers()
+        create_workflow_request(doc, method, *args, **kwargs)
 
 
 import frappe
