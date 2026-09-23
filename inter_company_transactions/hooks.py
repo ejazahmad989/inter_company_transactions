@@ -132,8 +132,8 @@ scheduler_events = {
 doc_events = {
     "Sales Order": {
         "on_submit": [
-            "inter_company_transactions.workflow.create_workflow_request",
             "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
+            #"inter_company_transactions.workflow.create_workflow_request",
             #"inter_company_transactions.workflow.create_approval_request_if_required"
         ],
         "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
@@ -147,8 +147,8 @@ doc_events = {
     },
     "Purchase Order": {
         "on_submit": [ 
-            "inter_company_transactions.workflow.create_workflow_request",
             "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
+            #"inter_company_transactions.workflow.create_workflow_request",
         ],
         "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
         "validate": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_transaction",
@@ -158,8 +158,8 @@ doc_events = {
     },
     "Journal Entry": {
         "on_submit": [
-            "inter_company_transactions.workflow.create_workflow_request",
             "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
+            #"inter_company_transactions.workflow.create_workflow_request",
         ],
         "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
         "validate": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_transaction",
@@ -169,8 +169,8 @@ doc_events = {
     },
     "Payment Entry": {
         "on_submit": [
-            "inter_company_transactions.workflow.create_workflow_request",
             "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
+            #"inter_company_transactions.workflow.create_workflow_request",
         ],
         "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
         "validate": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_transaction",
@@ -180,7 +180,6 @@ doc_events = {
     },
     "Sales Invoice": {
           "on_submit": [
-              "inter_company_transactions.workflow.create_workflow_request",
               "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents"
           ],
           "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
@@ -194,7 +193,6 @@ doc_events = {
     },
     "Purchase Invoice": {
           "on_submit": [
-              "inter_company_transactions.workflow.create_workflow_request",
               "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents"
           ],
           "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",

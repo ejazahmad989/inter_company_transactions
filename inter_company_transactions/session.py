@@ -44,8 +44,14 @@ def ensure_user_notification_settings(user=None):
         pass
 
 def before_request():
-    """Ensure database is clean of JS expressions and user has valid settings"""
+    """Ensure database is clean of JS expressions, safe_eval patch is active, and user has valid settings"""
     try:
+        try:
+            from inter_company_transactions.safe_eval_patch import apply_safe_eval_patch
+            apply_safe_eval_patch()
+        except Exception:
+            pass
+
         try:
             from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import fix_legacy_custom_fields
             fix_legacy_custom_fields()

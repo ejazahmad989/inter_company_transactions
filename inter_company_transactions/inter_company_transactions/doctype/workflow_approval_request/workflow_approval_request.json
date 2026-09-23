@@ -1,24 +1,5 @@
 {
-  "actions": [
-    {
-      "label": "Approve",
-      "condition": "doc.status == 'Pending'",
-      "action": "frappe.ui.form.on('Workflow Approval Request', { approve: function(frm) { frm.call('approve').then(() => frm.reload_doc()); } });",
-      "group": "Workflow"
-    },
-    {
-      "label": "Reject",
-      "condition": "doc.status == 'Pending'",
-      "action": "frappe.ui.form.on('Workflow Approval Request', { reject: function(frm) { frm.call('reject').then(() => frm.reload_doc()); } });",
-      "group": "Workflow"
-    },
-    {
-      "label": "Delegate",
-      "condition": "doc.status == 'Pending'",
-      "action": "frappe.ui.form.on('Workflow Approval Request', { delegate: function(frm) { frm.call('delegate').then(() => frm.reload_doc()); } });",
-      "group": "Workflow"
-    }
-  ],
+  "actions": [],
   "allow_rename": 1,
   "autoname": "format:WAR-{document_type}-{#####}",
   "creation": "2024-01-01 00:00:00.000000",

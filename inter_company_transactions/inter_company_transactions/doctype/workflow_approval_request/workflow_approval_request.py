@@ -132,49 +132,23 @@ class WorkflowApprovalRequest(Document):
     def create_target_document(self):
         try:
             from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
-                create_purchase_order,
-                create_sales_order,
-                create_journal_entry,
-                create_payment_entry
+                create_linked_documents
             )
         except ImportError:
             from intercompany_transaction_link import (
-                create_purchase_order,
-                create_sales_order,
-                create_journal_entry,
-                create_payment_entry
+                create_linked_documents
             )
 
         source_doc = frappe.get_doc(self.document_type, self.document_name)
-        workflow = frappe.get_doc("Inter Company Workflow", self.workflow)
-
-        mapping_info = {
-            'mapping': {
-                'main_company': self.source_company,
-                'other_company': self.target_company,
-            },
-            'transaction_type': {
-                'source_type': workflow.source_document_type,
-                'target_type': workflow.target_document_type
-            },
-            'linked_company': self.get_linked_company_info()
-        }
+        try:
+            # Ensure safe_eval patch and legacy field fixes are active
+            from inter_company_transactions.safe_eval_patch import apply_safe_eval_patch
+            apply_safe_eval_patch()
+        except Exception:
+            pass
 
         try:
-            if workflow.target_document_type == "Purchase Order":
-                target_doc = create_purchase_order(source_doc, mapping_info, "source_to_target")
-            elif workflow.target_document_type == "Sales Order":
-                target_doc = create_sales_order(source_doc, mapping_info, "source_to_target")
-            elif workflow.target_document_type == "Journal Entry":
-                target_doc = create_journal_entry(source_doc, mapping_info, "source_to_target")
-            elif workflow.target_document_type == "Payment Entry":
-                target_doc = create_payment_entry(source_doc, mapping_info, "source_to_target")
-            else:
-                frappe.throw(f"Unsupported target document type: {workflow.target_document_type}")
-
-            if target_doc:
-                self.finalize_target_document(target_doc)
-
+            create_linked_documents(source_doc)
         except Exception as e:
             self.handle_creation_error(e)
 

@@ -9,51 +9,77 @@ def create_workflow_request(doc, method=None, *args, **kwargs):
     if not doc:
         return
 
-    # Check if ignore_workflow flag is set
-    if getattr(doc, "flags", None) and getattr(doc.flags, "ignore_workflow", False):
-        return
-        
-    # Check if this is already a linked document (avoid re-triggering workflow)
-    if doc.get("intercompany_linked_doc_doctype"):
-        return
+    try:
+        from inter_company_transactions.safe_eval_patch import apply_safe_eval_patch
+        apply_safe_eval_patch()
+    except Exception:
+        pass
 
-    # If document has is_intercompany field and it is not ticked (non-intercompany entry), skip workflow
-    has_ic = hasattr(doc, "meta") and doc.meta.has_field("is_intercompany")
-    if has_ic and not cint(doc.get("is_intercompany")):
-        return
+    try:
+        from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import fix_legacy_custom_fields
+        fix_legacy_custom_fields()
+    except Exception:
+        pass
 
-    # If target company is same as source company, not an intercompany transaction
-    target_company = doc.get("intercompany_target_company")
-    if target_company and target_company == doc.company:
-        return
+    try:
+        # Check if ignore_workflow flag is set
+        if getattr(doc, "flags", None) and getattr(doc.flags, "ignore_workflow", False):
+            return
+            
+        # Check if this is already a linked document (avoid re-triggering workflow)
+        if doc.get("intercompany_linked_doc_doctype"):
+            return
+
+        # If document has is_intercompany field and it is not ticked (non-intercompany entry), skip workflow
+        has_ic = hasattr(doc, "meta") and doc.meta.has_field("is_intercompany")
+        if has_ic and not cint(doc.get("is_intercompany")):
+            return
+
+        # If target company is same as source company, not an intercompany transaction
+        target_company = doc.get("intercompany_target_company")
+        if target_company and target_company == doc.company:
+            return
+            
+        # Find applicable workflow
+        workflow = get_applicable_workflow(doc)
+        if not workflow or not cint(getattr(workflow, "approval_required", 1)):
+            return
+            
+        # Create workflow approval request
+        request = frappe.new_doc("Workflow Approval Request")
+        request.update({
+            "workflow": workflow.name,
+            "document_type": doc.doctype,
+            "document_name": doc.name,
+            "source_company": doc.company,
+            "target_company": workflow.target_company,
+            "requested_by": frappe.session.user,
+            "required_approvals": getattr(workflow, "approval_levels", 1),
+            "status": "Pending",
+            "priority": "Medium"
+        })
         
-    # Find applicable workflow
-    workflow = get_applicable_workflow(doc)
-    if not workflow:
-        return
+        if getattr(workflow, "escalation_enabled", False) and getattr(workflow, "escalation_hours", None):
+            try:
+                request.due_date = frappe.utils.add_days(
+                    frappe.utils.now_datetime(), 
+                    float(workflow.escalation_hours) / 24.0
+                )
+            except Exception:
+                pass
         
-    # Create workflow approval request
-    request = frappe.new_doc("Workflow Approval Request")
-    request.update({
-        "workflow": workflow.name,
-        "document_type": doc.doctype,
-        "document_name": doc.name,
-        "source_company": doc.company,
-        "target_company": workflow.target_company,
-        "requested_by": frappe.session.user,
-        "required_approvals": workflow.approval_levels,
-        "status": "Pending",
-        "priority": "Medium"
-    })
-    
-    if workflow.escalation_enabled:
-        request.due_date = frappe.utils.add_days(
-            frappe.utils.now_datetime(), 
-            workflow.escalation_hours/24
+        request.flags.ignore_permissions = True
+        request.flags.ignore_mandatory = True
+        request.insert(ignore_permissions=True)
+        try:
+            request.notify_next_approvers()
+        except Exception as notify_err:
+            frappe.logger("workflow").warning(f"Failed to notify approvers: {notify_err}")
+
+    except Exception as e:
+        frappe.logger("workflow").error(
+            f"Error creating workflow request for {doc.doctype} {doc.name}: {e}"
         )
-    
-    request.insert(ignore_permissions=True)
-    request.notify_next_approvers()
 
 def get_applicable_workflow(doc):
     """Find workflow matching this document"""

@@ -26,6 +26,13 @@ def validate_backdate(doc, method):
     if posting_date == today:
         return
 
+    # Check if Backdate Whitelist exists
+    try:
+        if not (hasattr(frappe, "db") and frappe.db and frappe.db.table_exists("Backdate Whitelist")):
+            return
+    except Exception:
+        return
+
     # ? For backdated entry, check whitelist
     whitelist = frappe.get_all(
         "Backdate Whitelist",

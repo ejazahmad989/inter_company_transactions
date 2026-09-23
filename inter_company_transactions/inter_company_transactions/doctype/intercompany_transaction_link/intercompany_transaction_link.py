@@ -141,25 +141,55 @@ _legacy_cleanup_done = False
 def fix_legacy_custom_fields(force=False):
 	"""
 	Comprehensive self-healing check:
-	1. Cleans up intercompany_target_company custom fields to ensure mandatory_depends_on
+	1. Applies safe_eval patch to prevent runtime SyntaxErrors from JavaScript operators.
+	2. Cleans up tabDocType Action (removes raw JS action scripts like frappe.ui.form.on).
+	3. Cleans up intercompany_target_company custom fields to ensure mandatory_depends_on
 	   and read_only_depends_on are empty (validation is strictly handled in Python and JS).
-	2. Cleans up any JavaScript operators (&&, ||, ===, eval:!) in tabCustom Field,
-	   tabDocField, and tabProperty Setter which cause Python safe_eval SyntaxErrors.
-	3. Cleans up tabDocType Action conditions (e.g. Workflow Approval Request doc.status == 'Pending').
+	4. Cleans up any JavaScript operators (&&, ||, ===, !==, eval:!) in tabCustom Field,
+	   tabDocField, and tabProperty Setter.
+	5. Cleans up tabNotification and tabWorkflow Transition condition fields.
 	"""
 	global _legacy_cleanup_done
 	if _legacy_cleanup_done and not force:
 		return
 
 	try:
+		try:
+			from inter_company_transactions.safe_eval_patch import apply_safe_eval_patch
+			apply_safe_eval_patch()
+		except Exception:
+			pass
+
 		if not (hasattr(frappe, "db") and frappe.db):
 			return
 
 		changed = False
 
-		# 1. Clean tabCustom Field for intercompany_target_company
+		# 1. Clean tabDocType Action (remove client-side JS actions from server table)
+		if frappe.db.table_exists("DocType Action"):
+			try:
+				frappe.db.sql(
+					"""
+					DELETE FROM `tabDocType Action`
+					WHERE parent = 'Workflow Approval Request'
+					   OR action LIKE '%function(%'
+					   OR action LIKE '%frappe.ui%'
+					   OR action LIKE '%frm.call%'
+					"""
+				)
+				frappe.db.sql(
+					"""
+					UPDATE `tabDocType Action`
+					SET `condition` = REPLACE(REPLACE(REPLACE(REPLACE(`condition`, '===', '=='), '!==', '!='), '&&', 'and'), '||', 'or')
+					WHERE `condition` LIKE '%===%' OR `condition` LIKE '%!==%' OR `condition` LIKE '%&&%' OR `condition` LIKE '%||%'
+					"""
+				)
+				changed = True
+			except Exception:
+				pass
+
+		# 2. Clean tabCustom Field
 		if frappe.db.table_exists("Custom Field"):
-			# Clear mandatory_depends_on and read_only_depends_on for intercompany_target_company
 			frappe.db.sql(
 				"""
 				UPDATE `tabCustom Field`
@@ -170,37 +200,32 @@ def fix_legacy_custom_fields(force=False):
 				       OR read_only_depends_on IS NOT NULL AND read_only_depends_on != '')
 				"""
 			)
-			# Clean JS operators in all custom fields
 			frappe.db.sql(
 				"""
 				UPDATE `tabCustom Field`
-				SET mandatory_depends_on = REPLACE(REPLACE(REPLACE(mandatory_depends_on, '===', '=='), '&&', 'and'), '||', 'or')
-				WHERE mandatory_depends_on LIKE '%&&%' OR mandatory_depends_on LIKE '%||%' OR mandatory_depends_on LIKE '%===%'
+				SET mandatory_depends_on = REPLACE(REPLACE(REPLACE(REPLACE(mandatory_depends_on, '===', '=='), '!==', '!='), '&&', 'and'), '||', 'or')
+				WHERE mandatory_depends_on LIKE '%&&%' OR mandatory_depends_on LIKE '%||%' OR mandatory_depends_on LIKE '%===%' OR mandatory_depends_on LIKE '%!==%'
 				"""
 			)
 			frappe.db.sql(
 				"""
 				UPDATE `tabCustom Field`
-				SET read_only_depends_on = REPLACE(REPLACE(REPLACE(read_only_depends_on, '===', '=='), '&&', 'and'), '||', 'or')
-				WHERE read_only_depends_on LIKE '%&&%' OR read_only_depends_on LIKE '%||%' OR read_only_depends_on LIKE '%===%'
+				SET read_only_depends_on = REPLACE(REPLACE(REPLACE(REPLACE(read_only_depends_on, '===', '=='), '!==', '!='), '&&', 'and'), '||', 'or')
+				WHERE read_only_depends_on LIKE '%&&%' OR read_only_depends_on LIKE '%||%' OR read_only_depends_on LIKE '%===%' OR read_only_depends_on LIKE '%!==%'
 				"""
 			)
 			frappe.db.sql(
 				"""
 				UPDATE `tabCustom Field`
-				SET depends_on = REPLACE(REPLACE(REPLACE(REPLACE(depends_on, '===', '=='), '&&', 'and'), '||', 'or'), 'eval:!', 'eval:not ')
-				WHERE depends_on LIKE '%&&%' OR depends_on LIKE '%||%' OR depends_on LIKE '%===%' OR depends_on LIKE '%eval:!%'
+				SET depends_on = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(depends_on, '===', '=='), '!==', '!='), '&&', 'and'), '||', 'or'), 'eval:!', 'eval:not ')
+				WHERE depends_on LIKE '%&&%' OR depends_on LIKE '%||%' OR depends_on LIKE '%===%' OR depends_on LIKE '%!==%' OR depends_on LIKE '%eval:!%'
 				"""
 			)
-			changed = True
-
-		# 2. Clean tabDocType Action conditions
-		if frappe.db.table_exists("DocType Action"):
 			frappe.db.sql(
 				"""
-				UPDATE `tabDocType Action`
-				SET `condition` = REPLACE(REPLACE(REPLACE(REPLACE(`condition`, '===', '=='), '&&', 'and'), '||', 'or'), 'eval:', '')
-				WHERE `condition` LIKE '%===%' OR `condition` LIKE '%&&%' OR `condition` LIKE '%||%' OR `condition` LIKE '%eval:%'
+				UPDATE `tabCustom Field`
+				SET depends_on = REPLACE(depends_on, 'eval: !', 'eval:not ')
+				WHERE depends_on LIKE '%eval: !%'
 				"""
 			)
 			changed = True
@@ -210,22 +235,29 @@ def fix_legacy_custom_fields(force=False):
 			frappe.db.sql(
 				"""
 				UPDATE `tabDocField`
-				SET depends_on = REPLACE(REPLACE(REPLACE(REPLACE(depends_on, '===', '=='), '&&', 'and'), '||', 'or'), 'eval:!', 'eval:not ')
-				WHERE depends_on LIKE '%&&%' OR depends_on LIKE '%||%' OR depends_on LIKE '%===%' OR depends_on LIKE '%eval:!%'
+				SET depends_on = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(depends_on, '===', '=='), '!==', '!='), '&&', 'and'), '||', 'or'), 'eval:!', 'eval:not ')
+				WHERE depends_on LIKE '%&&%' OR depends_on LIKE '%||%' OR depends_on LIKE '%===%' OR depends_on LIKE '%!==%' OR depends_on LIKE '%eval:!%'
 				"""
 			)
 			frappe.db.sql(
 				"""
 				UPDATE `tabDocField`
-				SET mandatory_depends_on = REPLACE(REPLACE(REPLACE(mandatory_depends_on, '===', '=='), '&&', 'and'), '||', 'or')
-				WHERE mandatory_depends_on LIKE '%&&%' OR mandatory_depends_on LIKE '%||%' OR mandatory_depends_on LIKE '%===%'
+				SET depends_on = REPLACE(depends_on, 'eval: !', 'eval:not ')
+				WHERE depends_on LIKE '%eval: !%'
 				"""
 			)
 			frappe.db.sql(
 				"""
 				UPDATE `tabDocField`
-				SET read_only_depends_on = REPLACE(REPLACE(REPLACE(read_only_depends_on, '===', '=='), '&&', 'and'), '||', 'or')
-				WHERE read_only_depends_on LIKE '%&&%' OR read_only_depends_on LIKE '%||%' OR read_only_depends_on LIKE '%===%'
+				SET mandatory_depends_on = REPLACE(REPLACE(REPLACE(REPLACE(mandatory_depends_on, '===', '=='), '!==', '!='), '&&', 'and'), '||', 'or')
+				WHERE mandatory_depends_on LIKE '%&&%' OR mandatory_depends_on LIKE '%||%' OR mandatory_depends_on LIKE '%===%' OR mandatory_depends_on LIKE '%!==%'
+				"""
+			)
+			frappe.db.sql(
+				"""
+				UPDATE `tabDocField`
+				SET read_only_depends_on = REPLACE(REPLACE(REPLACE(REPLACE(read_only_depends_on, '===', '=='), '!==', '!='), '&&', 'and'), '||', 'or')
+				WHERE read_only_depends_on LIKE '%&&%' OR read_only_depends_on LIKE '%||%' OR read_only_depends_on LIKE '%===%' OR read_only_depends_on LIKE '%!==%'
 				"""
 			)
 			changed = True
@@ -235,12 +267,40 @@ def fix_legacy_custom_fields(force=False):
 			frappe.db.sql(
 				"""
 				UPDATE `tabProperty Setter`
-				SET `value` = REPLACE(REPLACE(REPLACE(REPLACE(`value`, '===', '=='), '&&', 'and'), '||', 'or'), 'eval:!', 'eval:not ')
+				SET `value` = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(`value`, '===', '=='), '!==', '!='), '&&', 'and'), '||', 'or'), 'eval:!', 'eval:not ')
 				WHERE `property` IN ('depends_on', 'mandatory_depends_on', 'read_only_depends_on')
-				  AND (`value` LIKE '%&&%' OR `value` LIKE '%||%' OR `value` LIKE '%===%' OR `value` LIKE '%eval:!%')
+				  AND (`value` LIKE '%&&%' OR `value` LIKE '%||%' OR `value` LIKE '%===%' OR `value` LIKE '%!==%' OR `value` LIKE '%eval:!%')
 				"""
 			)
 			changed = True
+
+		# 5. Clean tabNotification if present
+		if frappe.db.table_exists("Notification"):
+			try:
+				frappe.db.sql(
+					"""
+					UPDATE `tabNotification`
+					SET `condition` = REPLACE(REPLACE(REPLACE(REPLACE(`condition`, '===', '=='), '!==', '!='), '&&', 'and'), '||', 'or')
+					WHERE `condition` LIKE '%===%' OR `condition` LIKE '%!==%' OR `condition` LIKE '%&&%' OR `condition` LIKE '%||%'
+					"""
+				)
+				changed = True
+			except Exception:
+				pass
+
+		# 6. Clean tabWorkflow Transition if present
+		if frappe.db.table_exists("Workflow Transition"):
+			try:
+				frappe.db.sql(
+					"""
+					UPDATE `tabWorkflow Transition`
+					SET `condition` = REPLACE(REPLACE(REPLACE(REPLACE(`condition`, '===', '=='), '!==', '!='), '&&', 'and'), '||', 'or')
+					WHERE `condition` LIKE '%===%' OR `condition` LIKE '%!==%' OR `condition` LIKE '%&&%' OR `condition` LIKE '%||%'
+					"""
+				)
+				changed = True
+			except Exception:
+				pass
 
 		if changed:
 			frappe.db.commit()
