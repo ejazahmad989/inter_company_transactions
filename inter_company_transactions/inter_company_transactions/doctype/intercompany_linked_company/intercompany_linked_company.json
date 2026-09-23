@@ -9,10 +9,12 @@
     "main_company_customer",
     "main_company_supplier",
     "main_company_account",
-    "section_break_2", 
+    "main_company_warehouse",
+    "section_break_2",
     "other_company_customer",
     "other_company_supplier",
-    "other_company_account"
+    "other_company_account",
+    "other_company_warehouse"
   ],
   "fields": [
     {
@@ -70,6 +72,20 @@
       "label": "Other Company Account",
       "options": "Account",
       "description": "Account in this company for transactions with main company"
+    },
+    {
+      "fieldname": "main_company_warehouse",
+      "fieldtype": "Link",
+      "label": "Main Company Transit Warehouse",
+      "options": "Warehouse",
+      "description": "Transit / Intercompany warehouse in main company for this pair"
+    },
+    {
+      "fieldname": "other_company_warehouse",
+      "fieldtype": "Link",
+      "label": "Other Company Transit Warehouse",
+      "options": "Warehouse",
+      "description": "Transit / Intercompany warehouse in linked company for this pair"
     }
   ],
   "istable": 1,

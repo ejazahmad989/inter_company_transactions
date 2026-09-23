@@ -150,6 +150,12 @@ def create_doctypes():
                     "options": "Account"
                 },
                 {
+                    "fieldname": "main_company_warehouse",
+                    "fieldtype": "Link",
+                    "label": "Main Company Transit Warehouse",
+                    "options": "Warehouse"
+                },
+                {
                     "fieldname": "section_break_2",
                     "fieldtype": "Section Break",
                     "label": "Other Company Settings"
@@ -171,6 +177,12 @@ def create_doctypes():
                     "fieldtype": "Link",
                     "label": "Other Company Account",
                     "options": "Account"
+                },
+                {
+                    "fieldname": "other_company_warehouse",
+                    "fieldtype": "Link",
+                    "label": "Other Company Transit Warehouse",
+                    "options": "Warehouse"
                 }
             ]
         },

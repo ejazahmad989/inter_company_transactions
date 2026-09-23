@@ -172,6 +172,7 @@ doc_events = {
         "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
     },
     "Stock Entry": {
+        "validate": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.sanitize_intercompany_stock_entry",
         "on_submit": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
         "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents"
     },

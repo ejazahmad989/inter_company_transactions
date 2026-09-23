@@ -833,6 +833,24 @@ def get_intercompany_warehouse(company):
     return warehouse
 
 
+def sanitize_intercompany_stock_entry(doc, method=None):
+    """
+    Ensures that an intercompany Material Receipt Stock Entry never contains
+    cross-company source warehouses which trigger ERPNext's 'Warehouse does not belong to company' error.
+    """
+    if doc.purpose == "Material Receipt":
+        if doc.from_warehouse:
+            from_wh_comp = frappe.db.get_value("Warehouse", doc.from_warehouse, "company")
+            if from_wh_comp and from_wh_comp != doc.company:
+                doc.from_warehouse = None
+                
+        for d in doc.get("items", []):
+            if d.s_warehouse:
+                s_wh_comp = frappe.db.get_value("Warehouse", d.s_warehouse, "company")
+                if s_wh_comp and s_wh_comp != doc.company:
+                    d.s_warehouse = None
+
+
 def create_stock_entry(source_stock_entry, mapping, linked_company, direction):
     """
     Creates a paired Stock Entry in target company for inter-company stock transfer.
@@ -843,9 +861,11 @@ def create_stock_entry(source_stock_entry, mapping, linked_company, direction):
     if direction == "other_to_main":
         se.company = mapping.main_company
         target_warehouse_company = mapping.main_company
+        target_warehouse = getattr(linked_company, "main_company_warehouse", None)
     else:
         se.company = linked_company.company
         target_warehouse_company = linked_company.company
+        target_warehouse = getattr(linked_company, "other_company_warehouse", None)
 
     # Receive into target company's transit or receiving warehouse
     se.stock_entry_type = "Material Receipt"
@@ -855,21 +875,28 @@ def create_stock_entry(source_stock_entry, mapping, linked_company, direction):
     se.posting_time = getattr(source_stock_entry, "posting_time", None)
     se.set_posting_time = getattr(source_stock_entry, "set_posting_time", 0)
     
-    target_warehouse = get_intercompany_warehouse(target_warehouse_company)
+    if not target_warehouse:
+        target_warehouse = get_intercompany_warehouse(target_warehouse_company)
     if not target_warehouse:
         target_warehouse = frappe.db.get_value("Warehouse", {"company": target_warehouse_company, "is_group": 0}, "name")
+
+    # In ERPNext, a Stock Entry in target company MUST NOT have from_warehouse set to another company!
+    se.from_warehouse = None
+    se.to_warehouse = target_warehouse
 
     for item in source_stock_entry.items:
         if not frappe.db.exists("Item", item.item_code):
             continue
             
+        rate = getattr(item, "basic_rate", 0) or getattr(item, "valuation_rate", 0) or 0
         se.append("items", {
             "item_code": item.item_code,
             "qty": item.qty,
             "uom": item.uom,
+            "s_warehouse": None,
             "t_warehouse": target_warehouse,
-            "basic_rate": getattr(item, "basic_rate", 0) or getattr(item, "valuation_rate", 0) or 0,
-            "basic_amount": (getattr(item, "basic_rate", 0) or getattr(item, "valuation_rate", 0) or 0) * item.qty,
+            "basic_rate": rate,
+            "basic_amount": rate * item.qty,
             "conversion_factor": getattr(item, "conversion_factor", 1) or 1
         })
 
@@ -887,6 +914,13 @@ def create_stock_entry(source_stock_entry, mapping, linked_company, direction):
         se.set_missing_values(for_validate=True)
     except Exception:
         pass
+
+    # Re-enforce clean warehouse state after set_missing_values
+    se.from_warehouse = None
+    for d in se.items:
+        d.s_warehouse = None
+        if not d.t_warehouse:
+            d.t_warehouse = target_warehouse
 
     se.docstatus = 0  # Draft
     return se
