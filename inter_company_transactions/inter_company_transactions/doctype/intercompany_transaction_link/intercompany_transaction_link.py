@@ -154,12 +154,6 @@ def fix_legacy_custom_fields(force=False):
 		return
 
 	try:
-		try:
-			from inter_company_transactions.safe_eval_patch import apply_safe_eval_patch
-			apply_safe_eval_patch()
-		except Exception:
-			pass
-
 		if not (hasattr(frappe, "db") and frappe.db):
 			return
 

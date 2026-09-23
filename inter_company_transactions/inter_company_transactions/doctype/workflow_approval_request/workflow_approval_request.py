@@ -141,13 +141,6 @@ class WorkflowApprovalRequest(Document):
 
         source_doc = frappe.get_doc(self.document_type, self.document_name)
         try:
-            # Ensure safe_eval patch and legacy field fixes are active
-            from inter_company_transactions.safe_eval_patch import apply_safe_eval_patch
-            apply_safe_eval_patch()
-        except Exception:
-            pass
-
-        try:
             create_linked_documents(source_doc)
         except Exception as e:
             self.handle_creation_error(e)
