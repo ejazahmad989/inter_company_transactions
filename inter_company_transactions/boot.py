@@ -13,7 +13,7 @@ def boot_session(bootinfo):
 
         try:
             from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import fix_legacy_custom_fields
-            fix_legacy_custom_fields()
+            fix_legacy_custom_fields(force=True)
         except Exception:
             pass
 

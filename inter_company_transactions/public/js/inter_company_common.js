@@ -2,6 +2,104 @@
 // Desk enhancements for intercompany transactions
 
 (function() {
+	/**
+	 * Client-side sanitizer for depends_on, mandatory_depends_on, and read_only_depends_on.
+	 * Translates Python-style operators ("not ", " and ", " or ") into valid JavaScript ("!", " && ", " || ")
+	 * and ensures forms / grid rows NEVER crash with 'Invalid "depends_on" expression'.
+	 */
+	function sanitize_depends_on_expression(expression) {
+		if (!expression || typeof expression !== 'string') return expression;
+		let expr = expression.trim();
+		let hasEval = false;
+		if (expr.startsWith('eval:')) {
+			hasEval = true;
+			expr = expr.substring(5).trim();
+		}
+
+		// Replace Python negation "not " with JS "!"
+		expr = expr.replace(/\bnot\s+(?=[a-zA-Z0-9_\(\[\$])/g, '!');
+		// Replace Python "and" with JS "&&"
+		expr = expr.replace(/\s+and\s+/g, ' && ');
+		// Replace Python "or" with JS "||"
+		expr = expr.replace(/\s+or\s+/g, ' || ');
+		// Replace Python True, False, None
+		expr = expr.replace(/\bTrue\b/g, 'true');
+		expr = expr.replace(/\bFalse\b/g, 'false');
+		expr = expr.replace(/\bNone\b/g, 'null');
+
+		return hasEval ? ('eval:' + expr) : expr;
+	}
+
+	function patch_evaluate_depends_on() {
+		try {
+			if (window.frappe && frappe.ui && frappe.ui.form) {
+				// 1. Patch frappe.ui.form.evaluate_depends_on_value
+				if (frappe.ui.form.evaluate_depends_on_value && !frappe.ui.form.evaluate_depends_on_value._ict_sanitized) {
+					const orig_eval = frappe.ui.form.evaluate_depends_on_value;
+					frappe.ui.form.evaluate_depends_on_value = function(expression, doc, parent) {
+						if (!expression) return true;
+						const sanitized = sanitize_depends_on_expression(expression);
+						try {
+							return orig_eval.call(this, sanitized, doc, parent);
+						} catch (err) {
+							try {
+								let code = sanitized;
+								if (code.startsWith('eval:')) {
+									code = code.substring(5);
+								}
+								let fn = new Function('doc', 'parent', 'let out = ' + code + '; return out;');
+								return fn(doc, parent);
+							} catch (evalErr) {
+								console.warn('[ICT] Safely caught invalid depends_on expression:', expression, evalErr);
+								return false;
+							}
+						}
+					};
+					frappe.ui.form.evaluate_depends_on_value._ict_sanitized = true;
+				}
+
+				// 2. Patch frappe.ui.form.GridRow.prototype.evaluate_depends_on_value
+				if (frappe.ui.form.GridRow && frappe.ui.form.GridRow.prototype.evaluate_depends_on_value && !frappe.ui.form.GridRow.prototype.evaluate_depends_on_value._ict_sanitized) {
+					const orig_grid_eval = frappe.ui.form.GridRow.prototype.evaluate_depends_on_value;
+					frappe.ui.form.GridRow.prototype.evaluate_depends_on_value = function(expression) {
+						if (!expression) return true;
+						const sanitized = sanitize_depends_on_expression(expression);
+						try {
+							return orig_grid_eval.call(this, sanitized);
+						} catch (err) {
+							try {
+								let doc = this.doc;
+								let parent = (this.grid && (this.grid.df.doc || (this.grid.frm && this.grid.frm.doc))) || null;
+								if (!parent && doc && doc.parent && window.locals && window.locals[doc.parenttype]) {
+									parent = window.locals[doc.parenttype][doc.parent];
+								}
+								let code = sanitized;
+								if (code.startsWith('eval:')) {
+									code = code.substring(5);
+								}
+								let fn = new Function('doc', 'parent', 'let out = ' + code + '; return out;');
+								return fn(doc, parent);
+							} catch (evalErr) {
+								console.warn('[ICT GridRow] Safely caught invalid depends_on expression:', expression, evalErr);
+								return false;
+							}
+						}
+					};
+					frappe.ui.form.GridRow.prototype.evaluate_depends_on_value._ict_sanitized = true;
+				}
+			}
+		} catch (e) {
+			// Protection should never fail silently or break caller
+		}
+	}
+
+	// Install immediately and when document is ready
+	patch_evaluate_depends_on();
+	if (typeof $ !== 'undefined') {
+		$(document).ready(patch_evaluate_depends_on);
+		$(document).on('page-change', patch_evaluate_depends_on);
+	}
+
 	const supportedDocTypes = [
 		'Sales Order',
 		'Purchase Order',

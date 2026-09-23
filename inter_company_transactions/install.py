@@ -422,7 +422,7 @@ def create_doctypes():
                     "fieldtype": "Table",
                     "label": "Specific Companies",
                     "options": "Backdate Permission Company",
-                    "depends_on": "eval:not doc.applies_to_all_companies"
+                    "depends_on": "eval:!doc.applies_to_all_companies"
                 },
                 {
                     "fieldname": "allow_backdate",
