@@ -202,103 +202,91 @@ def fix_legacy_custom_fields(force=False):
 				       OR read_only_depends_on IS NOT NULL AND read_only_depends_on != '')
 				"""
 			)
-			frappe.db.sql(
-				"""
-				UPDATE `tabCustom Field`
-				SET depends_on = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(depends_on,
-					'eval:not ', 'eval:!'),
-					'eval: not ', 'eval:!'),
-					'not parent.', '!parent.'),
-					'not doc.', '!doc.'),
-					' and ', ' && '),
-					' or ', ' || ')
-				WHERE depends_on LIKE '%eval:not %'
-				   OR depends_on LIKE '%eval: not %'
-				   OR depends_on LIKE '%not parent.%'
-				   OR depends_on LIKE '%not doc.%'
-				   OR (depends_on LIKE '% and %' AND depends_on NOT LIKE '%stand%')
-				   OR depends_on LIKE '% or %'
-				"""
-			)
-			frappe.db.sql(
-				"""
-				UPDATE `tabCustom Field`
-				SET mandatory_depends_on = REPLACE(REPLACE(REPLACE(REPLACE(mandatory_depends_on,
-					'eval:not ', 'eval:!'),
-					'not doc.', '!doc.'),
-					' and ', ' && '),
-					' or ', ' || ')
-				WHERE mandatory_depends_on LIKE '%eval:not %'
-				   OR mandatory_depends_on LIKE '%not doc.%'
-				   OR mandatory_depends_on LIKE '% and %'
-				   OR mandatory_depends_on LIKE '% or %'
-				"""
-			)
-			frappe.db.sql(
-				"""
-				UPDATE `tabCustom Field`
-				SET read_only_depends_on = REPLACE(REPLACE(REPLACE(REPLACE(read_only_depends_on,
-					'eval:not ', 'eval:!'),
-					'not doc.', '!doc.'),
-					' and ', ' && '),
-					' or ', ' || ')
-				WHERE read_only_depends_on LIKE '%eval:not %'
-				   OR read_only_depends_on LIKE '%not doc.%'
-				   OR read_only_depends_on LIKE '% and %'
-				   OR read_only_depends_on LIKE '% or %'
-				"""
-			)
+			for col in ('depends_on', 'mandatory_depends_on', 'read_only_depends_on'):
+				frappe.db.sql(
+					f"""
+					UPDATE `tabCustom Field`
+					SET `{col}` = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(`{col}`,
+						'eval:not ', 'eval:!'),
+						'eval: not ', 'eval:!'),
+						'not parent.', '!parent.'),
+						'not doc.', '!doc.'),
+						'1or(', '1 || ('),
+						'0or(', '0 || ('),
+						')or(', ') || ('),
+						')or', ') || '),
+						'1or', '1 || '),
+						'0or', '0 || '),
+						'or(', ' || ('),
+						'1and(', '1 && ('),
+						'0and(', '0 && ('),
+						'and(', ' && (')
+					WHERE `{col}` LIKE '%eval:not %'
+					   OR `{col}` LIKE '%eval: not %'
+					   OR `{col}` LIKE '%not parent.%'
+					   OR `{col}` LIKE '%not doc.%'
+					   OR `{col}` LIKE '%or(%'
+					   OR `{col}` LIKE '%)or%'
+					   OR `{col}` LIKE '%1or%'
+					   OR `{col}` LIKE '%0or%'
+					   OR `{col}` LIKE '%and(%'
+					   OR `{col}` LIKE '%)and%'
+					   OR `{col}` LIKE '%1and%'
+					   OR `{col}` LIKE '%0and%'
+					"""
+				)
+				frappe.db.sql(
+					f"""
+					UPDATE `tabCustom Field`
+					SET `{col}` = REPLACE(REPLACE(`{col}`, ' and ', ' && '), ' or ', ' || ')
+					WHERE `{col}` LIKE '% and %' OR `{col}` LIKE '% or %'
+					"""
+				)
 			changed = True
 
 		# 3. Clean tabDocField:
 		# RESTORE valid JavaScript operators in depends_on, mandatory_depends_on, read_only_depends_on
 		if frappe.db.table_exists("DocField"):
-			frappe.db.sql(
-				"""
-				UPDATE `tabDocField`
-				SET depends_on = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(depends_on,
-					'eval:not ', 'eval:!'),
-					'eval: not ', 'eval:!'),
-					'not parent.', '!parent.'),
-					'not doc.', '!doc.'),
-					' and ', ' && '),
-					' or ', ' || ')
-				WHERE depends_on LIKE '%eval:not %'
-				   OR depends_on LIKE '%eval: not %'
-				   OR depends_on LIKE '%not parent.%'
-				   OR depends_on LIKE '%not doc.%'
-				   OR (depends_on LIKE '% and %' AND depends_on NOT LIKE '%stand%')
-				   OR depends_on LIKE '% or %'
-				"""
-			)
-			frappe.db.sql(
-				"""
-				UPDATE `tabDocField`
-				SET mandatory_depends_on = REPLACE(REPLACE(REPLACE(REPLACE(mandatory_depends_on,
-					'eval:not ', 'eval:!'),
-					'not doc.', '!doc.'),
-					' and ', ' && '),
-					' or ', ' || ')
-				WHERE mandatory_depends_on LIKE '%eval:not %'
-				   OR mandatory_depends_on LIKE '%not doc.%'
-				   OR mandatory_depends_on LIKE '% and %'
-				   OR mandatory_depends_on LIKE '% or %'
-				"""
-			)
-			frappe.db.sql(
-				"""
-				UPDATE `tabDocField`
-				SET read_only_depends_on = REPLACE(REPLACE(REPLACE(REPLACE(read_only_depends_on,
-					'eval:not ', 'eval:!'),
-					'not doc.', '!doc.'),
-					' and ', ' && '),
-					' or ', ' || ')
-				WHERE read_only_depends_on LIKE '%eval:not %'
-				   OR read_only_depends_on LIKE '%not doc.%'
-				   OR read_only_depends_on LIKE '% and %'
-				   OR read_only_depends_on LIKE '% or %'
-				"""
-			)
+			for col in ('depends_on', 'mandatory_depends_on', 'read_only_depends_on'):
+				frappe.db.sql(
+					f"""
+					UPDATE `tabDocField`
+					SET `{col}` = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(`{col}`,
+						'eval:not ', 'eval:!'),
+						'eval: not ', 'eval:!'),
+						'not parent.', '!parent.'),
+						'not doc.', '!doc.'),
+						'1or(', '1 || ('),
+						'0or(', '0 || ('),
+						')or(', ') || ('),
+						')or', ') || '),
+						'1or', '1 || '),
+						'0or', '0 || '),
+						'or(', ' || ('),
+						'1and(', '1 && ('),
+						'0and(', '0 && ('),
+						'and(', ' && (')
+					WHERE `{col}` LIKE '%eval:not %'
+					   OR `{col}` LIKE '%eval: not %'
+					   OR `{col}` LIKE '%not parent.%'
+					   OR `{col}` LIKE '%not doc.%'
+					   OR `{col}` LIKE '%or(%'
+					   OR `{col}` LIKE '%)or%'
+					   OR `{col}` LIKE '%1or%'
+					   OR `{col}` LIKE '%0or%'
+					   OR `{col}` LIKE '%and(%'
+					   OR `{col}` LIKE '%)and%'
+					   OR `{col}` LIKE '%1and%'
+					   OR `{col}` LIKE '%0and%'
+					"""
+				)
+				frappe.db.sql(
+					f"""
+					UPDATE `tabDocField`
+					SET `{col}` = REPLACE(REPLACE(`{col}`, ' and ', ' && '), ' or ', ' || ')
+					WHERE `{col}` LIKE '% and %' OR `{col}` LIKE '% or %'
+					"""
+				)
 			changed = True
 
 		# 4. Clean tabProperty Setter:
@@ -307,20 +295,42 @@ def fix_legacy_custom_fields(force=False):
 			frappe.db.sql(
 				"""
 				UPDATE `tabProperty Setter`
-				SET `value` = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(`value`,
+				SET `value` = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(`value`,
 					'eval:not ', 'eval:!'),
 					'eval: not ', 'eval:!'),
 					'not parent.', '!parent.'),
 					'not doc.', '!doc.'),
-					' and ', ' && '),
-					' or ', ' || ')
+					'1or(', '1 || ('),
+					'0or(', '0 || ('),
+					')or(', ') || ('),
+					')or', ') || '),
+					'1or', '1 || '),
+					'0or', '0 || '),
+					'or(', ' || ('),
+					'1and(', '1 && ('),
+					'0and(', '0 && ('),
+					'and(', ' && (')
 				WHERE `property` IN ('depends_on', 'mandatory_depends_on', 'read_only_depends_on')
 				  AND (`value` LIKE '%eval:not %'
 				       OR `value` LIKE '%eval: not %'
 				       OR `value` LIKE '%not parent.%'
 				       OR `value` LIKE '%not doc.%'
-				       OR `value` LIKE '% and %'
-				       OR `value` LIKE '% or %')
+				       OR `value` LIKE '%or(%'
+				       OR `value` LIKE '%)or%'
+				       OR `value` LIKE '%1or%'
+				       OR `value` LIKE '%0or%'
+				       OR `value` LIKE '%and(%'
+				       OR `value` LIKE '%)and%'
+				       OR `value` LIKE '%1and%'
+				       OR `value` LIKE '%0and%')
+				"""
+			)
+			frappe.db.sql(
+				"""
+				UPDATE `tabProperty Setter`
+				SET `value` = REPLACE(REPLACE(`value`, ' and ', ' && '), ' or ', ' || ')
+				WHERE `property` IN ('depends_on', 'mandatory_depends_on', 'read_only_depends_on')
+				  AND (`value` LIKE '% and %' OR `value` LIKE '% or %')
 				"""
 			)
 			changed = True

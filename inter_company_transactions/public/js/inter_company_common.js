@@ -5,7 +5,8 @@
 	/**
 	 * Client-side sanitizer for depends_on, mandatory_depends_on, and read_only_depends_on.
 	 * Translates Python-style operators ("not ", " and ", " or ") into valid JavaScript ("!", " && ", " || ")
-	 * and ensures forms / grid rows NEVER crash with 'Invalid "depends_on" expression'.
+	 * and fixes glued operators like 1or(, 0or(, )or(, or(, etc.
+	 * Ensures forms, grid rows, and layouts NEVER crash with 'Invalid "depends_on" expression'.
 	 */
 	function sanitize_depends_on_expression(expression) {
 		if (!expression || typeof expression !== 'string') return expression;
@@ -16,12 +17,23 @@
 			expr = expr.substring(5).trim();
 		}
 
+		// Fix glued 'or' operators (e.g. 1or(, 0or(, )or(, or(, )or, 1or, 0or)
+		expr = expr.replace(/(\d)\s*or\s*(?=[(\w])/g, function(m, p1) { return p1 + ' || '; });
+		expr = expr.replace(/(\))\s*or\s*(?=[(\w])/g, function(m, p1) { return p1 + ' || '; });
+		expr = expr.replace(/\bor\s*\(/g, '|| (');
+		expr = expr.replace(/\s+or\s+/g, ' || ');
+		expr = expr.replace(/\bor\b/g, ' || ');
+
+		// Fix glued 'and' operators (e.g. 1and(, 0and(, )and(, and(, etc.)
+		expr = expr.replace(/(\d)\s*and\s*(?=[(\w])/g, function(m, p1) { return p1 + ' && '; });
+		expr = expr.replace(/(\))\s*and\s*(?=[(\w])/g, function(m, p1) { return p1 + ' && '; });
+		expr = expr.replace(/\band\s*\(/g, '&& (');
+		expr = expr.replace(/\s+and\s+/g, ' && ');
+		expr = expr.replace(/\band\b/g, ' && ');
+
 		// Replace Python negation "not " with JS "!"
 		expr = expr.replace(/\bnot\s+(?=[a-zA-Z0-9_\(\[\$])/g, '!');
-		// Replace Python "and" with JS "&&"
-		expr = expr.replace(/\s+and\s+/g, ' && ');
-		// Replace Python "or" with JS "||"
-		expr = expr.replace(/\s+or\s+/g, ' || ');
+
 		// Replace Python True, False, None
 		expr = expr.replace(/\bTrue\b/g, 'true');
 		expr = expr.replace(/\bFalse\b/g, 'false');
@@ -32,72 +44,122 @@
 
 	function patch_evaluate_depends_on() {
 		try {
-			if (window.frappe && frappe.ui && frappe.ui.form) {
-				// 1. Patch frappe.ui.form.evaluate_depends_on_value
-				if (frappe.ui.form.evaluate_depends_on_value && !frappe.ui.form.evaluate_depends_on_value._ict_sanitized) {
-					const orig_eval = frappe.ui.form.evaluate_depends_on_value;
-					frappe.ui.form.evaluate_depends_on_value = function(expression, doc, parent) {
-						if (!expression) return true;
-						const sanitized = sanitize_depends_on_expression(expression);
-						try {
-							return orig_eval.call(this, sanitized, doc, parent);
-						} catch (err) {
-							try {
-								let code = sanitized;
-								if (code.startsWith('eval:')) {
-									code = code.substring(5);
-								}
-								let fn = new Function('doc', 'parent', 'let out = ' + code + '; return out;');
-								return fn(doc, parent);
-							} catch (evalErr) {
-								console.warn('[ICT] Safely caught invalid depends_on expression:', expression, evalErr);
-								return false;
-							}
-						}
-					};
-					frappe.ui.form.evaluate_depends_on_value._ict_sanitized = true;
-				}
+			if (!window.frappe) return;
 
-				// 2. Patch frappe.ui.form.GridRow.prototype.evaluate_depends_on_value
-				if (frappe.ui.form.GridRow && frappe.ui.form.GridRow.prototype.evaluate_depends_on_value && !frappe.ui.form.GridRow.prototype.evaluate_depends_on_value._ict_sanitized) {
-					const orig_grid_eval = frappe.ui.form.GridRow.prototype.evaluate_depends_on_value;
-					frappe.ui.form.GridRow.prototype.evaluate_depends_on_value = function(expression) {
-						if (!expression) return true;
-						const sanitized = sanitize_depends_on_expression(expression);
+			// 1. Root patch for frappe.utils.eval (used by layout.js, grid_row.js, controls)
+			if (frappe.utils && frappe.utils.eval && !frappe.utils.eval._ict_sanitized) {
+				const orig_utils_eval = frappe.utils.eval;
+				frappe.utils.eval = function(code, context) {
+					if (!code || typeof code !== 'string') return true;
+					const sanitized = sanitize_depends_on_expression(code);
+					try {
+						return orig_utils_eval.call(this, sanitized, context);
+					} catch (err) {
 						try {
-							return orig_grid_eval.call(this, sanitized);
-						} catch (err) {
-							try {
-								let doc = this.doc;
-								let parent = (this.grid && (this.grid.df.doc || (this.grid.frm && this.grid.frm.doc))) || null;
-								if (!parent && doc && doc.parent && window.locals && window.locals[doc.parenttype]) {
-									parent = window.locals[doc.parenttype][doc.parent];
-								}
-								let code = sanitized;
-								if (code.startsWith('eval:')) {
-									code = code.substring(5);
-								}
-								let fn = new Function('doc', 'parent', 'let out = ' + code + '; return out;');
-								return fn(doc, parent);
-							} catch (evalErr) {
-								console.warn('[ICT GridRow] Safely caught invalid depends_on expression:', expression, evalErr);
-								return false;
-							}
+							let clean = sanitized;
+							if (clean.startsWith('eval:')) clean = clean.substring(5);
+							let doc = (context && context.doc) || (window.cur_frm && window.cur_frm.doc) || {};
+							let parent = (context && context.parent) || doc;
+							let fn = new Function('doc', 'parent', 'let out = ' + clean + '; return out;');
+							return fn(doc, parent);
+						} catch (evalErr) {
+							console.warn('[ICT utils.eval] Safely caught invalid expression:', code, evalErr);
+							return false;
 						}
-					};
-					frappe.ui.form.GridRow.prototype.evaluate_depends_on_value._ict_sanitized = true;
-				}
+					}
+				};
+				frappe.utils.eval._ict_sanitized = true;
+			}
+
+			// 2. Patch frappe.ui.form.Layout.prototype.evaluate_depends_on_value (layout.js:773)
+			if (frappe.ui && frappe.ui.form && frappe.ui.form.Layout && frappe.ui.form.Layout.prototype.evaluate_depends_on_value && !frappe.ui.form.Layout.prototype.evaluate_depends_on_value._ict_sanitized) {
+				const orig_layout_eval = frappe.ui.form.Layout.prototype.evaluate_depends_on_value;
+				frappe.ui.form.Layout.prototype.evaluate_depends_on_value = function(expression, doc) {
+					if (!expression) return true;
+					const sanitized = sanitize_depends_on_expression(expression);
+					try {
+						return orig_layout_eval.call(this, sanitized, doc);
+					} catch (err) {
+						try {
+							let clean = sanitized;
+							if (clean.startsWith('eval:')) clean = clean.substring(5);
+							let parent = (this.frm && this.frm.doc) || doc || {};
+							let fn = new Function('doc', 'parent', 'let out = ' + clean + '; return out;');
+							return fn(doc || parent, parent);
+						} catch (evalErr) {
+							console.warn('[ICT Layout] Safely caught invalid expression:', expression, evalErr);
+							return false;
+						}
+					}
+				};
+				frappe.ui.form.Layout.prototype.evaluate_depends_on_value._ict_sanitized = true;
+			}
+
+			// 3. Patch frappe.ui.form.evaluate_depends_on_value
+			if (frappe.ui && frappe.ui.form && frappe.ui.form.evaluate_depends_on_value && !frappe.ui.form.evaluate_depends_on_value._ict_sanitized) {
+				const orig_eval = frappe.ui.form.evaluate_depends_on_value;
+				frappe.ui.form.evaluate_depends_on_value = function(expression, doc, parent) {
+					if (!expression) return true;
+					const sanitized = sanitize_depends_on_expression(expression);
+					try {
+						return orig_eval.call(this, sanitized, doc, parent);
+					} catch (err) {
+						try {
+							let code = sanitized;
+							if (code.startsWith('eval:')) {
+								code = code.substring(5);
+							}
+							let fn = new Function('doc', 'parent', 'let out = ' + code + '; return out;');
+							return fn(doc, parent);
+						} catch (evalErr) {
+							console.warn('[ICT] Safely caught invalid depends_on expression:', expression, evalErr);
+							return false;
+						}
+					}
+				};
+				frappe.ui.form.evaluate_depends_on_value._ict_sanitized = true;
+			}
+
+			// 4. Patch frappe.ui.form.GridRow.prototype.evaluate_depends_on_value (grid_row.js:823)
+			if (frappe.ui && frappe.ui.form && frappe.ui.form.GridRow && frappe.ui.form.GridRow.prototype.evaluate_depends_on_value && !frappe.ui.form.GridRow.prototype.evaluate_depends_on_value._ict_sanitized) {
+				const orig_grid_eval = frappe.ui.form.GridRow.prototype.evaluate_depends_on_value;
+				frappe.ui.form.GridRow.prototype.evaluate_depends_on_value = function(expression) {
+					if (!expression) return true;
+					const sanitized = sanitize_depends_on_expression(expression);
+					try {
+						return orig_grid_eval.call(this, sanitized);
+					} catch (err) {
+						try {
+							let doc = this.doc;
+							let parent = (this.grid && (this.grid.df.doc || (this.grid.frm && this.grid.frm.doc))) || null;
+							if (!parent && doc && doc.parent && window.locals && window.locals[doc.parenttype]) {
+								parent = window.locals[doc.parenttype][doc.parent];
+							}
+							let code = sanitized;
+							if (code.startsWith('eval:')) {
+								code = code.substring(5);
+							}
+							let fn = new Function('doc', 'parent', 'let out = ' + code + '; return out;');
+							return fn(doc, parent);
+						} catch (evalErr) {
+							console.warn('[ICT GridRow] Safely caught invalid depends_on expression:', expression, evalErr);
+							return false;
+						}
+					}
+				};
+				frappe.ui.form.GridRow.prototype.evaluate_depends_on_value._ict_sanitized = true;
 			}
 		} catch (e) {
 			// Protection should never fail silently or break caller
 		}
 	}
 
-	// Install immediately and when document is ready
+	// Install immediately, on DOM ready, and on page-change / route change
 	patch_evaluate_depends_on();
 	if (typeof $ !== 'undefined') {
 		$(document).ready(patch_evaluate_depends_on);
 		$(document).on('page-change', patch_evaluate_depends_on);
+		$(document).on('form-refresh', patch_evaluate_depends_on);
 	}
 
 	const supportedDocTypes = [
@@ -117,51 +179,58 @@
 	];
 
 	function sync_intercompany_state(frm) {
-		if (!frm.fields_dict.is_intercompany || !frm.fields_dict.intercompany_target_company) {
-			return;
-		}
+		try {
+			if (!frm || !frm.fields_dict || !frm.fields_dict.is_intercompany || !frm.fields_dict.intercompany_target_company) {
+				return;
+			}
 
-		const is_intercompany = cint(frm.doc.is_intercompany);
-		const current_company = frm.doc.company || '';
+			// Ensure evaluators are patched before any df properties are touched
+			patch_evaluate_depends_on();
 
-		if (!is_intercompany) {
-			// Normal internal transaction:
-			// 1. Target company is read-only
-			frm.set_df_property('intercompany_target_company', 'read_only', 1);
-			frm.set_df_property('intercompany_target_company', 'reqd', 0);
+			const is_intercompany = cint(frm.doc.is_intercompany);
+			const current_company = frm.doc.company || '';
 
-			// 2. Target company reflects same company as document
-			if (current_company && frm.doc.intercompany_target_company !== current_company) {
+			if (!is_intercompany) {
+				// Normal internal transaction:
+				// 1. Target company is read-only
+				frm.set_df_property('intercompany_target_company', 'read_only', 1);
+				frm.set_df_property('intercompany_target_company', 'reqd', 0);
+
+				// 2. Target company reflects same company as document
+				if (current_company && frm.doc.intercompany_target_company !== current_company) {
+					if (frm.doc.docstatus === 0) {
+						frm.set_value('intercompany_target_company', current_company);
+					}
+				}
+
+				// Clear filter query so current company does not get blocked if viewed
+				frm.set_query('intercompany_target_company', function() {
+					return {};
+				});
+			} else {
+				// Intercompany transaction:
+				// 1. Target company is editable (if draft) and mandatory
 				if (frm.doc.docstatus === 0) {
-					frm.set_value('intercompany_target_company', current_company);
+					frm.set_df_property('intercompany_target_company', 'read_only', 0);
+					frm.set_df_property('intercompany_target_company', 'reqd', 1);
+
+					// 2. If it is currently holding the source company, clear it to prompt user selection
+					if (frm.doc.intercompany_target_company && frm.doc.intercompany_target_company === current_company) {
+						frm.set_value('intercompany_target_company', '');
+					}
 				}
+
+				// 3. Filter query so user can ONLY select other sister companies
+				frm.set_query('intercompany_target_company', function() {
+					return {
+						filters: [
+							['Company', 'name', '!=', current_company]
+						]
+					};
+				});
 			}
-
-			// Clear filter query so current company does not get blocked if viewed
-			frm.set_query('intercompany_target_company', function() {
-				return {};
-			});
-		} else {
-			// Intercompany transaction:
-			// 1. Target company is editable (if draft) and mandatory
-			if (frm.doc.docstatus === 0) {
-				frm.set_df_property('intercompany_target_company', 'read_only', 0);
-				frm.set_df_property('intercompany_target_company', 'reqd', 1);
-
-				// 2. If it is currently holding the source company, clear it to prompt user selection
-				if (frm.doc.intercompany_target_company && frm.doc.intercompany_target_company === current_company) {
-					frm.set_value('intercompany_target_company', '');
-				}
-			}
-
-			// 3. Filter query so user can ONLY select other sister companies
-			frm.set_query('intercompany_target_company', function() {
-				return {
-					filters: [
-						['Company', 'name', '!=', current_company]
-					]
-				};
-			});
+		} catch (err) {
+			console.warn('[ICT] Warning in sync_intercompany_state:', err);
 		}
 	}
 

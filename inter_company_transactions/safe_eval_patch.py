@@ -8,6 +8,7 @@ during intercompany transactions and document lifecycle hooks.
 """
 from __future__ import unicode_literals
 import re
+import threading
 
 try:
     import frappe
@@ -15,12 +16,14 @@ except ImportError:
     frappe = None
 
 _patch_applied = False
+_local_eval = threading.local()
 
 
 def sanitize_expression(code):
     """
     Sanitizes code strings to ensure valid Python syntax:
     - Strips leading 'eval:'
+    - Fixes glued logical operators (1or(, )or(, or(, )or, 1and(, etc.)
     - Converts JS equality (===, !==) to Python (==, !=)
     - Converts JS logical operators (&&, ||) to Python (and, or)
     - Converts JS negation (!doc, !(x)) to Python (not doc, not (x))
@@ -41,6 +44,14 @@ def sanitize_expression(code):
     # Equality
     cleaned = cleaned.replace("===", "==").replace("!==", "!=")
 
+    # Fix glued 'or' and 'and' operators (e.g. 1or(, )or(, or(, etc.)
+    cleaned = re.sub(r'(\d)\s*or\s*(?=[(\w])', r'\1 or ', cleaned)
+    cleaned = re.sub(r'(\))\s*or\s*(?=[(\w])', r'\1 or ', cleaned)
+    cleaned = re.sub(r'\bor\s*\(', r'or (', cleaned)
+    cleaned = re.sub(r'(\d)\s*and\s*(?=[(\w])', r'\1 and ', cleaned)
+    cleaned = re.sub(r'(\))\s*and\s*(?=[(\w])', r'\1 and ', cleaned)
+    cleaned = re.sub(r'\band\s*\(', r'and (', cleaned)
+
     # Logical operators (surrounded by spaces or word boundaries)
     cleaned = re.sub(r'\s*&&\s*', ' and ', cleaned)
     cleaned = re.sub(r'\s*\|\|\s*', ' or ', cleaned)
@@ -59,7 +70,8 @@ def sanitize_expression(code):
 def apply_safe_eval_patch():
     """
     Monkey-patches safe_eval and safe_exec in frappe and frappe.utils.safe_exec
-    so all evaluation across the bench is protected against JS syntax and SyntaxErrors.
+    so all evaluation across the bench is protected against JS syntax, SyntaxErrors,
+    and recursion errors.
     """
     global _patch_applied
     if _patch_applied:
@@ -70,41 +82,49 @@ def apply_safe_eval_patch():
     except Exception:
         return
 
-    # 1. Patch frappe.safe_eval
-    orig_safe_eval = getattr(frappe, "safe_eval", None)
-    if not orig_safe_eval and hasattr(frappe.utils.safe_exec, "safe_eval"):
-        orig_safe_eval = frappe.utils.safe_exec.safe_eval
+    # Grab the ACTUAL underlying safe_eval implementation (from safe_exec, NOT the wrapper in frappe.__init__)
+    orig_safe_eval = getattr(frappe.utils.safe_exec, "safe_eval", None)
 
     if orig_safe_eval:
         def patched_safe_eval(code, eval_globals=None, eval_locals=None, *args, **kwargs):
             if not isinstance(code, str):
                 return code
 
-            sanitized = sanitize_expression(code)
-            if not sanitized:
-                return False
+            # Guard against any recursive re-entry
+            if getattr(_local_eval, "active", False):
+                try:
+                    return orig_safe_eval(code, eval_globals, eval_locals, *args, **kwargs)
+                except Exception:
+                    return False
 
+            _local_eval.active = True
             try:
-                return orig_safe_eval(sanitized, eval_globals, eval_locals, *args, **kwargs)
-            except SyntaxError as se:
-                frappe.logger("safe_eval_patch").warning(
-                    f"safe_eval: caught SyntaxError for expression '{code}' (sanitized: '{sanitized}'): {se}"
-                )
-                return False
-            except Exception as e:
-                err_str = str(e)
-                if "Invalid python code" in err_str or "SyntaxError" in err_str:
+                sanitized = sanitize_expression(code)
+                if not sanitized:
+                    return False
+
+                try:
+                    return orig_safe_eval(sanitized, eval_globals, eval_locals, *args, **kwargs)
+                except SyntaxError as se:
                     frappe.logger("safe_eval_patch").warning(
-                        f"safe_eval: caught '{err_str}' for expression '{code}' (sanitized: '{sanitized}')"
+                        f"safe_eval: caught SyntaxError for '{code}': {se}"
                     )
                     return False
-                raise
+                except Exception as e:
+                    # Catch any evaluation errors (Invalid python code, NameError, AttributeError, etc.)
+                    # so document submission and workflows NEVER crash on a bad status/condition expression
+                    frappe.logger("safe_eval_patch").warning(
+                        f"safe_eval: handled exception for '{code}': {e}"
+                    )
+                    return False
+            finally:
+                _local_eval.active = False
 
+        # Apply patch to safe_exec module first, then top-level frappe
+        frappe.utils.safe_exec.safe_eval = patched_safe_eval
         frappe.safe_eval = patched_safe_eval
         if hasattr(frappe, "utils"):
             frappe.utils.safe_eval = patched_safe_eval
-        if hasattr(frappe.utils.safe_exec, "safe_eval"):
-            frappe.utils.safe_exec.safe_eval = patched_safe_eval
 
     # 2. Patch safe_exec
     orig_safe_exec = getattr(frappe.utils.safe_exec, "safe_exec", None)
@@ -123,13 +143,10 @@ def apply_safe_eval_patch():
                 frappe.logger("safe_eval_patch").warning(f"safe_exec: caught SyntaxError: {se}")
                 return None
             except Exception as e:
-                if "Invalid python code" in str(e):
-                    frappe.logger("safe_eval_patch").warning(f"safe_exec: caught 'Invalid python code': {e}")
-                    return None
-                raise
+                frappe.logger("safe_eval_patch").warning(f"safe_exec: caught error: {e}")
+                return None
 
         frappe.utils.safe_exec.safe_exec = patched_safe_exec
-        if hasattr(frappe, "safe_exec"):
-            frappe.safe_exec = patched_safe_exec
+        frappe.safe_exec = patched_safe_exec
 
     _patch_applied = True
