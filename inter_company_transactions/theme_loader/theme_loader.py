@@ -57,7 +57,6 @@ def get_website_theme():
     if frappe.session.user != "Guest":
         return
         
-    # Get company from request args or default
     company = frappe.form_dict.company or frappe.defaults.get_defaults().company
     if not company:
         return
@@ -74,3 +73,30 @@ def get_website_theme():
         "primary_color": theme.get("colors", {}).get("primary", "#5e64ff"),
         "font_family": theme.get("font", "inherit")
     }
+
+def get_active_theme_for_company(company):
+    """Retrieve active theme for a given company"""
+    if not company:
+        return None
+    try:
+        theme_data = frappe.cache().hget("company_themes", company)
+        if theme_data:
+            return json.loads(theme_data)
+            
+        if frappe.db.exists("DocType", "Company Theme"):
+            theme_name = frappe.db.get_value("Company Theme", {"company": company, "enabled": 1}, "name")
+            if theme_name:
+                doc = frappe.get_doc("Company Theme", theme_name)
+                return {
+                    "name": doc.name,
+                    "colors": {
+                        "primary": getattr(doc, "primary_color", "#5e64ff"),
+                        "secondary": getattr(doc, "secondary_color", "#f5f7fa"),
+                        "accent": getattr(doc, "accent_color", "#e0e6ed"),
+                        "text": getattr(doc, "text_color", "#36414c"),
+                    },
+                    "font": getattr(doc, "font_family", "inherit")
+                }
+    except Exception:
+        pass
+    return None

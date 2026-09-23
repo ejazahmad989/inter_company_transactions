@@ -1,390 +1,193 @@
+# -*- coding: utf-8 -*-
+from __future__ import unicode_literals
+
 app_name = "inter_company_transactions"
 app_title = "Inter Company Transactions"
 app_publisher = "Your Company"
-app_description = "Comprehensive Inter-Company Transactions, Transfer Pricing, and Balance Reconciliation for ERPNext"
+app_description = "A custom app for handling inter-company transactions with dynamic theming"
 app_icon = "octicon octicon-git-compare"
 app_color = "blue"
 app_email = "your@example.com"
 app_license = "MIT"
 
+# ============================================================================
+# THEME SYSTEM - WORKING CONFIGURATION
+# ============================================================================
 
-
-# Desk assets (backend)
-app_include_css = [
-    "/assets/inter_company_transactions/css/enhanced_themes.css",
-    "/assets/inter_company_transactions/css/inter_company_transactions.css",
-    "/assets/inter_company_transactions/css/theme_manager.css",
-    "/assets/inter_company_transactions/css/quickbooks_theme.css"
-]
-
+# CSS and JS includes
+app_include_css = "inter_company_transactions.inter_company_transactions.theme_loader.get_company_css"
 app_include_js = [
-    "/assets/inter_company_transactions/js/backdate_permission.js",
-    "/assets/inter_company_transactions/js/enhanced_workflow.js",
-    "/assets/inter_company_transactions/js/inter_company_transaction_map.js",
-    "/assets/inter_company_transactions/js/inter_company_common.js",
-    "/assets/inter_company_transactions/js/theme_manager.js"
+    "/assets/inter_company_transactions/js/theme_auto_loader.js",
+    "/assets/inter_company_transactions/js/inter_company_common.js"
 ]
 
-# include js, css files in header of desk.html
-# app_include_css = "/assets/test/css/test.css"
-# app_include_js = "/assets/test/js/test.js"
+# DocType specific JS
+doctype_js = {"Company Theme": "public/js/theme_auto_loader.js"}
 
-# include js, css files in header of web template
-# web_include_css = "/assets/test/css/test.css"
-# web_include_js = "/assets/test/js/test.js"
+# Website theme for login
+website_theme = "inter_company_transactions.inter_company_transactions.theme_loader.get_website_theme"
 
-# include custom scss in every website theme (without file extension ".scss")
-# website_theme_scss = "test/public/scss/website"
+# ============================================================================
+# EXISTING INTER-COMPANY FUNCTIONALITY
+# ============================================================================
 
-# include js, css files in header of web form
-# webform_include_js = {"doctype": "public/js/doctype.js"}
-# webform_include_css = {"doctype": "public/css/doctype.css"}
-
-# include js in page
-# page_js = {"page" : "public/js/file.js"}
-
-# include js in doctype views
-# doctype_js = {"doctype" : "public/js/doctype.js"}
-# doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
-# doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
-# doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
-
-
-# Fixtures - This ensures all doctypes and custom fields are preserved during migrations
+# Custom Fields
 fixtures = [
-    # DocTypes - All custom doctypes
     {
-        "doctype": "DocType",
+        "doctype": "Custom Field",
         "filters": [
             ["name", "in", [
-                "Role Replication",
-                "Inter Company Settings",
-                "Intercompany Transaction Link",
-                "Intercompany Linked Company", 
-                "Intercompany Transaction Type",
-                "Intercompany Item Mapping",
-                "Inter Company Document Reference",
-                "Inter Company Error Log",
-                "Theme Manager",
-                "Theme Manager Company",
-                "Theme Manager User",
-                "Theme Manager Role",
-                "Enhanced Theme Manager",
-                "Inter Company Workflow",
-                "Inter Company Workflow Approver",
-                "Workflow Approval Request",
-                "Workflow Approval History",
-                "Inter Company Netting Cycle",
-                "Inter Company Netting Company",
-                "Inter Company Netting Invoice",
-                "Inter Company Netting Summary",
-                "Transfer Pricing Policy",
-                "Inter Company Elimination Run",
-                "Inter Company Dispute",
-                "Inter Company Remote Site",
-                "ICT Notification Setting"
-            ]]
-        ]
-    },
-    # Workspaces
-    {
-        "doctype": "Workspace",
-        "filters": [
-            ["name", "in", ["Inter Company"]]
-        ]
-    },
-    # Email Templates for workflow notifications
-    {
-        "doctype": "Email Template",
-        "filters": [
-            ["name", "in", [
-                "approval_request_email",
-                "approval_approved_email", 
-                "approval_rejected_email",
-                "escalation_email"
-            ]]
-        ]
-    },
-    # Roles
-    {
-        "doctype": "Role",
-        "filters": [
-            ["name", "in", [
-                "Workflow Manager",
-                "Approver",
-                "Theme Administrator"
+                "Sales Order-intercompany_linked_doc_doctype",
+                "Sales Order-intercompany_linked_doc_name",
+                "Sales Order-intercompany_linked_company",
+                "Sales Order-intercompany_target_company",
+                "Sales Order-backdate_reason",
+                "Sales Order-futuredate_reason",
+
+                "Purchase Order-intercompany_linked_doc_doctype",
+                "Purchase Order-intercompany_linked_doc_name",
+                "Purchase Order-intercompany_linked_company",
+                "Purchase Order-intercompany_target_company",
+                "Purchase Order-backdate_reason",
+                "Purchase Order-futuredate_reason",
+
+                "Sales Invoice-intercompany_linked_doc_doctype",
+                "Sales Invoice-intercompany_linked_doc_name",
+                "Sales Invoice-intercompany_linked_company",
+                "Sales Invoice-intercompany_target_company",
+                "Sales Invoice-inter_company_reference",
+                "Sales Invoice-backdate_reason",
+                "Sales Invoice-futuredate_reason",
+
+                "Purchase Invoice-intercompany_linked_doc_doctype",
+                "Purchase Invoice-intercompany_linked_doc_name",
+                "Purchase Invoice-intercompany_linked_company",
+                "Purchase Invoice-intercompany_target_company",
+                "Purchase Invoice-inter_company_reference",
+                "Purchase Invoice-backdate_reason",
+                "Purchase Invoice-futuredate_reason",
+
+                "Journal Entry-intercompany_linked_doc_doctype",
+                "Journal Entry-intercompany_linked_doc_name",
+                "Journal Entry-intercompany_linked_company",
+                "Journal Entry-intercompany_target_company",
+                "Journal Entry-backdate_reason",
+                "Journal Entry-futuredate_reason",
+
+                "Payment Entry-intercompany_linked_doc_doctype",
+                "Payment Entry-intercompany_linked_doc_name",
+                "Payment Entry-intercompany_linked_company",
+                "Payment Entry-intercompany_target_company",
+                "Payment Entry-backdate_reason",
+                "Payment Entry-futuredate_reason",
+
+                "Delivery Note-intercompany_linked_doc_doctype",
+                "Delivery Note-intercompany_linked_doc_name",
+                "Delivery Note-intercompany_linked_company",
+                "Delivery Note-intercompany_target_company",
+                "Delivery Note-backdate_reason",
+                "Delivery Note-futuredate_reason",
+
+                "Purchase Receipt-intercompany_linked_doc_doctype",
+                "Purchase Receipt-intercompany_linked_doc_name",
+                "Purchase Receipt-intercompany_linked_company",
+                "Purchase Receipt-intercompany_target_company",
+                "Purchase Receipt-backdate_reason",
+                "Purchase Receipt-futuredate_reason",
+
+                "Material Request-intercompany_linked_doc_doctype",
+                "Material Request-intercompany_linked_doc_name",
+                "Material Request-intercompany_linked_company",
+                "Material Request-intercompany_target_company",
+
+                "Customer-ic_customer_group",
+                "Customer-custom_company",
+                "Supplier-ic_supplier_group",
+                "Supplier-custom_company",
+                "Customer Group-custom_company",
+                "Supplier Group-custom_company"
             ]]
         ]
     }
 ]
 
-scheduler_events = {
-    "hourly": [
-        "inter_company_transactions.workflow.send_approval_reminders",
-        "inter_company_transactions.workflow.process_escalations"
-    ],
-    "daily": [
-        "inter_company_transactions.workflow.cleanup_old_notifications"
-    ]
-}
+# Install Hooks
+after_install = "inter_company_transactions.install.after_install"
 
-# Document Events - Enhanced with workflow integration
+# Document Events for Inter-Company Transactions
 doc_events = {
     "Sales Order": {
-        "on_submit": [
-            "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
-            #"inter_company_transactions.workflow.create_workflow_request",
-            #"inter_company_transactions.workflow.create_approval_request_if_required"
-        ],
+        "on_submit": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
         "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
-        "validate": [
-            "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_transaction",
-            "inter_company_transactions.date_validation_hooks.validate_backdate"
-        ],
-        "before_insert": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
-        "before_save": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
-        "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
+        "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
     },
     "Purchase Order": {
-        "on_submit": [ 
-            "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
-            #"inter_company_transactions.workflow.create_workflow_request",
-        ],
+        "on_submit": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
         "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
-        "validate": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_transaction",
-        "before_insert": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
-        "before_save":   "inter_company_transactions.date_control.date_validator.validate_transaction_date",
-        "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
-    },
-    "Journal Entry": {
-        "on_submit": [
-            "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
-            #"inter_company_transactions.workflow.create_workflow_request",
-        ],
-        "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
-        "validate": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_transaction",
-        "before_insert": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
-        "before_save":   "inter_company_transactions.date_control.date_validator.validate_transaction_date",
-        "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
-    },
-    "Payment Entry": {
-        "on_submit": [
-            "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
-            #"inter_company_transactions.workflow.create_workflow_request",
-        ],
-        "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
-        "validate": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_transaction",
-        "before_insert": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
-        "before_save":   "inter_company_transactions.date_control.date_validator.validate_transaction_date",
         "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
     },
     "Sales Invoice": {
-          "on_submit": [
-              "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents"
-          ],
-          "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
-          "validate": [
-              "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_transaction",
-              "inter_company_transactions.date_validation_hooks.validate_backdate"
-          ],
-          "before_insert": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
-          "before_save":   "inter_company_transactions.date_control.date_validator.validate_transaction_date",
-          "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
+        "on_submit": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
+        "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
+        "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
     },
     "Purchase Invoice": {
-          "on_submit": [
-              "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents"
-          ],
-          "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
-          "validate": [
-              "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_transaction",
-              "inter_company_transactions.date_validation_hooks.validate_backdate"
-          ],
-          "before_insert": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
-          "before_save":   "inter_company_transactions.date_control.date_validator.validate_transaction_date",
-          "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
+        "on_submit": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
+        "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
+        "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
     },
     "Delivery Note": {
-          "on_submit": [
-              "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents"
-          ],
-          "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
-          "validate": [
-              "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_transaction",
-              "inter_company_transactions.date_validation_hooks.validate_backdate"
-          ],
-          "before_insert": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
-          "before_save":   "inter_company_transactions.date_control.date_validator.validate_transaction_date",
-          "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
+        "on_submit": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
+        "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
+        "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
     },
     "Purchase Receipt": {
-          "on_submit": [
-              "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents"
-          ],
-          "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
-          "validate": [
-              "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_transaction",
-              "inter_company_transactions.date_validation_hooks.validate_backdate"
-          ],
-          "before_insert": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
-          "before_save":   "inter_company_transactions.date_control.date_validator.validate_transaction_date",
-          "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
-    },
-    "Stock Entry": {
-          "on_submit": [
-              "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents"
-          ],
-          "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
-          "validate": [
-              "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_transaction",
-              "inter_company_transactions.date_validation_hooks.validate_backdate"
-          ],
-          "before_insert": "inter_company_transactions.date_control.date_validator.validate_transaction_date",
-          "before_save":   "inter_company_transactions.date_control.date_validator.validate_transaction_date",
-          "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
-    },
-    "Quotation": {
-          "on_submit": [
-              "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents"
-          ],
-          "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
-          "validate": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_transaction"
-    },
-    "Supplier Quotation": {
-          "on_submit": [
-              "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents"
-          ],
-          "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
-          "validate": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_transaction"
+        "on_submit": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
+        "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
+        "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
     },
     "Material Request": {
-          "on_submit": [
-              "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents"
-          ],
-          "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
-          "validate": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_transaction"
+        "on_submit": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
+        "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
+        "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
     },
-    "Request for Quotation": {
-          "on_submit": [
-              "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents"
-          ],
-          "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
-          "validate": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_transaction"
-    }
-}
-
-# Login hooks for theme application
-on_login = [
-    "inter_company_transactions.enhanced_theme.apply_user_theme"
-]
-
-# Scheduled tasks for workflow reminders and escalations
-scheduler_events = {
-    "hourly": [
-        "inter_company_transactions.workflow.send_approval_reminders",
-        "inter_company_transactions.workflow.process_escalations"
-    ],
-    "daily": [
-        "inter_company_transactions.workflow.cleanup_old_notifications",
-        "inter_company_transactions.enhanced_theme.cleanup_old_theme_files"
-    ]
-}
-
-# Jinja Environment - Enhanced with theme and workflow methods
-jenv = {
-    "methods": [
-        "inter_company_transactions.enhanced_theme.get_company_theme",
-        "inter_company_transactions.workflow.get_pending_approvals_count",
-        "inter_company_transactions.workflow.get_user_approval_requests"
-    ]
-}
-
-# Boot session - Add user-specific data on login
-boot_session = "inter_company_transactions.boot.boot_session"
-
-# Override whitelisted methods
-#override_whitelisted_methods = {
-    #"frappe.desk.form.save.savedocs": "inter_company_transactions.overrides.enhanced_save_docs"
-#}
-
-# Import whitelisted functions
-#from .overrides import enhanced_save_docs, check_workflow_triggers
-
-# Define custom whitelisted functions
-whitelisted_functions = [
-    'enhanced_save_docs',
-    'check_workflow_triggers'
-]
-
-# Standard portal menu items
-standard_portal_menu_items = [
-    {
-        "title": "Approval Requests",
-        "route": "/approval-requests",
-        "reference_doctype": "Workflow Approval Request",
-        "role": "Approver"
-    }
-]
-
-# Permission query methods
-#permission_query_conditions = {
-    #"Workflow Approval Request": "inter_company_transactions.workflow.get_permission_query_conditions_for_approval_request"
-#}
-
-# Data import/export hooks
-data_import_tool = {
-    "Intercompany Transaction Link": "inter_company_transactions.data_import.validate_intercompany_data"
-}
-
-# Notification hooks
-notification_config = "inter_company_transactions.notifications.get_notification_config"
-
-# Report hooks
-standard_queries = {
-    "Workflow Approval Request": "inter_company_transactions.queries.workflow_approval_request_query"
-}
-
-# Desk page hooks
-extend_bootinfo = "inter_company_transactions.boot.extend_bootinfo"
-
-# Global search hooks
-global_search_doctypes = {
-    "Workflow Approval Request": {
-        "search_fields": ["document_name", "document_type", "requested_by"],
-        "title_field": "document_name"
+    "Stock Entry": {
+        "on_submit": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
+        "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents"
     },
-    "Inter Company Workflow": {
-        "search_fields": ["workflow_name", "source_company", "target_company"],
-        "title_field": "workflow_name"
+    "Journal Entry": {
+        "on_submit": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
+        "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
+        "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
+    },
+    "Payment Entry": {
+        "on_submit": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
+        "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
+        "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
     }
 }
 
-#override_whitelisted_methods = {
-    #"frappe.desk.form.save.savedocs": "inter_company_transactions.inter_company_transactions.overrides.enhanced_save_docs"
-#}
-
-# Backup hooks
-before_backup = "inter_company_transactions.backup.before_backup"
-after_backup = "inter_company_transactions.backup.after_backup"
-
-# Migration hooks - Fixed paths
-before_migrate = "inter_company_transactions.patches.before_migrate.before_migrate"
-after_migrate = "inter_company_transactions.patches.after_migrate.after_migrate"
-
-# Installation hooks
-after_install = "inter_company_transactions.install.after_install"
-before_uninstall = "inter_company_transactions.install.before_uninstall"
-
-# Startup hooks
-on_session_creation = "inter_company_transactions.session.on_session_creation"
-before_request = "inter_company_transactions.session.before_request"
-
-# Error handling hooks
-on_error = "inter_company_transactions.error_handler.handle_error"
-
-# Cache hooks
-cache_wipe_doctypes = [
-    "Intercompany Transaction Link",
-    "Inter Company Workflow", 
-    "Enhanced Theme Manager"
-]
+# Boot session for theme data
+def boot_session(bootinfo):
+    """Add theme information to boot session"""
+    try:
+        import frappe
+        from inter_company_transactions.inter_company_transactions.theme_loader import get_active_theme_for_company
+        
+        if frappe.session.user != "Guest":
+            company = frappe.get_value("User", frappe.session.user, "company")
+            if not company:
+                company = frappe.db.get_single_value("Global Defaults", "default_company")
+            
+            if company:
+                theme_data = get_active_theme_for_company(company)
+                if theme_data:
+                    bootinfo.company_theme = {
+                        "company": company,
+                        "theme_name": theme_data.get("name", "Default"),
+                        "colors": theme_data.get("colors", {}),
+                        "font": theme_data.get("font", "inherit")
+                    }
+    except Exception as e:
+        import frappe
+        frappe.logger().error(f"Error in boot_session for theme: {str(e)}")
