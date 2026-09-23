@@ -100,6 +100,26 @@ fixtures = [
                 "Material Request-intercompany_linked_company",
                 "Material Request-intercompany_target_company",
 
+                "Stock Entry-intercompany_linked_doc_doctype",
+                "Stock Entry-intercompany_linked_doc_name",
+                "Stock Entry-intercompany_linked_company",
+                "Stock Entry-intercompany_target_company",
+
+                "Quotation-intercompany_linked_doc_doctype",
+                "Quotation-intercompany_linked_doc_name",
+                "Quotation-intercompany_linked_company",
+                "Quotation-intercompany_target_company",
+
+                "Supplier Quotation-intercompany_linked_doc_doctype",
+                "Supplier Quotation-intercompany_linked_doc_name",
+                "Supplier Quotation-intercompany_linked_company",
+                "Supplier Quotation-intercompany_target_company",
+
+                "Item-is_intercompany_item",
+                "Item-ic_item_group",
+                "Warehouse-is_intercompany_warehouse",
+                "Warehouse-ic_warehouse",
+
                 "Customer-ic_customer_group",
                 "Customer-custom_company",
                 "Supplier-ic_supplier_group",
@@ -164,6 +184,14 @@ doc_events = {
         "on_submit": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
         "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents",
         "before_submit": "inter_company_transactions.date_control.date_validator.validate_transaction_date"
+    },
+    "Quotation": {
+        "on_submit": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
+        "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents"
+    },
+    "Supplier Quotation": {
+        "on_submit": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
+        "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents"
     }
 }
 

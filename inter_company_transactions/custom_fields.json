@@ -662,5 +662,46 @@
       "read_only": 1,
       "hidden": 1
     }
+  ],
+  "Item": [
+    {
+      "fieldname": "is_intercompany_item",
+      "label": "Is Intercompany Item",
+      "fieldtype": "Check",
+      "default": "0",
+      "insert_after": "item_group",
+      "description": "Mark this item as an inter-company catalog item",
+      "in_list_view": 1,
+      "in_standard_filter": 1
+    },
+    {
+      "fieldname": "ic_item_group",
+      "label": "Inter Company Item Group",
+      "fieldtype": "Link",
+      "options": "Item Group",
+      "insert_after": "is_intercompany_item",
+      "description": "Item group for shared inter-company access and catalog mapping",
+      "in_standard_filter": 1
+    }
+  ],
+  "Warehouse": [
+    {
+      "fieldname": "is_intercompany_warehouse",
+      "label": "Is Intercompany / Transit Warehouse",
+      "fieldtype": "Check",
+      "default": "0",
+      "insert_after": "company",
+      "description": "Designates this warehouse for inter-company stock transfers and in-transit inventory",
+      "in_list_view": 1,
+      "in_standard_filter": 1
+    },
+    {
+      "fieldname": "ic_warehouse",
+      "label": "Linked Intercompany Warehouse",
+      "fieldtype": "Link",
+      "options": "Warehouse",
+      "insert_after": "is_intercompany_warehouse",
+      "description": "Corresponding warehouse in the linked sister company"
+    }
   ]
 }
