@@ -6,67 +6,148 @@ This script builds a multi-page PDF using standard Python without external depen
 
 import sys
 import os
+import textwrap
 
-def create_pdf(output_path="inter_company_user_guide.pdf"):
+def create_pdf(output_path=None):
     # Read the markdown content
     script_dir = os.path.dirname(os.path.abspath(__file__))
     md_path = os.path.join(script_dir, "USER_GUIDE.md")
     
+    if not os.path.exists(md_path):
+        md_path = os.path.join(script_dir, "..", "USER_GUIDE.md")
+    
     with open(md_path, "r", encoding="utf-8") as f:
         lines = f.readlines()
 
-    # Simple, elegant PDF page builder
+    # Determine default output path
+    if not output_path:
+        public_dir = os.path.join(script_dir, "public")
+        os.makedirs(public_dir, exist_ok=True)
+        output_path = os.path.join(public_dir, "Inter_Company_Transactions_User_Guide.pdf")
+
+    # Dynamic line layout with text wrapping and height calculation
     pages = []
-    current_page_lines = []
-    
-    # Clean text lines for printing
+    current_page_items = []
+    current_y = 705
+
+    def push_page():
+        nonlocal current_page_items, current_y
+        if current_page_items:
+            pages.append(current_page_items)
+            current_page_items = []
+        current_y = 735
+
     for raw_line in lines:
         line = raw_line.rstrip()
-        # Escape parenthesis and backslashes for PDF text encoding
-        line_clean = line.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)')
-        current_page_lines.append(line_clean)
-        if len(current_page_lines) >= 54:
-            pages.append(current_page_lines)
-            current_page_lines = []
-    if current_page_lines:
-        pages.append(current_page_lines)
+        
+        # Determine formatting type and height
+        if line.startswith("# "):
+            text = line[2:].strip()
+            # Clean special characters
+            text_clean = text.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)')
+            needed_h = 24
+            if current_y - needed_h < 55:
+                push_page()
+            current_page_items.append(('h1', text_clean, current_y))
+            current_y -= needed_h
+
+        elif line.startswith("## "):
+            text = line[3:].strip()
+            text_clean = text.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)')
+            needed_h = 20
+            if current_y - needed_h < 55:
+                push_page()
+            current_page_items.append(('h2', text_clean, current_y))
+            current_y -= needed_h
+
+        elif line.startswith("### "):
+            text = line[4:].strip()
+            text_clean = text.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)')
+            needed_h = 17
+            if current_y - needed_h < 55:
+                push_page()
+            current_page_items.append(('h3', text_clean, current_y))
+            current_y -= needed_h
+
+        elif line.startswith("#### "):
+            text = line[5:].strip()
+            text_clean = text.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)')
+            needed_h = 15
+            if current_y - needed_h < 55:
+                push_page()
+            current_page_items.append(('h4', text_clean, current_y))
+            current_y -= needed_h
+
+        elif line.strip() == "---":
+            needed_h = 12
+            if current_y - needed_h < 55:
+                push_page()
+            current_page_items.append(('hr', '', current_y))
+            current_y -= needed_h
+
+        elif line.startswith("```"):
+            current_y -= 4
+
+        elif line.startswith("* ") or line.startswith("- "):
+            text = line[2:].strip()
+            wrapped = textwrap.wrap(text, width=80)
+            for idx, w in enumerate(wrapped):
+                w_clean = w.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)')
+                prefix = "\\225 " if idx == 0 else "  "
+                needed_h = 12
+                if current_y - needed_h < 55:
+                    push_page()
+                current_page_items.append(('bullet', f"{prefix}{w_clean}", current_y))
+                current_y -= needed_h
+
+        elif line.startswith("   - ") or line.startswith("  * ") or line.startswith("    - "):
+            text = line.lstrip(" -*").strip()
+            wrapped = textwrap.wrap(text, width=76)
+            for idx, w in enumerate(wrapped):
+                w_clean = w.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)')
+                prefix = "- " if idx == 0 else "  "
+                needed_h = 11.5
+                if current_y - needed_h < 55:
+                    push_page()
+                current_page_items.append(('subbullet', f"{prefix}{w_clean}", current_y))
+                current_y -= needed_h
+
+        elif not line.strip():
+            current_y -= 6
+            if current_y < 55:
+                push_page()
+
+        else:
+            wrapped = textwrap.wrap(line, width=86)
+            for w in wrapped:
+                w_clean = w.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)')
+                needed_h = 11.5
+                if current_y - needed_h < 55:
+                    push_page()
+                current_page_items.append(('body', w_clean, current_y))
+                current_y -= needed_h
+
+    if current_page_items:
+        pages.append(current_page_items)
 
     total_pages = len(pages)
     
-    # PDF binary stream construction
-    objects = []
-    
-    def add_object(content):
-        objects.append(content)
-        return len(objects)
-
-    # Obj 1: Catalog (placeholder, updated at end)
-    # Obj 2: Pages (placeholder)
-    
-    page_obj_ids = []
-    font_obj_id = 3 # Will define font as obj 3
-    bold_font_obj_id = 4 # Will define bold font as obj 4
-
-    # We will lay out objects:
+    # Lay out PDF objects:
     # 1: Catalog
     # 2: Pages
     # 3: Regular Font (Helvetica)
     # 4: Bold Font (Helvetica-Bold)
-    # Then each page:
-    # 5, 6 (Page, Content stream), 7, 8...
-    
+    # 5, 6 (Page, Content stream)...
     next_id = 5
     page_entries = []
 
-    for idx, p_lines in enumerate(pages):
+    for idx, p_items in enumerate(pages):
         page_id = next_id
         content_id = next_id + 1
         next_id += 2
-        page_entries.append((page_id, content_id, p_lines, idx + 1))
+        page_entries.append((page_id, content_id, p_items, idx + 1))
 
-    # Prepare PDF objects
     obj_catalog = "<< /Type /Catalog /Pages 2 0 R >>"
-    
     kids_str = " ".join([f"{p[0]} 0 R" for p in page_entries])
     obj_pages = f"<< /Type /Pages /Kids [{kids_str}] /Count {total_pages} >>"
     obj_font = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"
@@ -79,71 +160,51 @@ def create_pdf(output_path="inter_company_user_guide.pdf"):
         (4, obj_font_bold)
     ]
 
-    for page_id, content_id, p_lines, page_num in page_entries:
+    for page_id, content_id, p_items, page_num in page_entries:
         page_dict = f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents {content_id} 0 R /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> >>"
         pdf_objs.append((page_id, page_dict))
         
-        # Build stream commands
         stream_cmds = []
-        
-        # Top banner on first page or header on subsequent
         stream_cmds.append("q")
+        
+        # Header banner or running header
         if page_num == 1:
             # Header bar
-            stream_cmds.append("0.1 0.2 0.5 rg") # Deep blue
-            stream_cmds.append("40 730 532 30 re f")
+            stream_cmds.append("0.12 0.23 0.53 rg") # Corporate deep blue
+            stream_cmds.append("40 730 532 32 re f")
             stream_cmds.append("1 1 1 rg") # White text
-            stream_cmds.append("BT /F2 14 Tf 50 740 Td (INTER-COMPANY TRANSACTIONS FOR ERPNEXT) Tj ET")
+            stream_cmds.append("BT /F2 13 Tf 50 742 Td (INTER-COMPANY TRANSACTIONS FOR ERPNEXT) Tj ET")
             stream_cmds.append("0 0 0 rg") # Reset black
-            y_start = 705
         else:
             # Subtle running header
             stream_cmds.append("0.4 0.4 0.4 rg")
-            stream_cmds.append("BT /F1 9 Tf 40 760 Td (Inter-Company Transactions - User Guide & Tutorial) Tj ET")
+            stream_cmds.append("BT /F1 9 Tf 40 760 Td (Inter-Company Transactions - Enterprise User Guide & Multi-Currency Tutorial) Tj ET")
             stream_cmds.append("0.8 0.8 0.8 RG 40 752 m 572 752 l S")
             stream_cmds.append("0 0 0 rg")
-            y_start = 735
 
         # Running footer
         stream_cmds.append("0.4 0.4 0.4 rg")
         stream_cmds.append("0.8 0.8 0.8 RG 40 40 m 572 40 l S")
-        stream_cmds.append(f"BT /F1 9 Tf 530 28 Td (Page {page_num} of {total_pages}) Tj ET")
+        stream_cmds.append(f"BT /F1 9 Tf 520 28 Td (Page {page_num} of {total_pages}) Tj ET")
         stream_cmds.append("0 0 0 rg")
         
-        y = y_start
-        for line in p_lines:
-            if y < 55:
-                break
-            
-            # Format headings vs body
-            if line.startswith("# "):
-                text = line[2:]
-                stream_cmds.append(f"BT /F2 14 Tf 40 {y} Td ({text}) Tj ET")
-                y -= 18
-            elif line.startswith("## "):
-                text = line[3:]
-                stream_cmds.append(f"BT /F2 11 Tf 40 {y} Td ({text}) Tj ET")
-                y -= 15
-            elif line.startswith("### "):
-                text = line[4:]
-                stream_cmds.append(f"BT /F2 10 Tf 40 {y} Td ({text}) Tj ET")
-                y -= 13
-            elif line.startswith("* ") or line.startswith("- "):
-                text = line[2:]
-                stream_cmds.append(f"BT /F1 8.5 Tf 50 {y} Td (\\225 {text}) Tj ET")
-                y -= 11.5
-            elif line.startswith("   - ") or line.startswith("  * "):
-                text = line[5:]
-                stream_cmds.append(f"BT /F1 8.5 Tf 65 {y} Td (- {text}) Tj ET")
-                y -= 11
-            elif line.strip() == "---":
+        for item_type, text, y in p_items:
+            if item_type == 'h1':
+                stream_cmds.append(f"0.12 0.23 0.53 rg BT /F2 13 Tf 40 {y} Td ({text}) Tj ET 0 0 0 rg")
+            elif item_type == 'h2':
+                stream_cmds.append(f"0.15 0.3 0.6 rg BT /F2 11 Tf 40 {y} Td ({text}) Tj ET 0 0 0 rg")
+            elif item_type == 'h3':
+                stream_cmds.append(f"0.2 0.2 0.2 rg BT /F2 10 Tf 40 {y} Td ({text}) Tj ET 0 0 0 rg")
+            elif item_type == 'h4':
+                stream_cmds.append(f"0.25 0.25 0.25 rg BT /F2 9.5 Tf 40 {y} Td ({text}) Tj ET 0 0 0 rg")
+            elif item_type == 'hr':
                 stream_cmds.append(f"0.85 0.85 0.85 RG 40 {y} m 572 {y} l S 0 0 0 rg")
-                y -= 10
-            elif line.startswith("```"):
-                y -= 4
+            elif item_type == 'bullet':
+                stream_cmds.append(f"BT /F1 8.5 Tf 50 {y} Td ({text}) Tj ET")
+            elif item_type == 'subbullet':
+                stream_cmds.append(f"BT /F1 8.5 Tf 65 {y} Td ({text}) Tj ET")
             else:
-                stream_cmds.append(f"BT /F1 8.5 Tf 40 {y} Td ({line}) Tj ET")
-                y -= 11.5
+                stream_cmds.append(f"BT /F1 8.5 Tf 40 {y} Td ({text}) Tj ET")
                 
         stream_cmds.append("Q")
         stream_data = "\n".join(stream_cmds).encode('latin-1', 'replace')
@@ -154,6 +215,7 @@ def create_pdf(output_path="inter_company_user_guide.pdf"):
     pdf_objs.sort(key=lambda x: x[0])
     
     # Write PDF file with accurate xref table
+    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
     with open(output_path, "wb") as f:
         f.write(b"%PDF-1.4\n")
         offsets = {}
@@ -172,7 +234,20 @@ def create_pdf(output_path="inter_company_user_guide.pdf"):
         f.write(f"trailer\n<< /Size {total_objs} /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF\n".encode('latin-1'))
 
     print(f"Successfully generated User Guide PDF at {output_path} ({os.path.getsize(output_path)} bytes, {total_pages} pages)")
+    return output_path
 
 if __name__ == "__main__":
-    out = sys.argv[1] if len(sys.argv) > 1 else "/inter_company_transactions/inter_company_transactions/public/Inter_Company_Transactions_User_Guide.pdf"
-    create_pdf(out)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    target_public = os.path.join(script_dir, "public", "Inter_Company_Transactions_User_Guide.pdf")
+    out = sys.argv[1] if len(sys.argv) > 1 else target_public
+    pdf_path = create_pdf(out)
+    
+    # Also copy to root for quick access
+    root_pdf = os.path.join(script_dir, "..", "Inter_Company_Transactions_User_Guide.pdf")
+    try:
+        import shutil
+        shutil.copyfile(pdf_path, root_pdf)
+        print(f"Copied to root: {root_pdf}")
+    except Exception as e:
+        print(f"Notice: {e}")
+

@@ -311,6 +311,78 @@ Without netting, 3 separate international wire transfers are required ($170,000 
 6. Click **Execute Resolution**.
 7. The system creates and links a Credit Note return invoice in the seller entity and updates the intercompany variance to zero.
 
+### Example E: Multi-Currency Intercompany Transactions (Step-by-Step PKR vs USD Tutorial)
+**Scenario:** A conglomerate operates with two entities with different legal currencies:
+* **Main Company (Entity A):** `ABC Technologies (Pvt) Ltd` - Default Currency: **PKR**
+* **Sister Subsidiary (Entity B):** `XYZ Global Inc` - Default Currency: **USD**
+* **Exchange Rate:** 1 USD = 280 PKR (or 1 PKR = 0.00357 USD)
+
+#### Is there a Custom Field needed for Currency?
+**No new custom field is required!** ERPNext natively provides multi-currency capabilities (`currency`, `conversion_rate`, `party_account_currency`) across all transactional documents, and this app automatically integrates with them. You only need the standard transaction control fields:
+1. **`is_intercompany` (Check):** Tick on any transaction to trigger intercompany mirroring.
+2. **`intercompany_target_company` (Link):** Select the target sister company (e.g., `XYZ Global Inc`).
+
+#### Step-by-Step Setup:
+1. **Define Exchange Rates in ERPNext:**
+   - Navigate to **Accounting > Setup > Currency Exchange**.
+   - Create a record:
+     - `From Currency`: **USD**
+     - `To Currency`: **PKR**
+     - `Date`: Today's date (or transaction date)
+     - `Exchange Rate`: **280.0**
+   - Save. (The system automatically calculates inverse conversions when converting PKR to USD).
+2. **Setup Internal Customer & Supplier Profiles:**
+   - In `ABC Technologies (PKR)`:
+     - Internal Customer `XYZ Global Inc (Internal)`: Set `Billing Currency` = **USD** (or PKR).
+     - Internal Supplier `XYZ Global Inc (Internal)`: Set `Billing Currency` = **USD** (or PKR).
+   - In `XYZ Global Inc (USD)`:
+     - Internal Customer `ABC Technologies (Internal)`: Set `Billing Currency` = **USD** (or PKR).
+     - Internal Supplier `ABC Technologies (Internal)`: Set `Billing Currency` = **USD** (or PKR).
+3. **Configure the Link in Intercompany Transaction Link:**
+   - In **Inter Company > Intercompany Transaction Link**, add `XYZ Global Inc` in the Companies table and specify the respective customer and supplier IDs.
+
+#### How Each Document Flow Operates Across Currencies:
+
+1. **Sales Order (SO) to Purchase Order (PO) & PO to SO:**
+   - **Action in ABC (PKR):** Create a Sales Order for `XYZ Global Inc`.
+   - Set Currency to **USD**, Item `Laptop`, Qty `10`, Rate `$1,000 USD`.
+   - Check `Is Intercompany` = Yes, select `Intercompany Target Company` = `XYZ Global Inc`.
+   - **Result on Submit:** Mirrored **Purchase Order** is created in `XYZ Global Inc` in **USD** with Rate `$1,000 USD`, Conversion Rate = 1.0, and Total = $10,000 USD.
+   - If billed in PKR (e.g. 2,800,000 PKR), the mirrored PO in XYZ automatically receives Rate = $1,000 USD via the exchange rate ($2,800,000 / 280 = $10,000).
+
+2. **Sales Invoice (SI) to Purchase Invoice (PI) & PI to SI:**
+   - **Action:** Submit Sales Invoice in ABC (PKR) for $1,000 USD.
+   - **Result on Submit:** Mirrored **Purchase Invoice** is generated in `XYZ Global Inc` in **USD** for $1,000 USD.
+   - Accounts Payable in XYZ is booked in USD ($1,000), while Accounts Receivable in ABC is booked in USD with local base currency conversion (280,000 PKR).
+
+3. **Delivery Note (DN) to Purchase Receipt (PR) & PR to DN:**
+   - **Action:** Dispatch goods from ABC (PKR) warehouse via Delivery Note.
+   - **Result on Submit:** Mirrored **Purchase Receipt** in `XYZ Global Inc` automatically converts item unit rates to USD, ensuring the incoming inventory valuation in XYZ's stock ledger matches the exact commercial cost in USD without valuation corruption.
+
+4. **Stock Entry to Stock Entry (Inter-Company Material Transfer):**
+   - **Action:** Issue materials from ABC (PKR) warehouse to transfer to XYZ (USD).
+   - **Result on Submit:** Source Material Issue has valuation rate in PKR (e.g. 56,000 PKR). The mirrored Material Receipt in XYZ receives valuation rate in USD ($56,000 / 280 = $200 USD), preserving physical stock balance and accurate stock ledger valuation.
+
+5. **Payment Entry (Payment to Receipt across Currencies):**
+   - **Action:** ABC (PKR) pays XYZ (USD) to settle an invoice.
+   - Create Payment Entry (Pay): `Paid From` = PKR Bank Account (Amount: 280,000 PKR).
+   - Check `Is Intercompany` and select `XYZ Global Inc`.
+   - **Result on Submit:** A mirrored Payment Entry (Receive) is created in `XYZ Global Inc`:
+     - `Party Type` = Customer (`ABC Technologies`)
+     - `Paid To` = USD Bank Account
+     - `Received Amount` = **$1,000 USD**
+     - Target exchange rate and currency conversions are resolved seamlessly.
+
+6. **Journal Entry (Cross-Company Shared Expenses & GL Balances):**
+   - **Action:** ABC (PKR) pays a shared group software license fee of 560,000 PKR and charges 50% (280,000 PKR) to XYZ (USD).
+   - Post Intercompany Journal Entry in ABC.
+   - **Result on Submit:** Mirrored Journal Entry is created in `XYZ Global Inc` with `multi_currency = 1`. The debit/credit amount in XYZ is converted to **$1,000 USD** at the effective exchange rate, keeping both ledgers in mathematical equilibrium.
+
+7. **Cross-Currency Balance Reconciliation:**
+   - In **Inter Company Balance Reconciliation Report**, select Company A (`ABC Technologies`) and Company B (`XYZ Global Inc`).
+   - The report displays `Cur A` (PKR), `Amount A`, `Cur B` (USD), and `Amount B`.
+   - It converts Amount B into Currency A using the posting date exchange rate and reports the true variance in base currency, avoiding false discrepancies caused by currency denomination differences.
+
 ---
 
 ## 5. Reporting & Executive Audit Tools

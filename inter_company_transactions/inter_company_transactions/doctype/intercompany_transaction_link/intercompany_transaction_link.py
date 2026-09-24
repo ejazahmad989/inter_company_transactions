@@ -1413,3 +1413,27 @@ def get_intercompany_dashboard_data(company):
         "outstanding_balances": 0,
         "recent_transactions": []
     }
+
+
+@frappe.whitelist()
+def download_user_guide_pdf():
+    """Whitelisted endpoint allowing users to download the comprehensive PDF User Guide directly from ERPNext Desk."""
+    import os
+    app_path = frappe.get_app_path("inter_company_transactions")
+    pdf_path = os.path.join(app_path, "public", "Inter_Company_Transactions_User_Guide.pdf")
+    if not os.path.exists(pdf_path):
+        try:
+            from inter_company_transactions.generate_pdf_guide import create_pdf
+            pdf_path = create_pdf()
+        except Exception:
+            pass
+            
+    if os.path.exists(pdf_path):
+        with open(pdf_path, "rb") as f:
+            filecontent = f.read()
+        frappe.response["filename"] = "Inter_Company_Transactions_User_Guide.pdf"
+        frappe.response["filecontent"] = filecontent
+        frappe.response["type"] = "download"
+    else:
+        frappe.throw(_("User guide PDF file could not be found."))
+
