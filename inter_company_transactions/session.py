@@ -44,7 +44,7 @@ def ensure_user_notification_settings(user=None):
         pass
 
 def before_request():
-    """Ensure database is clean of JS expressions and user has valid settings"""
+    """Ensure database is clean of legacy expressions and user has valid settings"""
     try:
         try:
             from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import fix_legacy_custom_fields
@@ -78,12 +78,5 @@ def on_session_creation(login_manager):
         if frappe.session.user != "Guest":
             ensure_user_notification_settings(frappe.session.user)
             ensure_user_ict_notification_settings(frappe.session.user)
-            # Apply user theme
-            from inter_company_transactions.enhanced_theme import apply_user_theme
-            apply_user_theme()
-            
-            # Log session creation
-            frappe.log_error(f"Session created for user: {frappe.session.user}", "Session Management")
-            
     except Exception as e:
         frappe.log_error(f"Error in session creation: {str(e)}", "Session Management")

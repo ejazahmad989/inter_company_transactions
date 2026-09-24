@@ -30,13 +30,6 @@ def after_install():
         frappe.log_error(f"Error in create_custom_fields: {e}", "App Installation")
     
     try:
-        # Create email templates
-        create_email_templates()
-    except Exception as e:
-        print(f"Notice during email templates creation: {e}")
-        frappe.log_error(f"Error in create_email_templates: {e}", "App Installation")
-    
-    try:
         # Set default permissions
         set_default_permissions()
     except Exception as e:
@@ -63,16 +56,8 @@ def create_custom_roles():
     """Create custom roles required by the app"""
     roles = [
         {
-            "role_name": "Workflow Manager",
-            "description": "Can manage inter-company workflows and approval processes"
-        },
-        {
-            "role_name": "Approver",
-            "description": "Can approve workflow requests and inter-company transactions"
-        },
-        {
-            "role_name": "Theme Administrator", 
-            "description": "Can manage themes and UI customizations"
+            "role_name": "Inter Company User",
+            "description": "Can view and process inter-company transactions"
         }
     ]
     
@@ -89,28 +74,7 @@ def create_custom_roles():
 def create_doctypes():
     """Create required DocTypes"""
     doctypes = [
-        # Child Tables First (to avoid dependency issues)
-        
-        # 1. Backdate Permission Company (Child Table)
-        {
-            "doctype": "DocType",
-            "name": "Backdate Permission Company",
-            "module": "Inter Company Transactions",
-            "istable": 1,
-            "custom": 1,
-            "fields": [
-                {
-                    "fieldname": "company",
-                    "fieldtype": "Link",
-                    "in_list_view": 1,
-                    "label": "Company",
-                    "options": "Company",
-                    "reqd": 1
-                }
-            ]
-        },
-        
-        # 2. Intercompany Linked Company (Child Table)
+        # 1. Intercompany Linked Company (Child Table)
         {
             "doctype": "DocType",
             "name": "Intercompany Linked Company",
@@ -187,7 +151,7 @@ def create_doctypes():
             ]
         },
         
-        # 3. Intercompany Transaction Type (Child Table)
+        # 2. Intercompany Transaction Type (Child Table)
         {
             "doctype": "DocType",
             "name": "Intercompany Transaction Type",
@@ -222,262 +186,7 @@ def create_doctypes():
             ]
         },
         
-        # 4. Theme Manager Company (Child Table)
-        {
-            "doctype": "DocType",
-            "name": "Theme Manager Company",
-            "module": "Inter Company Transactions",
-            "istable": 1,
-            "custom": 1,
-            "fields": [
-                {
-                    "fieldname": "company",
-                    "fieldtype": "Link",
-                    "in_list_view": 1,
-                    "label": "Company",
-                    "options": "Company",
-                    "reqd": 1
-                }
-            ]
-        },
-        
-        # 5. Theme Manager User (Child Table)
-        {
-            "doctype": "DocType",
-            "name": "Theme Manager User",
-            "module": "Inter Company Transactions",
-            "istable": 1,
-            "custom": 1,
-            "fields": [
-                {
-                    "fieldname": "user",
-                    "fieldtype": "Link",
-                    "in_list_view": 1,
-                    "label": "User",
-                    "options": "User",
-                    "reqd": 1
-                }
-            ]
-        },
-        
-        # 6. Theme Manager Role (Child Table)
-        {
-            "doctype": "DocType",
-            "name": "Theme Manager Role",
-            "module": "Inter Company Transactions",
-            "istable": 1,
-            "custom": 1,
-            "fields": [
-                {
-                    "fieldname": "role",
-                    "fieldtype": "Link",
-                    "in_list_view": 1,
-                    "label": "Role",
-                    "options": "Role",
-                    "reqd": 1
-                }
-            ]
-        },
-        
-        # 7. Inter Company Workflow Approver (Child Table)
-        {
-            "doctype": "DocType",
-            "name": "Inter Company Workflow Approver",
-            "module": "Inter Company Transactions",
-            "istable": 1,
-            "custom": 1,
-            "fields": [
-                {
-                    "fieldname": "approval_level",
-                    "fieldtype": "Int",
-                    "in_list_view": 1,
-                    "label": "Approval Level",
-                    "reqd": 1
-                },
-                {
-                    "fieldname": "approver_type",
-                    "fieldtype": "Select",
-                    "in_list_view": 1,
-                    "label": "Approver Type",
-                    "options": "User\nRole\nDynamic",
-                    "reqd": 1
-                },
-                {
-                    "fieldname": "approver_user",
-                    "fieldtype": "Link",
-                    "label": "Approver User",
-                    "options": "User",
-                    "depends_on": "eval:doc.approver_type == 'User'"
-                },
-                {
-                    "fieldname": "approver_role",
-                    "fieldtype": "Link",
-                    "label": "Approver Role",
-                    "options": "Role",
-                    "depends_on": "eval:doc.approver_type == 'Role'"
-                },
-                {
-                    "fieldname": "amount_threshold",
-                    "fieldtype": "Currency",
-                    "label": "Amount Threshold"
-                },
-                {
-                    "fieldname": "is_mandatory",
-                    "fieldtype": "Check",
-                    "label": "Is Mandatory",
-                    "default": 1
-                }
-            ]
-        },
-        
-        # 8. Workflow Approval History (Child Table)
-        {
-            "doctype": "DocType",
-            "name": "Workflow Approval History",
-            "module": "Inter Company Transactions",
-            "istable": 1,
-            "custom": 1,
-            "fields": [
-                {
-                    "fieldname": "approval_level",
-                    "fieldtype": "Int",
-                    "in_list_view": 1,
-                    "label": "Approval Level"
-                },
-                {
-                    "fieldname": "approver",
-                    "fieldtype": "Link",
-                    "in_list_view": 1,
-                    "label": "Approver",
-                    "options": "User"
-                },
-                {
-                    "fieldname": "action",
-                    "fieldtype": "Select",
-                    "in_list_view": 1,
-                    "label": "Action",
-                    "options": "Approved\nRejected\nDelegated\nEscalated\nCommented"
-                },
-                {
-                    "fieldname": "action_date",
-                    "fieldtype": "Datetime",
-                    "in_list_view": 1,
-                    "label": "Action Date"
-                },
-                {
-                    "fieldname": "comments",
-                    "fieldtype": "Text",
-                    "label": "Comments"
-                }
-            ]
-        },
-        
-        # Main DocTypes (after child tables)
-        
-        # 9. Backdate Permission (Main DocType) - FIXED: Changed 'doctype' to 'document_type'
-        {
-            "doctype": "DocType",
-            "name": "Backdate Permission",
-            "module": "Inter Company Transactions",
-            "custom": 1,
-            "autoname": "format:BDP-{user}-{document_type}-{#####}",
-            "fields": [
-                {
-                    "fieldname": "user",
-                    "fieldtype": "Link",
-                    "in_list_view": 1,
-                    "label": "User",
-                    "options": "User",
-                    "reqd": 1
-                },
-                {
-                    "fieldname": "full_name",
-                    "fieldtype": "Data",
-                    "label": "Full Name",
-                    "read_only": 1
-                },
-                {
-                    "fieldname": "role",
-                    "fieldtype": "Link",
-                    "label": "Primary Role",
-                    "options": "Role"
-                },
-                {
-                    "fieldname": "company",
-                    "fieldtype": "Link",
-                    "label": "Default Company",
-                    "options": "Company"
-                },
-                {
-                    "fieldname": "enabled",
-                    "fieldtype": "Check",
-                    "in_list_view": 1,
-                    "label": "Enabled",
-                    "default": 1
-                },
-                {
-                    "fieldname": "document_type",  # FIXED: Changed from 'doctype' to 'document_type'
-                    "fieldtype": "Select",
-                    "in_list_view": 1,
-                    "label": "Document Type",
-                    "options": "Journal Entry\nPayment Entry\nSales Invoice\nPurchase Invoice\nSales Order\nPurchase Order\nDelivery Note\nPurchase Receipt\nStock Entry\nAsset\nAll Transaction Types",
-                    "reqd": 1
-                },
-                {
-                    "fieldname": "applies_to_all_companies",
-                    "fieldtype": "Check",
-                    "label": "Applies to All Companies",
-                    "default": 0
-                },
-                {
-                    "fieldname": "specific_companies",
-                    "fieldtype": "Table",
-                    "label": "Specific Companies",
-                    "options": "Backdate Permission Company",
-                    "depends_on": "eval:!doc.applies_to_all_companies"
-                },
-                {
-                    "fieldname": "allow_backdate",
-                    "fieldtype": "Check",
-                    "label": "Allow Backdate Transactions",
-                    "default": 1
-                },
-                {
-                    "fieldname": "backdate_days",
-                    "fieldtype": "Int",
-                    "label": "Backdate Days Allowed",
-                    "default": 2,
-                    "depends_on": "allow_backdate"
-                },
-                {
-                    "fieldname": "allow_future_date",
-                    "fieldtype": "Check",
-                    "label": "Allow Future Date Transactions",
-                    "default": 0
-                },
-                {
-                    "fieldname": "future_date_days",
-                    "fieldtype": "Int",
-                    "label": "Future Date Days Allowed",
-                    "default": 0,
-                    "depends_on": "allow_future_date"
-                },
-                {
-                    "fieldname": "expires_on",
-                    "fieldtype": "Date",
-                    "label": "Expires On",
-                    "depends_on": "auto_expire"
-                },
-                {
-                    "fieldname": "auto_expire",
-                    "fieldtype": "Check",
-                    "label": "Auto Expire",
-                    "default": 0
-                }
-            ]
-        },
-        
-        # 10. Intercompany Transaction Link (Main DocType)
+        # 3. Intercompany Transaction Link (Main DocType)
         {
             "doctype": "DocType",
             "name": "Intercompany Transaction Link",
@@ -529,7 +238,7 @@ def create_doctypes():
             ]
         },
         
-        # 11. Inter Company Document Reference
+        # 4. Inter Company Document Reference
         {
             "doctype": "DocType",
             "name": "Inter Company Document Reference",
@@ -588,239 +297,7 @@ def create_doctypes():
             ]
         },
         
-        # 12. Enhanced Theme Manager
-        {
-            "doctype": "DocType",
-            "name": "Enhanced Theme Manager",
-            "module": "Inter Company Transactions",
-            "custom": 1,
-            "allow_import": 0,
-            "autoname": "format:ETM-{theme_name}-{#####}",
-            "fields": [
-                {
-                    "fieldname": "theme_name",
-                    "fieldtype": "Select",
-                    "in_list_view": 1,
-                    "label": "Theme Name",
-                    "options": "QuickBooks Classic\nQuickBooks Modern\nQuickBooks Pro\nSage Green\nXero Blue\nFreshBooks Orange\nZoho Purple\nWave Teal\nAccounting Professional\nManufacturing Blue\nTrading Green\nRetail Orange\nHealthcare Teal\nEducation Purple\nFintech Dark\nStartup Minimal\nCorporate Elite\nCustom Theme",
-                    "reqd": 1
-                },
-                {
-                    "fieldname": "is_active",
-                    "fieldtype": "Check",
-                    "in_list_view": 1,
-                    "label": "Is Active",
-                    "default": 0
-                },
-                {
-                    "fieldname": "is_default",
-                    "fieldtype": "Check",
-                    "label": "Is Default Theme",
-                    "default": 0
-                },
-                {
-                    "fieldname": "primary_color",
-                    "fieldtype": "Color",
-                    "label": "Primary Color"
-                },
-                {
-                    "fieldname": "secondary_color",
-                    "fieldtype": "Color",
-                    "label": "Secondary Color"
-                },
-                {
-                    "fieldname": "background_color",
-                    "fieldtype": "Color",
-                    "label": "Background Color"
-                },
-                {
-                    "fieldname": "text_color",
-                    "fieldtype": "Color",
-                    "label": "Text Color"
-                },
-                {
-                    "fieldname": "custom_css",
-                    "fieldtype": "Code",
-                    "label": "Custom CSS",
-                    "options": "CSS"
-                }
-            ]
-        },
-        
-        # 13. Inter Company Workflow
-        {
-            "doctype": "DocType",
-            "name": "Inter Company Workflow",
-            "module": "Inter Company Transactions",
-            "custom": 1,
-            "allow_import": 0,
-            "autoname": "format:ICW-{workflow_name}-{#####}",
-            "fields": [
-                {
-                    "fieldname": "workflow_name",
-                    "fieldtype": "Data",
-                    "in_list_view": 1,
-                    "label": "Workflow Name",
-                    "reqd": 1
-                },
-                {
-                    "fieldname": "enabled",
-                    "fieldtype": "Check",
-                    "in_list_view": 1,
-                    "label": "Enabled",
-                    "default": 1
-                },
-                {
-                    "fieldname": "source_company",
-                    "fieldtype": "Link",
-                    "in_list_view": 1,
-                    "label": "Source Company",
-                    "options": "Company",
-                    "reqd": 1
-                },
-                {
-                    "fieldname": "target_company",
-                    "fieldtype": "Link",
-                    "in_list_view": 1,
-                    "label": "Target Company",
-                    "options": "Company",
-                    "reqd": 1
-                },
-                {
-                    "fieldname": "source_document_type",
-                    "fieldtype": "Link",
-                    "in_list_view": 1,
-                    "label": "Source Document Type",
-                    "options": "DocType",
-                    "reqd": 1,
-                    "description": "The document type that initiates the workflow (e.g., Sales Order)"
-                },
-                {
-                    "fieldname": "target_document_type",
-                    "fieldtype": "Link",
-                    "in_list_view": 1,
-                    "label": "Target Document Type",
-                    "options": "DocType",
-                    "reqd": 1,
-                    "description": "The document type that will be created upon approval (e.g., Purchase Order)"
-                },
-                {
-                    "fieldname": "approval_required",
-                    "fieldtype": "Check",
-                    "label": "Approval Required",
-                    "default": 1
-                },
-                {
-                    "fieldname": "approver_mappings",
-                    "fieldtype": "Table",
-                    "label": "Approver Mappings",
-                    "options": "Inter Company Workflow Approver"
-                },
-                {
-                    "fieldname": "escalation_enabled",
-                    "fieldtype": "Check",
-                    "label": "Enable Escalation",
-                    "default": 0
-                },
-                {
-                    "fieldname": "escalation_hours",
-                    "fieldtype": "Int",
-                    "label": "Escalation Hours",
-                    "default": 24,
-                    "depends_on": "escalation_enabled"
-                }
-            ]
-        },
-        
-        # 14. Workflow Approval Request
-        {
-            "doctype": "DocType",
-            "name": "Workflow Approval Request",
-            "module": "Inter Company Transactions",
-            "custom": 1,
-            "allow_import": 0,
-            "autoname": "format:WAR-{document_type}-{#####}",
-            "fields": [
-                {
-                    "fieldname": "workflow",
-                    "fieldtype": "Link",
-                    "in_list_view": 1,
-                    "label": "Workflow",
-                    "options": "Inter Company Workflow",
-                    "reqd": 1
-                },
-                {
-                    "fieldname": "document_type",
-                    "fieldtype": "Link",
-                    "in_list_view": 1,
-                    "label": "Document Type",
-                    "options": "DocType",
-                    "reqd": 1
-                },
-                {
-                    "fieldname": "document_name",
-                    "fieldtype": "Dynamic Link",
-                    "in_list_view": 1,
-                    "label": "Document Name",
-                    "options": "document_type",
-                    "reqd": 1
-                },
-                {
-                    "fieldname": "source_company",
-                    "fieldtype": "Link",
-                    "in_list_view": 1,
-                    "label": "Source Company",
-                    "options": "Company",
-                    "reqd": 1
-                },
-                {
-                    "fieldname": "target_company",
-                    "fieldtype": "Link",
-                    "label": "Target Company",
-                    "options": "Company",
-                    "reqd": 1
-                },
-                {
-                    "fieldname": "requested_by",
-                    "fieldtype": "Link",
-                    "label": "Requested By",
-                    "options": "User",
-                    "reqd": 1
-                },
-                {
-                    "fieldname": "status",
-                    "fieldtype": "Select",
-                    "in_list_view": 1,
-                    "label": "Status",
-                    "options": "Pending\nApproved\nRejected\nEscalated\nCancelled",
-                    "default": "Pending"
-                },
-                {
-                    "fieldname": "document_amount",
-                    "fieldtype": "Currency",
-                    "label": "Document Amount"
-                },
-                {
-                    "fieldname": "approval_history",
-                    "fieldtype": "Table",
-                    "label": "Approval History",
-                    "options": "Workflow Approval History"
-                },
-                {
-                    "fieldname": "created_date",
-                    "fieldtype": "Datetime",
-                    "label": "Created Date",
-                    "read_only": 1
-                },
-                {
-                    "fieldname": "due_date",
-                    "fieldtype": "Datetime",
-                    "label": "Due Date"
-                }
-            ]
-        },
-        
-        # 15. ICT Notification Setting
+        # 5. ICT Notification Setting
         {
             "doctype": "DocType",
             "name": "ICT Notification Setting",
@@ -882,22 +359,6 @@ def create_doctypes():
                     "fieldname": "section_break_events",
                     "fieldtype": "Section Break",
                     "label": "Notification Triggers & Events"
-                },
-                {
-                    "default": "1",
-                    "fieldname": "approval_requests",
-                    "fieldtype": "Check",
-                    "label": "Approval Requests"
-                },
-                {
-                    "default": "1",
-                    "fieldname": "status_updates",
-                    "fieldtype": "Check",
-                    "label": "Status Updates"
-                },
-                {
-                    "fieldname": "column_break_events",
-                    "fieldtype": "Column Break"
                 },
                 {
                     "default": "1",
@@ -975,7 +436,7 @@ def create_custom_fields():
                 "Stock Entry", "Quotation", "Supplier Quotation", "Material Request",
                 "Request for Quotation"
             ]
-
+            
             def _get_fallback_tx_fields():
                 return [
                     {
@@ -994,7 +455,7 @@ def create_custom_fields():
                         "fieldtype": "Link",
                         "options": "Company",
                         "insert_after": "is_intercompany",
-                        "description": "Select the target company for inter-company transaction (editable only when Is Intercompany is checked)",
+                        "description": "Select the target company for inter-company transaction",
                         "mandatory_depends_on": "is_intercompany",
                         "in_list_view": 1,
                         "in_standard_filter": 1,
@@ -1010,7 +471,7 @@ def create_custom_fields():
                     },
                     {
                         "fieldname": "intercompany_linked_doc_name",
-                        "label": "Linked Document",
+                        "label": "Linked Document Name",
                         "fieldtype": "Data",
                         "insert_after": "intercompany_linked_doc_doctype",
                         "read_only": 1,
@@ -1019,14 +480,13 @@ def create_custom_fields():
                     {
                         "fieldname": "intercompany_linked_company",
                         "label": "Linked Company",
-                        "fieldtype": "Link",
-                        "options": "Company",
+                        "fieldtype": "Data",
                         "insert_after": "intercompany_linked_doc_name",
                         "read_only": 1,
                         "hidden": 1
                     }
                 ]
-
+            
             custom_fields = {
                 "Customer": [
                     {
@@ -1067,6 +527,42 @@ def create_custom_fields():
                         "insert_after": "parent_supplier_group",
                         "description": "Company this supplier group belongs to"
                     }
+                ],
+                "Item": [
+                    {
+                        "fieldname": "is_intercompany_item",
+                        "label": "Is Intercompany Item",
+                        "fieldtype": "Check",
+                        "default": "0",
+                        "insert_after": "item_group",
+                        "description": "Designates this item for inter-company transactions"
+                    },
+                    {
+                        "fieldname": "ic_item_group",
+                        "label": "Inter Company Item Group",
+                        "fieldtype": "Link",
+                        "options": "Item Group",
+                        "insert_after": "is_intercompany_item",
+                        "description": "Intercompany shared Item Group"
+                    }
+                ],
+                "Warehouse": [
+                    {
+                        "fieldname": "is_intercompany_warehouse",
+                        "label": "Is Intercompany / Transit Warehouse",
+                        "fieldtype": "Check",
+                        "default": "0",
+                        "insert_after": "company",
+                        "description": "Designates this warehouse for inter-company stock transfers and in-transit inventory"
+                    },
+                    {
+                        "fieldname": "ic_warehouse",
+                        "label": "Linked Intercompany Warehouse",
+                        "fieldtype": "Link",
+                        "options": "Warehouse",
+                        "insert_after": "is_intercompany_warehouse",
+                        "description": "Corresponding warehouse in linked partner company"
+                    }
                 ]
             }
             for dt in tx_doctypes:
@@ -1076,7 +572,6 @@ def create_custom_fields():
             for field in fields:
                 try:
                     field_name = f"{doctype}-{field['fieldname']}"
-                    # Check if Custom Field exists by name or by (dt, fieldname)
                     existing_cf = None
                     if frappe.db.exists("Custom Field", field_name):
                         existing_cf = field_name
@@ -1109,7 +604,6 @@ def create_custom_fields():
                         custom_field.insert()
                         print(f"Created Custom Field: {doctype} - {field['fieldname']}")
                     else:
-                        # Ensure module is set to Inter Company Transactions and sync dependencies
                         cf_doc = frappe.get_doc("Custom Field", existing_cf)
                         cf_doc.module = "Inter Company Transactions"
                         if "label" in field:
@@ -1143,91 +637,6 @@ def create_custom_fields():
         print(f"Error creating custom fields: {str(e)}")
         frappe.log_error(f"Custom Fields Creation Error: {str(e)}", "Inter Company Transaction Setup")
 
-def create_email_templates():
-    """Create email templates for workflow notifications"""
-    templates = [
-        {
-            "name": "approval_request_email",
-            "subject": "Approval Required: {{ doc.document_type }} {{ doc.document_name }}",
-            "response": """
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <div style="background: linear-gradient(135deg, #0077C5, #005A9F); color: white; padding: 20px; text-align: center;">
-                    <h2>Approval Required</h2>
-                </div>
-                <div style="padding: 20px; background: #f8f9fa;">
-                    <p>Dear {{ frappe.db.get_value("User", user, "full_name") }},</p>
-                    
-                    <p>You have a new approval request:</p>
-                    
-                    <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
-                        <p><strong>Document:</strong> {{ doc.document_type }} {{ doc.document_name }}</p>
-                        <p><strong>Amount:</strong> {{ frappe.format_value(doc.document_amount, "Currency") }}</p>
-                        <p><strong>Requested By:</strong> {{ frappe.db.get_value("User", doc.requested_by, "full_name") }}</p>
-                    </div>
-                    
-                    <div style="text-align: center; margin: 20px 0;">
-                        <a href="{{ frappe.utils.get_url() }}/app/workflow-approval-request/{{ doc.name }}" 
-                           style="background: #0077C5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px;">
-                            Review & Approve
-                        </a>
-                    </div>
-                </div>
-            </div>
-            """
-        },
-        {
-            "name": "approval_approved_email",
-            "subject": "Request Approved: {{ doc.document_type }} {{ doc.document_name }}",
-            "response": """
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <div style="background: linear-gradient(135deg, #28a745, #20c997); color: white; padding: 20px; text-align: center;">
-                    <h2>Request Approved</h2>
-                </div>
-                <div style="padding: 20px; background: #f8f9fa;">
-                    <p>Your approval request has been approved:</p>
-                    
-                    <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
-                        <p><strong>Document:</strong> {{ doc.document_type }} {{ doc.document_name }}</p>
-                        <p><strong>Amount:</strong> {{ frappe.format_value(doc.document_amount, "Currency") }}</p>
-                        <p><strong>Status:</strong> Approved</p>
-                    </div>
-                </div>
-            </div>
-            """
-        },
-        {
-            "name": "approval_rejected_email",
-            "subject": "Request Rejected: {{ doc.document_type }} {{ doc.document_name }}",
-            "response": """
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <div style="background: linear-gradient(135deg, #dc3545, #c82333); color: white; padding: 20px; text-align: center;">
-                    <h2>Request Rejected</h2>
-                </div>
-                <div style="padding: 20px; background: #f8f9fa;">
-                    <p>Your approval request has been rejected:</p>
-                    
-                    <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
-                        <p><strong>Document:</strong> {{ doc.document_type }} {{ doc.document_name }}</p>
-                        <p><strong>Amount:</strong> {{ frappe.format_value(doc.document_amount, "Currency") }}</p>
-                        <p><strong>Status:</strong> Rejected</p>
-                    </div>
-                </div>
-            </div>
-            """
-        }
-    ]
-    
-    for template in templates:
-        if not frappe.db.exists("Email Template", template["name"]):
-            email_template = frappe.get_doc({
-                "doctype": "Email Template",
-                "name": template["name"],
-                "subject": template["subject"],
-                "response": template["response"]
-            })
-            email_template.insert(ignore_permissions=True)
-            print(f"Created Email Template: {template['name']}")
-
 def set_default_permissions():
     """Set default permissions for custom doctypes"""
     permissions = [
@@ -1241,34 +650,6 @@ def set_default_permissions():
         },
         {
             "doctype": "Inter Company Document Reference",
-            "role": "System Manager",
-            "read": 1, "write": 1, "create": 1, "delete": 1,
-            "submit": 0, "cancel": 0, "amend": 0,
-            "report": 1, "export": 1, "print": 1, "email": 1, "share": 1
-        },
-        {
-            "doctype": "Backdate Permission",
-            "role": "System Manager",
-            "read": 1, "write": 1, "create": 1, "delete": 1,
-            "submit": 0, "cancel": 0, "amend": 0,
-            "report": 1, "export": 1, "print": 1, "email": 1, "share": 1
-        },
-        {
-            "doctype": "Enhanced Theme Manager",
-            "role": "System Manager",
-            "read": 1, "write": 1, "create": 1, "delete": 1,
-            "submit": 0, "cancel": 0, "amend": 0,
-            "report": 1, "export": 1, "print": 1, "email": 1, "share": 1
-        },
-        {
-            "doctype": "Inter Company Workflow",
-            "role": "System Manager",
-            "read": 1, "write": 1, "create": 1, "delete": 1,
-            "submit": 0, "cancel": 0, "amend": 0,
-            "report": 1, "export": 1, "print": 1, "email": 1, "share": 1
-        },
-        {
-            "doctype": "Workflow Approval Request",
             "role": "System Manager",
             "read": 1, "write": 1, "create": 1, "delete": 1,
             "submit": 0, "cancel": 0, "amend": 0,
@@ -1344,69 +725,10 @@ def set_default_permissions():
             "submit": 0, "cancel": 0, "amend": 0,
             "report": 0, "export": 0, "print": 1, "email": 1, "share": 0
         },
-        
-        # All Role - Read access to view DocTypes
         {
             "doctype": "Intercompany Transaction Link",
             "role": "All",
             "read": 1, "write": 0, "create": 0, "delete": 0,
-            "submit": 0, "cancel": 0, "amend": 0,
-            "report": 0, "export": 0, "print": 0, "email": 0, "share": 0
-        },
-        {
-            "doctype": "Enhanced Theme Manager",
-            "role": "All",
-            "read": 1, "write": 0, "create": 0, "delete": 0,
-            "submit": 0, "cancel": 0, "amend": 0,
-            "report": 0, "export": 0, "print": 0, "email": 0, "share": 0
-        },
-        {
-            "doctype": "Workflow Approval Request",
-            "role": "All",
-            "read": 1, "write": 0, "create": 0, "delete": 0,
-            "submit": 0, "cancel": 0, "amend": 0,
-            "report": 0, "export": 0, "print": 0, "email": 0, "share": 0
-        },
-        
-        # Accounts Manager - Can manage Backdate Permissions
-        {
-            "doctype": "Backdate Permission",
-            "role": "Accounts Manager",
-            "read": 1, "write": 1, "create": 1, "delete": 1,
-            "submit": 0, "cancel": 0, "amend": 0,
-            "report": 1, "export": 1, "print": 1, "email": 1, "share": 1
-        },
-        
-        # Theme Administrator - Can manage themes
-        {
-            "doctype": "Enhanced Theme Manager",
-            "role": "Theme Administrator",
-            "read": 1, "write": 1, "create": 1, "delete": 1,
-            "submit": 0, "cancel": 0, "amend": 0,
-            "report": 1, "export": 1, "print": 1, "email": 1, "share": 1
-        },
-        
-        # Workflow Manager - Can manage workflows
-        {
-            "doctype": "Inter Company Workflow",
-            "role": "Workflow Manager",
-            "read": 1, "write": 1, "create": 1, "delete": 1,
-            "submit": 0, "cancel": 0, "amend": 0,
-            "report": 1, "export": 1, "print": 1, "email": 1, "share": 1
-        },
-        {
-            "doctype": "Workflow Approval Request",
-            "role": "Workflow Manager",
-            "read": 1, "write": 1, "create": 1, "delete": 0,
-            "submit": 0, "cancel": 0, "amend": 0,
-            "report": 1, "export": 1, "print": 1, "email": 1, "share": 1
-        },
-        
-        # Approver - Can read/write approval requests
-        {
-            "doctype": "Workflow Approval Request",
-            "role": "Approver",
-            "read": 1, "write": 1, "create": 0, "delete": 0,
             "submit": 0, "cancel": 0, "amend": 0,
             "report": 0, "export": 0, "print": 0, "email": 0, "share": 0
         }
@@ -1415,7 +737,6 @@ def set_default_permissions():
     for perm in permissions:
         try:
             if frappe.db.exists("DocType", perm["doctype"]):
-                # Check if permission already exists
                 existing_perm = frappe.db.exists("DocPerm", {
                     "parent": perm["doctype"],
                     "role": perm["role"]
@@ -1449,28 +770,29 @@ def set_default_permissions():
             print(f"Error setting permissions for {perm['doctype']}: {str(e)}")
 
 def create_sample_data():
-    """Create sample data for demonstration"""
+    """Ensure Inter Company Settings single doctype is initialized with default values"""
     try:
-        # Create sample enhanced theme if none exists
-        if not frappe.db.exists("Enhanced Theme Manager", {"is_default": 1}):
-            sample_theme = frappe.get_doc({
-                "doctype": "Enhanced Theme Manager",
-                "theme_name": "QuickBooks Classic",
-                "theme_description": "Classic QuickBooks-inspired theme for accounting",
-                "is_default": 1,
-                "is_active": 1,
-                "primary_color": "#0077C5",
-                "secondary_color": "#2CA01C",
-                "background_color": "#F5F5F5",
-                "text_color": "#333333"
-            })
-            sample_theme.insert(ignore_permissions=True)
-            print("Created sample theme: QuickBooks Classic")
-        
-        print("Sample data creation completed")
-            
+        if frappe.db.exists("DocType", "Inter Company Settings"):
+            settings = frappe.get_single("Inter Company Settings")
+            if not settings.execution_mode:
+                settings.execution_mode = "Synchronous"
+            if settings.enabled is None:
+                settings.enabled = 1
+            if settings.auto_create_missing_items is None:
+                settings.auto_create_missing_items = 1
+            if not settings.tax_handling_strategy:
+                settings.tax_handling_strategy = "Mirror Net Rate Exactly"
+            if not settings.default_transfer_pricing_rule:
+                settings.default_transfer_pricing_rule = "Source Document Rate"
+            if settings.tolerance_amount is None:
+                settings.tolerance_amount = 0.05
+            if settings.notify_on_sync_failure is None:
+                settings.notify_on_sync_failure = 1
+            settings.save(ignore_permissions=True)
+            print("Initialized Inter Company Settings default values")
+        frappe.db.commit()
     except Exception as e:
-        print(f"Error creating sample data: {str(e)}")
+        print(f"Notice during sample data initialization: {str(e)}")
 
 def create_page_and_workspace():
     """Ensure Inter-Company Control Console page and Inter Company workspace exist in DB"""
@@ -1515,7 +837,6 @@ def before_uninstall():
     """Clean up before app uninstall"""
     print("Cleaning up Inter Company Transactions app...")
     
-    # Remove custom fields
     custom_fields = frappe.get_all("Custom Field", 
         filters={"module": "Inter Company Transactions"},
         fields=["name"]

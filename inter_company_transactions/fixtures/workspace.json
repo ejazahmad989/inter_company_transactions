@@ -1,237 +1,227 @@
 [
- {
-  "category": "Modules",
-  "charts": [],
-  "content": "[{\"id\":\"b_header\",\"type\":\"header\",\"data\":{\"text\":\"Inter-Company Central Hub\",\"level\":3}},{\"id\":\"b_card_setup\",\"type\":\"card\",\"data\":{\"card_name\":\"Setup & Configuration\"}},{\"id\":\"b_card_trans\",\"type\":\"card\",\"data\":{\"card_name\":\"Operations & Tracking\"}},{\"id\":\"b_card_enterprise\",\"type\":\"card\",\"data\":{\"card_name\":\"Netting, Pricing & Elimination\"}},{\"id\":\"b_card_recon\",\"type\":\"card\",\"data\":{\"card_name\":\"Reconciliation & Disputes\"}}]",
-  "creation": "2024-03-14 00:00:00.000000",
-  "custom_blocks": [],
-  "docstatus": 0,
-  "doctype": "Workspace",
-  "for_user": "",
-  "hide_custom": 0,
-  "icon": "octicon octicon-git-compare",
-  "is_hidden": 0,
-  "label": "Inter Company",
-  "links": [
-   {
-    "hidden": 0,
-    "is_query_report": 0,
-    "label": "Inter-Company Control Console",
-    "link_count": 0,
-    "link_to": "inter-company-console",
-    "link_type": "Page",
-    "onboard": 1,
-    "type": "Link"
-   },
-   {
-    "hidden": 0,
-    "is_query_report": 0,
-    "label": "Inter Company Settings",
-    "link_count": 0,
-    "link_to": "Inter Company Settings",
-    "link_type": "DocType",
-    "onboard": 1,
-    "type": "Link"
-   },
-   {
-    "hidden": 0,
-    "is_query_report": 0,
-    "label": "Intercompany Transaction Link",
-    "link_count": 0,
-    "link_to": "Intercompany Transaction Link",
-    "link_type": "DocType",
-    "onboard": 1,
-    "type": "Link"
-   },
-   {
-    "hidden": 0,
-    "is_query_report": 0,
-    "label": "Transfer Pricing Policy",
-    "link_count": 0,
-    "link_to": "Transfer Pricing Policy",
-    "link_type": "DocType",
-    "onboard": 1,
-    "type": "Link"
-   },
-   {
-    "hidden": 0,
-    "is_query_report": 0,
-    "label": "Inter Company Netting Cycle",
-    "link_count": 0,
-    "link_to": "Inter Company Netting Cycle",
-    "link_type": "DocType",
-    "onboard": 1,
-    "type": "Link"
-   },
-   {
-    "hidden": 0,
-    "is_query_report": 0,
-    "label": "Inter Company Elimination Run",
-    "link_count": 0,
-    "link_to": "Inter Company Elimination Run",
-    "link_type": "DocType",
-    "onboard": 1,
-    "type": "Link"
-   },
-   {
-    "hidden": 0,
-    "is_query_report": 0,
-    "label": "Inter Company Dispute",
-    "link_count": 0,
-    "link_to": "Inter Company Dispute",
-    "link_type": "DocType",
-    "onboard": 0,
-    "type": "Link"
-   },
-   {
-    "hidden": 0,
-    "is_query_report": 0,
-    "label": "Inter Company Document Reference",
-    "link_count": 0,
-    "link_to": "Inter Company Document Reference",
-    "link_type": "DocType",
-    "onboard": 0,
-    "type": "Link"
-   },
-   {
-    "hidden": 0,
-    "is_query_report": 0,
-    "label": "Inter Company Workflow",
-    "link_count": 0,
-    "link_to": "Inter Company Workflow",
-    "link_type": "DocType",
-    "onboard": 0,
-    "type": "Link"
-   },
-   {
-    "hidden": 0,
-    "is_query_report": 0,
-    "label": "Intercompany Item Mapping",
-    "link_count": 0,
-    "link_to": "Intercompany Item Mapping",
-    "link_type": "DocType",
-    "onboard": 0,
-    "type": "Link"
-   },
-   {
-    "hidden": 0,
-    "is_query_report": 0,
-    "label": "Inter Company Error Log",
-    "link_count": 0,
-    "link_to": "Inter Company Error Log",
-    "link_type": "DocType",
-    "onboard": 0,
-    "type": "Link"
-   },
-   {
-    "hidden": 0,
-    "is_query_report": 1,
-    "label": "Inter Company Balance Reconciliation",
-    "link_count": 0,
-    "link_to": "Inter Company Balance Reconciliation",
-    "link_type": "Report",
-    "onboard": 1,
-    "type": "Link"
-   },
-   {
-    "hidden": 0,
-    "is_query_report": 1,
-    "label": "Inter Company Transaction Matrix",
-    "link_count": 0,
-    "link_to": "Inter Company Transaction Matrix",
-    "link_type": "Report",
-    "onboard": 1,
-    "type": "Link"
-   },
-   {
-    "hidden": 0,
-    "is_query_report": 0,
-    "label": "ICT Notification Setting",
-    "link_count": 0,
-    "link_to": "ICT Notification Setting",
-    "link_type": "DocType",
-    "onboard": 0,
-    "type": "Link"
-   }
-  ],
-  "modified": "2024-03-14 00:00:00.000000",
-  "modified_by": "Administrator",
-  "module": "Inter Company Transactions",
-  "name": "Inter Company",
-  "number_cards": [],
-  "owner": "Administrator",
-  "public": 1,
-  "quick_lists": [],
-  "roles": [
-   {
-    "role": "Accounts Manager"
-   },
-   {
-    "role": "Accounts User"
-   },
-   {
-    "role": "System Manager"
-   }
-  ],
-  "sequence_id": 20.0,
-  "shortcuts": [
-   {
-    "color": "Purple",
-    "doc_view": "",
-    "label": "Control Console",
-    "link_to": "inter-company-console",
-    "type": "Page"
-   },
-   {
-    "color": "Blue",
-    "doc_view": "List",
-    "label": "Transaction Links",
-    "link_to": "Intercompany Transaction Link",
-    "type": "DocType"
-   },
-   {
-    "color": "Green",
-    "doc_view": "List",
-    "label": "Netting Cycles",
-    "link_to": "Inter Company Netting Cycle",
-    "type": "DocType"
-   },
-   {
-    "color": "Orange",
-    "doc_view": "List",
-    "label": "Transfer Pricing",
-    "link_to": "Transfer Pricing Policy",
-    "type": "DocType"
-   },
-   {
-    "color": "Purple",
-    "doc_view": "List",
-    "label": "Elimination Runs",
-    "link_to": "Inter Company Elimination Run",
-    "type": "DocType"
-   },
-   {
-    "color": "Red",
-    "doc_view": "List",
-    "label": "Dispute Center",
-    "link_to": "Inter Company Dispute",
-    "type": "DocType"
-   },
-   {
-    "color": "Grey",
-    "doc_view": "Report",
-    "label": "Balance Reconciliation",
-    "link_to": "Inter Company Balance Reconciliation",
-    "type": "Report"
-   },
-   {
-    "color": "Grey",
-    "doc_view": "List",
-    "label": "Global Settings",
-    "link_to": "Inter Company Settings",
-    "type": "DocType"
-   }
-  ],
-  "title": "Inter Company"
- }
+  {
+    "category": "Modules",
+    "charts": [],
+    "content": "[{\"id\":\"b_header\",\"type\":\"header\",\"data\":{\"text\":\"Inter-Company Central Hub\",\"level\":3}},{\"id\":\"b_card_setup\",\"type\":\"card\",\"data\":{\"card_name\":\"Setup & Configuration\"}},{\"id\":\"b_card_trans\",\"type\":\"card\",\"data\":{\"card_name\":\"Operations & Tracking\"}},{\"id\":\"b_card_enterprise\",\"type\":\"card\",\"data\":{\"card_name\":\"Netting, Pricing & Elimination\"}},{\"id\":\"b_card_recon\",\"type\":\"card\",\"data\":{\"card_name\":\"Reconciliation & Disputes\"}}]",
+    "creation": "2024-03-14 00:00:00.000000",
+    "custom_blocks": [],
+    "docstatus": 0,
+    "doctype": "Workspace",
+    "for_user": "",
+    "hide_custom": 0,
+    "icon": "octicon octicon-git-compare",
+    "is_hidden": 0,
+    "label": "Inter Company",
+    "links": [
+      {
+        "hidden": 0,
+        "is_query_report": 0,
+        "label": "Inter-Company Control Console",
+        "link_count": 0,
+        "link_to": "inter-company-console",
+        "link_type": "Page",
+        "onboard": 1,
+        "type": "Link"
+      },
+      {
+        "hidden": 0,
+        "is_query_report": 0,
+        "label": "Inter Company Settings",
+        "link_count": 0,
+        "link_to": "Inter Company Settings",
+        "link_type": "DocType",
+        "onboard": 1,
+        "type": "Link"
+      },
+      {
+        "hidden": 0,
+        "is_query_report": 0,
+        "label": "Intercompany Transaction Link",
+        "link_count": 0,
+        "link_to": "Intercompany Transaction Link",
+        "link_type": "DocType",
+        "onboard": 1,
+        "type": "Link"
+      },
+      {
+        "hidden": 0,
+        "is_query_report": 0,
+        "label": "Transfer Pricing Policy",
+        "link_count": 0,
+        "link_to": "Transfer Pricing Policy",
+        "link_type": "DocType",
+        "onboard": 1,
+        "type": "Link"
+      },
+      {
+        "hidden": 0,
+        "is_query_report": 0,
+        "label": "Inter Company Netting Cycle",
+        "link_count": 0,
+        "link_to": "Inter Company Netting Cycle",
+        "link_type": "DocType",
+        "onboard": 1,
+        "type": "Link"
+      },
+      {
+        "hidden": 0,
+        "is_query_report": 0,
+        "label": "Inter Company Elimination Run",
+        "link_count": 0,
+        "link_to": "Inter Company Elimination Run",
+        "link_type": "DocType",
+        "onboard": 1,
+        "type": "Link"
+      },
+      {
+        "hidden": 0,
+        "is_query_report": 0,
+        "label": "Inter Company Dispute",
+        "link_count": 0,
+        "link_to": "Inter Company Dispute",
+        "link_type": "DocType",
+        "onboard": 0,
+        "type": "Link"
+      },
+      {
+        "hidden": 0,
+        "is_query_report": 0,
+        "label": "Inter Company Document Reference",
+        "link_count": 0,
+        "link_to": "Inter Company Document Reference",
+        "link_type": "DocType",
+        "onboard": 0,
+        "type": "Link"
+      },
+      {
+        "hidden": 0,
+        "is_query_report": 0,
+        "label": "Intercompany Item Mapping",
+        "link_count": 0,
+        "link_to": "Intercompany Item Mapping",
+        "link_type": "DocType",
+        "onboard": 0,
+        "type": "Link"
+      },
+      {
+        "hidden": 0,
+        "is_query_report": 0,
+        "label": "Inter Company Error Log",
+        "link_count": 0,
+        "link_to": "Inter Company Error Log",
+        "link_type": "DocType",
+        "onboard": 0,
+        "type": "Link"
+      },
+      {
+        "hidden": 0,
+        "is_query_report": 1,
+        "label": "Inter Company Balance Reconciliation",
+        "link_count": 0,
+        "link_to": "Inter Company Balance Reconciliation",
+        "link_type": "Report",
+        "onboard": 1,
+        "type": "Link"
+      },
+      {
+        "hidden": 0,
+        "is_query_report": 1,
+        "label": "Inter Company Transaction Matrix",
+        "link_count": 0,
+        "link_to": "Inter Company Transaction Matrix",
+        "link_type": "Report",
+        "onboard": 1,
+        "type": "Link"
+      },
+      {
+        "hidden": 0,
+        "is_query_report": 0,
+        "label": "ICT Notification Setting",
+        "link_count": 0,
+        "link_to": "ICT Notification Setting",
+        "link_type": "DocType",
+        "onboard": 0,
+        "type": "Link"
+      }
+    ],
+    "modified": "2024-03-14 00:00:00.000000",
+    "modified_by": "Administrator",
+    "module": "Inter Company Transactions",
+    "name": "Inter Company",
+    "number_cards": [],
+    "owner": "Administrator",
+    "public": 1,
+    "quick_lists": [],
+    "roles": [
+      {
+        "role": "Accounts Manager"
+      },
+      {
+        "role": "Accounts User"
+      },
+      {
+        "role": "System Manager"
+      }
+    ],
+    "sequence_id": 20.0,
+    "shortcuts": [
+      {
+        "color": "Purple",
+        "doc_view": "",
+        "label": "Control Console",
+        "link_to": "inter-company-console",
+        "type": "Page"
+      },
+      {
+        "color": "Blue",
+        "doc_view": "List",
+        "label": "Transaction Links",
+        "link_to": "Intercompany Transaction Link",
+        "type": "DocType"
+      },
+      {
+        "color": "Green",
+        "doc_view": "List",
+        "label": "Netting Cycles",
+        "link_to": "Inter Company Netting Cycle",
+        "type": "DocType"
+      },
+      {
+        "color": "Orange",
+        "doc_view": "List",
+        "label": "Transfer Pricing",
+        "link_to": "Transfer Pricing Policy",
+        "type": "DocType"
+      },
+      {
+        "color": "Purple",
+        "doc_view": "List",
+        "label": "Elimination Runs",
+        "link_to": "Inter Company Elimination Run",
+        "type": "DocType"
+      },
+      {
+        "color": "Red",
+        "doc_view": "List",
+        "label": "Dispute Center",
+        "link_to": "Inter Company Dispute",
+        "type": "DocType"
+      },
+      {
+        "color": "Grey",
+        "doc_view": "Report",
+        "label": "Balance Reconciliation",
+        "link_to": "Inter Company Balance Reconciliation",
+        "type": "Report"
+      },
+      {
+        "color": "Grey",
+        "doc_view": "List",
+        "label": "Global Settings",
+        "link_to": "Inter Company Settings",
+        "type": "DocType"
+      }
+    ],
+    "title": "Inter Company"
+  }
 ]

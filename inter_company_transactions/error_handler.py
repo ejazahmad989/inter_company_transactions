@@ -5,18 +5,13 @@ import frappe
 def handle_error(error):
     """Handle application errors"""
     try:
-        # Log error with context
         frappe.log_error(
             f"Application Error: {str(error)}\nUser: {frappe.session.user}\nURL: {frappe.request.url if frappe.request else 'N/A'}",
-            "Application Error Handler"
+            "Inter Company Transactions Error"
         )
-        
-        # Send notification to administrators if critical
         if is_critical_error(error):
             send_error_notification(error)
-            
     except Exception as e:
-        # Fallback error logging
         frappe.log_error(f"Error in error handler: {str(e)}", "Error Handler")
 
 def is_critical_error(error):
@@ -25,10 +20,8 @@ def is_critical_error(error):
         "database",
         "connection",
         "permission",
-        "workflow",
         "inter_company"
     ]
-    
     error_str = str(error).lower()
     return any(keyword in error_str for keyword in critical_keywords)
 
@@ -40,7 +33,6 @@ def send_error_notification(error):
             filters={"role": "System Manager"},
             fields=["parent"]
         )
-        
         for admin in administrators:
             frappe.sendmail(
                 recipients=[admin.parent],
@@ -49,6 +41,5 @@ def send_error_notification(error):
                 reference_doctype="Error Log",
                 reference_name=frappe.utils.now()
             )
-            
     except Exception as e:
         frappe.log_error(f"Error sending error notification: {str(e)}", "Error Notification")

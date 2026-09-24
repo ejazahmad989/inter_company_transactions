@@ -29,7 +29,7 @@
     {
       "fieldname": "section_break_execution",
       "fieldtype": "Section Break",
-      "label": "Execution & Workflow"
+      "label": "Execution & Processing"
     },
     {
       "default": "Synchronous",
