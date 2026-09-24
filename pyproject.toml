@@ -1,9 +1,9 @@
 [project]
 name = "inter_company_transactions"
 authors = [
-    { name = "inter", email = "ayp.cmc024@gmail.com"}
+    { name = "Rahil Ali", email = "rahilali3311@gmail.com"}
 ]
-description = "inter"
+description = "Enterprise Inter-Company Transactions, Transfer Pricing, Elimination and Netting for ERPNext"
 requires-python = ">=3.10"
 readme = "README.md"
 dynamic = ["version"]

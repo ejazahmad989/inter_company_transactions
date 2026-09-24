@@ -10,9 +10,9 @@ from inter_company_transactions import __version__ as version
 setup(
 	name='inter_company_transactions',
 	version=version,
-	description='A custom app for handling inter-company transactions',
-	author='Your Company',
-	author_email='your@example.com',
+	description='Enterprise Inter-Company Transactions for ERPNext',
+	author='Rahil Ali',
+	author_email='rahilali3311@gmail.com',
 	packages=find_packages(),
 	zip_safe=False,
 	include_package_data=True,

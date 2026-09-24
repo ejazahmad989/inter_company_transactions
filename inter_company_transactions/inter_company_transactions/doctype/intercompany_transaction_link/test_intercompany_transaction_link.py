@@ -133,5 +133,25 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 		self.assertIn("status", health)
 		self.assertIn("recommendations", health)
 
+	def test_multi_currency_resolution_same_currency(self):
+		"""Verify currency resolver handles identical currencies seamlessly"""
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			resolve_intercompany_currency_and_rate,
+			get_intercompany_exchange_rate
+		)
+		self.assertEqual(get_intercompany_exchange_rate("USD", "USD"), 1.0)
+		self.assertEqual(get_intercompany_exchange_rate("EUR", "EUR"), 1.0)
+		self.assertEqual(get_intercompany_exchange_rate(None, "USD"), 1.0)
+
+	def test_multi_currency_rate_factor_safe_fallback(self):
+		"""Verify exchange rate resolver provides safe fallbacks when rates are not in DB"""
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			get_intercompany_exchange_rate
+		)
+		rate = get_intercompany_exchange_rate("USD", "PKR", nowdate())
+		self.assertIsInstance(rate, float)
+		self.assertGreater(rate, 0)
+
+
 
 

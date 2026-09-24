@@ -604,24 +604,8 @@ def create_custom_fields():
                         custom_field.insert()
                         print(f"Created Custom Field: {doctype} - {field['fieldname']}")
                     else:
-                        cf_doc = frappe.get_doc("Custom Field", existing_cf)
-                        cf_doc.module = "Inter Company Transactions"
-                        if "label" in field:
-                            cf_doc.label = field["label"]
-                        if "insert_after" in field:
-                            cf_doc.insert_after = field["insert_after"]
-                        if "description" in field:
-                            cf_doc.description = field["description"]
-                        if "default" in field:
-                            cf_doc.default = field["default"]
-                        cf_doc.mandatory_depends_on = field.get("mandatory_depends_on", "")
-                        cf_doc.read_only_depends_on = field.get("read_only_depends_on", "")
-                        cf_doc.depends_on = field.get("depends_on", "")
-                        cf_doc.in_list_view = field.get("in_list_view", cf_doc.in_list_view)
-                        cf_doc.in_standard_filter = field.get("in_standard_filter", cf_doc.in_standard_filter)
-                        cf_doc.flags.ignore_permissions = True
-                        cf_doc.save(ignore_permissions=True)
-                        print(f"Updated Custom Field: {doctype} - {field['fieldname']}")
+                        # Custom field already exists; do not overwrite user customizations or trigger migrate conflicts
+                        pass
                         
                 except Exception as e:
                     print(f"Error creating custom field {field['fieldname']} for {doctype}: {str(e)}")

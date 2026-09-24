@@ -3,12 +3,14 @@ from __future__ import unicode_literals
 
 app_name = "inter_company_transactions"
 app_title = "Inter Company Transactions"
-app_publisher = "Your Company"
-app_description = "A custom app for handling inter-company transactions"
+app_publisher = "Rahil Ali"
+app_description = "Enterprise Inter-Company Transactions, Transfer Pricing, Elimination and Netting for ERPNext"
 app_icon = "octicon octicon-git-compare"
 app_color = "blue"
-app_email = "your@example.com"
+app_email = "rahilali3311@gmail.com"
 app_license = "MIT"
+
+required_apps = ["erpnext"]
 
 # Assets includes
 app_include_css = "/assets/inter_company_transactions/css/inter_company_transactions.css"
@@ -24,92 +26,13 @@ on_session_creation = "inter_company_transactions.session.on_session_creation"
 # Boot Session
 boot_session = "inter_company_transactions.boot.boot_session"
 
-# Fixtures for Inter-Company Custom Fields
-fixtures = [
-    {
-        "doctype": "Custom Field",
-        "filters": [
-            ["name", "in", [
-                "Sales Order-intercompany_linked_doc_doctype",
-                "Sales Order-intercompany_linked_doc_name",
-                "Sales Order-intercompany_linked_company",
-                "Sales Order-intercompany_target_company",
-
-                "Purchase Order-intercompany_linked_doc_doctype",
-                "Purchase Order-intercompany_linked_doc_name",
-                "Purchase Order-intercompany_linked_company",
-                "Purchase Order-intercompany_target_company",
-
-                "Sales Invoice-intercompany_linked_doc_doctype",
-                "Sales Invoice-intercompany_linked_doc_name",
-                "Sales Invoice-intercompany_linked_company",
-                "Sales Invoice-intercompany_target_company",
-                "Sales Invoice-inter_company_reference",
-
-                "Purchase Invoice-intercompany_linked_doc_doctype",
-                "Purchase Invoice-intercompany_linked_doc_name",
-                "Purchase Invoice-intercompany_linked_company",
-                "Purchase Invoice-intercompany_target_company",
-                "Purchase Invoice-inter_company_reference",
-
-                "Journal Entry-intercompany_linked_doc_doctype",
-                "Journal Entry-intercompany_linked_doc_name",
-                "Journal Entry-intercompany_linked_company",
-                "Journal Entry-intercompany_target_company",
-
-                "Payment Entry-intercompany_linked_doc_doctype",
-                "Payment Entry-intercompany_linked_doc_name",
-                "Payment Entry-intercompany_linked_company",
-                "Payment Entry-intercompany_target_company",
-
-                "Delivery Note-intercompany_linked_doc_doctype",
-                "Delivery Note-intercompany_linked_doc_name",
-                "Delivery Note-intercompany_linked_company",
-                "Delivery Note-intercompany_target_company",
-
-                "Purchase Receipt-intercompany_linked_doc_doctype",
-                "Purchase Receipt-intercompany_linked_doc_name",
-                "Purchase Receipt-intercompany_linked_company",
-                "Purchase Receipt-intercompany_target_company",
-
-                "Material Request-intercompany_linked_doc_doctype",
-                "Material Request-intercompany_linked_doc_name",
-                "Material Request-intercompany_linked_company",
-                "Material Request-intercompany_target_company",
-
-                "Stock Entry-intercompany_linked_doc_doctype",
-                "Stock Entry-intercompany_linked_doc_name",
-                "Stock Entry-intercompany_linked_company",
-                "Stock Entry-intercompany_target_company",
-
-                "Quotation-intercompany_linked_doc_doctype",
-                "Quotation-intercompany_linked_doc_name",
-                "Quotation-intercompany_linked_company",
-                "Quotation-intercompany_target_company",
-
-                "Supplier Quotation-intercompany_linked_doc_doctype",
-                "Supplier Quotation-intercompany_linked_doc_name",
-                "Supplier Quotation-intercompany_linked_company",
-                "Supplier Quotation-intercompany_target_company",
-
-                "Item-is_intercompany_item",
-                "Item-ic_item_group",
-                "Warehouse-is_intercompany_warehouse",
-                "Warehouse-ic_warehouse",
-
-                "Customer-ic_customer_group",
-                "Customer-custom_company",
-                "Supplier-ic_supplier_group",
-                "Supplier-custom_company",
-                "Customer Group-custom_company",
-                "Supplier Group-custom_company"
-            ]]
-        ]
-    }
-]
-
-# Install Hooks
+# Migration & Install Hooks
+# Custom fields are safely created in the backend only if not already existing,
+# ensuring bench migrate never overwrites user customizations or triggers fixture conflicts.
+fixtures = []
 after_install = "inter_company_transactions.install.after_install"
+before_migrate = "inter_company_transactions.patches.before_migrate.before_migrate"
+after_migrate = "inter_company_transactions.patches.after_migrate.after_migrate"
 
 # Document Events for Inter-Company Transactions
 doc_events = {

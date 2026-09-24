@@ -54,10 +54,18 @@ def get_columns():
 			"width": 150,
 		},
 		{
-			"label": _("Amount A (Receivable / Dr)"),
+			"label": _("Cur A"),
+			"fieldname": "currency_a",
+			"fieldtype": "Link",
+			"options": "Currency",
+			"width": 80,
+		},
+		{
+			"label": _("Amount A"),
 			"fieldname": "amount_a",
 			"fieldtype": "Currency",
-			"width": 170,
+			"options": "currency_a",
+			"width": 130,
 		},
 		{
 			"label": _("DocType B"),
@@ -74,16 +82,25 @@ def get_columns():
 			"width": 150,
 		},
 		{
-			"label": _("Amount B (Payable / Cr)"),
-			"fieldname": "amount_b",
-			"fieldtype": "Currency",
-			"width": 170,
+			"label": _("Cur B"),
+			"fieldname": "currency_b",
+			"fieldtype": "Link",
+			"options": "Currency",
+			"width": 80,
 		},
 		{
-			"label": _("Variance / Diff"),
+			"label": _("Amount B"),
+			"fieldname": "amount_b",
+			"fieldtype": "Currency",
+			"options": "currency_b",
+			"width": 130,
+		},
+		{
+			"label": _("Variance (in Cur A)"),
 			"fieldname": "difference",
 			"fieldtype": "Currency",
-			"width": 130,
+			"options": "currency_a",
+			"width": 140,
 		},
 		{
 			"label": _("Reconciliation Status"),
@@ -123,6 +140,10 @@ def get_data(filters):
 		order_by="creation desc",
 	)
 
+	from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+		get_intercompany_exchange_rate
+	)
+
 	for ref in refs:
 		# Determine which is Company A side vs Company B side
 		if ref.source_company == company_a:
@@ -132,8 +153,8 @@ def get_data(filters):
 			doc_a_type, doc_a_name = ref.target_doctype, ref.target_name
 			doc_b_type, doc_b_name = ref.source_doctype, ref.source_name
 
-		amt_a, date_a, status_a = get_doc_amount_and_date(doc_a_type, doc_a_name)
-		amt_b, date_b, status_b = get_doc_amount_and_date(doc_b_type, doc_b_name)
+		amt_a, date_a, status_a, cur_a = get_doc_amount_and_date(doc_a_type, doc_a_name, company_a)
+		amt_b, date_b, status_b, cur_b = get_doc_amount_and_date(doc_b_type, doc_b_name, company_b)
 
 		posting_date = date_a or date_b or ref.creation
 
@@ -143,7 +164,14 @@ def get_data(filters):
 		if to_date and getdate(posting_date) > getdate(to_date):
 			continue
 
-		diff = flt(amt_a - amt_b, 2)
+		# Cross-currency comparison
+		if cur_a and cur_b and cur_a != cur_b:
+			fx = get_intercompany_exchange_rate(cur_b, cur_a, posting_date)
+			converted_b = flt(amt_b) * flt(fx)
+			diff = flt(amt_a - converted_b, 2)
+		else:
+			diff = flt(amt_a - amt_b, 2)
+
 		tolerance = 0.05
 
 		if abs(diff) <= tolerance and amt_a > 0 and amt_b > 0:
@@ -163,9 +191,11 @@ def get_data(filters):
 				"posting_date": posting_date,
 				"doctype_a": doc_a_type,
 				"docname_a": doc_a_name,
+				"currency_a": cur_a,
 				"amount_a": amt_a,
 				"doctype_b": doc_b_type,
 				"docname_b": doc_b_name,
+				"currency_b": cur_b,
 				"amount_b": amt_b,
 				"difference": diff,
 				"status": status,
@@ -175,10 +205,10 @@ def get_data(filters):
 	return data
 
 
-def get_doc_amount_and_date(doctype, name):
-	"""Extract grand total / paid amount and posting date safely from ERPNext document"""
+def get_doc_amount_and_date(doctype, name, company=None):
+	"""Extract grand total / paid amount, posting date, and currency safely from ERPNext document"""
 	if not doctype or not name or not frappe.db.exists(doctype, name):
-		return 0.0, None, "Missing"
+		return 0.0, None, "Missing", None
 
 	meta = frappe.get_meta(doctype)
 	fields = ["docstatus"]
@@ -193,9 +223,14 @@ def get_doc_amount_and_date(doctype, name):
 			fields.append(d)
 			break
 
+	for c in ["currency", "paid_from_account_currency"]:
+		if meta.has_field(c):
+			fields.append(c)
+			break
+
 	doc_data = frappe.db.get_value(doctype, name, fields, as_dict=True)
 	if not doc_data:
-		return 0.0, None, "Missing"
+		return 0.0, None, "Missing", None
 
 	amount = 0.0
 	for amt_field in ["grand_total", "total_amount", "paid_amount", "total_debit", "total_credit"]:
@@ -205,8 +240,11 @@ def get_doc_amount_and_date(doctype, name):
 
 	post_date = doc_data.get("posting_date") or doc_data.get("transaction_date")
 	status = "Submitted" if doc_data.get("docstatus") == 1 else "Draft"
+	currency = doc_data.get("currency") or doc_data.get("paid_from_account_currency")
+	if not currency and company:
+		currency = frappe.db.get_value("Company", company, "default_currency")
 
-	return amount, post_date, status
+	return amount, post_date, status, currency
 
 
 def get_report_summary(data):

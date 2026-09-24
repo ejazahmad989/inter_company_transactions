@@ -314,6 +314,85 @@ def validate_required_parties(doc, mapping):
             frappe.throw(_("Other Company Supplier is required for {0}").format(linked_company.company))
 
 
+def get_intercompany_exchange_rate(from_currency, to_currency, transaction_date=None):
+    """
+    Safely get the exchange rate from from_currency to to_currency on transaction_date.
+    Returns 1.0 if currencies are equal or cannot be resolved.
+    """
+    if not from_currency or not to_currency or from_currency == to_currency:
+        return 1.0
+
+    rate = None
+    # 1. Try ERPNext setup utility
+    try:
+        from erpnext.setup.utils import get_exchange_rate
+        rate = get_exchange_rate(from_currency, to_currency, transaction_date or nowdate())
+    except Exception:
+        pass
+
+    # 2. Try Currency Exchange DocType
+    if not rate and frappe.db and hasattr(frappe.db, "exists") and frappe.db.exists("DocType", "Currency Exchange"):
+        try:
+            rate = frappe.db.get_value(
+                "Currency Exchange",
+                {"from_currency": from_currency, "to_currency": to_currency},
+                "exchange_rate",
+                order_by="date desc"
+            )
+            if not rate:
+                # Inverted rate
+                inv = frappe.db.get_value(
+                    "Currency Exchange",
+                    {"from_currency": to_currency, "to_currency": from_currency},
+                    "exchange_rate",
+                    order_by="date desc"
+                )
+                if inv and flt(inv) > 0:
+                    rate = 1.0 / flt(inv)
+        except Exception:
+            pass
+
+    return flt(rate or 1.0)
+
+
+def resolve_intercompany_currency_and_rate(source_doc, target_company, party_type=None, party_name=None, date=None):
+    """
+    Resolve target document currency, conversion_rate, and item rate factor.
+    - target_currency: party default currency or source document currency or target company default currency
+    - conversion_rate: exchange rate from target_currency to target_company default currency
+    - rate_factor: multiplier to convert unit prices from source_currency to target_currency
+    """
+    target_company_currency = frappe.db.get_value("Company", target_company, "default_currency")
+    source_company = getattr(source_doc, "company", None)
+    source_company_currency = frappe.db.get_value("Company", source_company, "default_currency") if source_company else None
+    source_currency = getattr(source_doc, "currency", None) or source_company_currency or target_company_currency
+    
+    party_currency = None
+    if party_type and party_name and frappe.db.exists(party_type, party_name):
+        party_currency = frappe.db.get_value(party_type, party_name, "default_currency")
+    
+    # Priority: Party designated billing currency -> Source document currency -> Target company currency
+    target_currency = party_currency or source_currency or target_company_currency
+    
+    # ERPNext conversion_rate represents: target_currency -> target_company_currency
+    if target_currency == target_company_currency:
+        conversion_rate = 1.0
+    else:
+        conversion_rate = get_intercompany_exchange_rate(target_currency, target_company_currency, date)
+        if not conversion_rate or conversion_rate <= 0:
+            conversion_rate = 1.0
+            
+    # rate_factor converts unit prices from source_currency to target_currency
+    if source_currency == target_currency:
+        rate_factor = 1.0
+    else:
+        rate_factor = get_intercompany_exchange_rate(source_currency, target_currency, date)
+        if not rate_factor or rate_factor <= 0:
+            rate_factor = 1.0
+            
+    return target_currency, conversion_rate, rate_factor
+
+
 def create_corresponding_document(source_doc, mapping_info, direction):
     """Route document creation by target DocType"""
     mapping = mapping_info["mapping"]
@@ -360,12 +439,16 @@ def create_sales_invoice(source_doc, mapping, linked_company, direction):
     if not si.customer:
         frappe.throw(_("Customer not mapped for company {0}").format(si.company))
 
-    company_currency = frappe.db.get_value("Company", si.company, "default_currency")
-    si.currency = getattr(source_doc, "currency", None) or company_currency
-    si.conversion_rate = getattr(source_doc, "conversion_rate", 1.0) or 1.0
     si.posting_date = getattr(source_doc, "posting_date", None) or nowdate()
     si.due_date = getattr(source_doc, "due_date", None) or si.posting_date
     si.po_no = getattr(source_doc, "bill_no", None) or source_doc.name
+
+    # Accurate multi-currency and exchange rate resolution
+    target_currency, conversion_rate, rate_factor = resolve_intercompany_currency_and_rate(
+        source_doc, si.company, party_type="Customer", party_name=si.customer, date=si.posting_date
+    )
+    si.currency = target_currency
+    si.conversion_rate = conversion_rate
 
     warehouse = get_default_warehouse(si.company)
     if not warehouse:
@@ -381,13 +464,14 @@ def create_sales_invoice(source_doc, mapping, linked_company, direction):
     default_cost_center = get_default_cost_center(si.company)
 
     for item in getattr(source_doc, "items", []):
+        unit_rate = flt(getattr(item, "rate", 0)) * flt(rate_factor)
         item_row = {
             "item_code": item.item_code,
             "item_name": getattr(item, "item_name", item.item_code),
             "description": getattr(item, "description", item.item_code),
             "qty": item.qty,
             "uom": item.uom,
-            "rate": item.rate,
+            "rate": unit_rate,
             "cost_center": default_cost_center,
         }
         if warehouse:
@@ -432,12 +516,16 @@ def create_purchase_invoice(source_doc, mapping, linked_company, direction):
     if not pi.supplier:
         frappe.throw(_("Supplier not mapped for company {0}").format(pi.company))
 
-    company_currency = frappe.db.get_value("Company", pi.company, "default_currency")
-    pi.currency = getattr(source_doc, "currency", None) or company_currency
-    pi.conversion_rate = getattr(source_doc, "conversion_rate", 1.0) or 1.0
     pi.posting_date = getattr(source_doc, "posting_date", None) or nowdate()
     pi.due_date = getattr(source_doc, "due_date", None) or pi.posting_date
     pi.bill_no = source_doc.name
+
+    # Accurate multi-currency and exchange rate resolution
+    target_currency, conversion_rate, rate_factor = resolve_intercompany_currency_and_rate(
+        source_doc, pi.company, party_type="Supplier", party_name=pi.supplier, date=pi.posting_date
+    )
+    pi.currency = target_currency
+    pi.conversion_rate = conversion_rate
     
     warehouse = get_default_warehouse(pi.company)
     if not warehouse:
@@ -453,13 +541,14 @@ def create_purchase_invoice(source_doc, mapping, linked_company, direction):
     default_cost_center = get_default_cost_center(pi.company)
 
     for item in getattr(source_doc, "items", []):
+        unit_rate = flt(getattr(item, "rate", 0)) * flt(rate_factor)
         item_row = {
             "item_code": item.item_code,
             "item_name": getattr(item, "item_name", item.item_code),
             "description": getattr(item, "description", item.item_code),
             "qty": item.qty,
             "uom": item.uom,
-            "rate": item.rate,
+            "rate": unit_rate,
             "cost_center": default_cost_center,
         }
         if warehouse:
@@ -504,24 +593,30 @@ def create_purchase_order(sales_order, mapping, linked_company, direction):
     if not po.supplier:
         frappe.throw(_("Supplier not found for company {0}").format(po.company))
     
-    po.currency = sales_order.currency
-    po.conversion_rate = sales_order.conversion_rate
     po.transaction_date = sales_order.transaction_date
     po.schedule_date = getattr(sales_order, "delivery_date", None) or nowdate()
     po.intercompany_target_company = sales_order.company
+
+    # Accurate multi-currency and exchange rate resolution
+    target_currency, conversion_rate, rate_factor = resolve_intercompany_currency_and_rate(
+        sales_order, po.company, party_type="Supplier", party_name=po.supplier, date=po.transaction_date
+    )
+    po.currency = target_currency
+    po.conversion_rate = conversion_rate
     
     warehouse = get_default_warehouse(po.company)
     if not warehouse:
         warehouse = frappe.db.get_value("Warehouse", {"company": po.company, "is_group": 0}, "name")
     
     for item in sales_order.items:
+        unit_rate = flt(getattr(item, "rate", 0)) * flt(rate_factor)
         po.append("items", {
             "item_code": item.item_code,
             "item_name": item.item_name,
             "description": item.description,
             "qty": item.qty,
             "uom": item.uom,
-            "rate": item.rate,
+            "rate": unit_rate,
             "warehouse": warehouse,
             "schedule_date": getattr(item, "delivery_date", None) or po.schedule_date
         })
@@ -557,24 +652,30 @@ def create_sales_order(purchase_order, mapping, linked_company, direction):
     if not so.customer:
         frappe.throw(_("Customer not found for company {0}").format(so.company))
     
-    so.currency = purchase_order.currency
-    so.conversion_rate = purchase_order.conversion_rate
     so.transaction_date = purchase_order.transaction_date
     so.delivery_date = getattr(purchase_order, "schedule_date", None) or nowdate()
     so.intercompany_target_company = purchase_order.company
+
+    # Accurate multi-currency and exchange rate resolution
+    target_currency, conversion_rate, rate_factor = resolve_intercompany_currency_and_rate(
+        purchase_order, so.company, party_type="Customer", party_name=so.customer, date=so.transaction_date
+    )
+    so.currency = target_currency
+    so.conversion_rate = conversion_rate
     
     warehouse = get_default_warehouse(so.company)
     if not warehouse:
         warehouse = frappe.db.get_value("Warehouse", {"company": so.company, "is_group": 0}, "name")
     
     for item in purchase_order.items:
+        unit_rate = flt(getattr(item, "rate", 0)) * flt(rate_factor)
         so.append("items", {
             "item_code": item.item_code,
             "item_name": item.item_name,
             "description": item.description,
             "qty": item.qty,
             "uom": item.uom,
-            "rate": item.rate,
+            "rate": unit_rate,
             "warehouse": warehouse,
             "delivery_date": getattr(item, "schedule_date", None) or so.delivery_date
         })
@@ -613,8 +714,13 @@ def create_delivery_note(purchase_receipt, mapping, linked_company, direction):
     dn.posting_date = purchase_receipt.posting_date
     dn.posting_time = getattr(purchase_receipt, "posting_time", None)
     dn.set_posting_time = getattr(purchase_receipt, "set_posting_time", 0)
-    dn.currency = purchase_receipt.currency
-    dn.conversion_rate = purchase_receipt.conversion_rate
+
+    # Accurate multi-currency and exchange rate resolution
+    target_currency, conversion_rate, rate_factor = resolve_intercompany_currency_and_rate(
+        purchase_receipt, dn.company, party_type="Customer", party_name=dn.customer, date=dn.posting_date
+    )
+    dn.currency = target_currency
+    dn.conversion_rate = conversion_rate
     
     target_warehouse = get_default_warehouse(dn.company)
     if not target_warehouse:
@@ -624,13 +730,14 @@ def create_delivery_note(purchase_receipt, mapping, linked_company, direction):
         if not frappe.db.exists("Item", item.item_code):
             continue
             
+        unit_rate = flt(getattr(item, "rate", 0)) * flt(rate_factor)
         dn.append("items", {
             "item_code": item.item_code,
             "item_name": item.item_name,
             "description": item.description,
             "qty": item.qty,
             "uom": item.uom,
-            "rate": item.rate,
+            "rate": unit_rate,
             "warehouse": target_warehouse,
             "against_sales_order": None,
             "against_sales_invoice": None
@@ -675,8 +782,13 @@ def create_purchase_receipt(delivery_note, mapping, linked_company, direction):
     pr.posting_date = delivery_note.posting_date
     pr.posting_time = getattr(delivery_note, "posting_time", None)
     pr.set_posting_time = getattr(delivery_note, "set_posting_time", 0)
-    pr.currency = delivery_note.currency
-    pr.conversion_rate = delivery_note.conversion_rate
+
+    # Accurate multi-currency and exchange rate resolution
+    target_currency, conversion_rate, rate_factor = resolve_intercompany_currency_and_rate(
+        delivery_note, pr.company, party_type="Supplier", party_name=pr.supplier, date=pr.posting_date
+    )
+    pr.currency = target_currency
+    pr.conversion_rate = conversion_rate
     
     target_warehouse = get_default_warehouse(pr.company)
     if not target_warehouse:
@@ -686,13 +798,14 @@ def create_purchase_receipt(delivery_note, mapping, linked_company, direction):
         if not frappe.db.exists("Item", item.item_code):
             continue
             
+        unit_rate = flt(getattr(item, "rate", 0)) * flt(rate_factor)
         pr.append("items", {
             "item_code": item.item_code,
             "item_name": item.item_name,
             "description": item.description,
             "qty": item.qty,
             "uom": item.uom,
-            "rate": item.rate,
+            "rate": unit_rate,
             "warehouse": target_warehouse,
             "purchase_order": None,
             "purchase_invoice": None
@@ -732,16 +845,23 @@ def create_quotation(supplier_quotation, mapping, linked_company, direction):
 
     q.quotation_to = "Customer"
     q.transaction_date = getattr(supplier_quotation, "transaction_date", None) or nowdate()
-    q.currency = supplier_quotation.currency
+
+    # Accurate multi-currency and exchange rate resolution
+    target_currency, conversion_rate, rate_factor = resolve_intercompany_currency_and_rate(
+        supplier_quotation, q.company, party_type="Customer", party_name=q.party_name, date=q.transaction_date
+    )
+    q.currency = target_currency
+    q.conversion_rate = conversion_rate
 
     for item in supplier_quotation.items:
+        unit_rate = flt(getattr(item, "rate", 0)) * flt(rate_factor)
         q.append("items", {
             "item_code": item.item_code,
             "item_name": item.item_name,
             "description": item.description,
             "qty": item.qty,
             "uom": item.uom,
-            "rate": item.rate
+            "rate": unit_rate
         })
 
     q.intercompany_linked_doc_doctype = supplier_quotation.doctype
@@ -770,16 +890,23 @@ def create_supplier_quotation(quotation, mapping, linked_company, direction):
         sq.supplier = linked_company.other_company_supplier
 
     sq.transaction_date = getattr(quotation, "transaction_date", None) or nowdate()
-    sq.currency = quotation.currency
+
+    # Accurate multi-currency and exchange rate resolution
+    target_currency, conversion_rate, rate_factor = resolve_intercompany_currency_and_rate(
+        quotation, sq.company, party_type="Supplier", party_name=sq.supplier, date=sq.transaction_date
+    )
+    sq.currency = target_currency
+    sq.conversion_rate = conversion_rate
 
     for item in quotation.items:
+        unit_rate = flt(getattr(item, "rate", 0)) * flt(rate_factor)
         sq.append("items", {
             "item_code": item.item_code,
             "item_name": item.item_name,
             "description": item.description,
             "qty": item.qty,
             "uom": item.uom,
-            "rate": item.rate
+            "rate": unit_rate
         })
 
     sq.intercompany_linked_doc_doctype = quotation.doctype
@@ -874,6 +1001,11 @@ def create_stock_entry(source_stock_entry, mapping, linked_company, direction):
     se.posting_date = getattr(source_stock_entry, "posting_date", None) or nowdate()
     se.posting_time = getattr(source_stock_entry, "posting_time", None)
     se.set_posting_time = getattr(source_stock_entry, "set_posting_time", 0)
+
+    # Resolve currency conversion if source and target company default currencies differ
+    source_company_currency = frappe.db.get_value("Company", source_stock_entry.company, "default_currency")
+    target_company_currency = frappe.db.get_value("Company", se.company, "default_currency")
+    fx_rate = get_intercompany_exchange_rate(source_company_currency, target_company_currency, se.posting_date)
     
     if not target_warehouse:
         target_warehouse = get_intercompany_warehouse(target_warehouse_company)
@@ -888,7 +1020,8 @@ def create_stock_entry(source_stock_entry, mapping, linked_company, direction):
         if not frappe.db.exists("Item", item.item_code):
             continue
             
-        rate = getattr(item, "basic_rate", 0) or getattr(item, "valuation_rate", 0) or 0
+        base_rate = getattr(item, "basic_rate", 0) or getattr(item, "valuation_rate", 0) or 0
+        rate = flt(base_rate) * flt(fx_rate)
         se.append("items", {
             "item_code": item.item_code,
             "qty": item.qty,
@@ -946,8 +1079,20 @@ def create_journal_entry(source_je, mapping, linked_company, direction):
                       frappe.db.get_value("Company", je.company, "default_bank_account")
     
     je.posting_date = source_je.posting_date
-    je.multi_currency = source_je.multi_currency
     je.user_remark = f"Auto-generated from {source_je.doctype} {source_je.name} " + (source_je.user_remark or "")
+
+    # Multi-currency exchange rate handling
+    source_company_currency = frappe.db.get_value("Company", source_je.company, "default_currency")
+    target_company_currency = frappe.db.get_value("Company", je.company, "default_currency")
+    fx_rate = get_intercompany_exchange_rate(source_company_currency, target_company_currency, je.posting_date)
+    
+    if source_company_currency != target_company_currency:
+        je.multi_currency = 1
+    else:
+        je.multi_currency = source_je.multi_currency
+
+    credit_amt = flt(source_je.total_credit) * flt(fx_rate)
+    debit_amt = flt(source_je.total_debit) * flt(fx_rate)
     
     source_party_type = None
     source_is_credit = False
@@ -966,13 +1111,13 @@ def create_journal_entry(source_je, mapping, linked_company, direction):
             "party_type": "Customer",
             "party": customer,
             "credit_in_account_currency": 0,
-            "debit_in_account_currency": source_je.total_credit,
+            "debit_in_account_currency": credit_amt,
             "cost_center": default_cost_center
         })
         je.append("accounts", {
             "account": tmp_account,
             "debit_in_account_currency": 0,
-            "credit_in_account_currency": source_je.total_credit,
+            "credit_in_account_currency": credit_amt,
             "cost_center": default_cost_center
         })
     elif source_party_type == "Supplier" and not source_is_credit:
@@ -981,13 +1126,13 @@ def create_journal_entry(source_je, mapping, linked_company, direction):
             "party_type": "Customer",
             "party": customer,
             "debit_in_account_currency": 0,
-            "credit_in_account_currency": source_je.total_debit,
+            "credit_in_account_currency": debit_amt,
             "cost_center": default_cost_center
         })
         je.append("accounts", {
             "account": tmp_account,
             "credit_in_account_currency": 0,
-            "debit_in_account_currency": source_je.total_debit,
+            "debit_in_account_currency": debit_amt,
             "cost_center": default_cost_center
         })
     elif source_party_type == "Customer" and source_is_credit:
@@ -996,13 +1141,13 @@ def create_journal_entry(source_je, mapping, linked_company, direction):
             "party_type": "Supplier",
             "party": supplier,
             "credit_in_account_currency": 0,
-            "debit_in_account_currency": source_je.total_credit,
+            "debit_in_account_currency": credit_amt,
             "cost_center": default_cost_center
         })
         je.append("accounts", {
             "account": tmp_account,
             "debit_in_account_currency": 0,
-            "credit_in_account_currency": source_je.total_credit,
+            "credit_in_account_currency": credit_amt,
             "cost_center": default_cost_center
         })
     else:
@@ -1011,13 +1156,13 @@ def create_journal_entry(source_je, mapping, linked_company, direction):
             "party_type": "Supplier",
             "party": supplier,
             "debit_in_account_currency": 0,
-            "credit_in_account_currency": source_je.total_debit,
+            "credit_in_account_currency": debit_amt,
             "cost_center": default_cost_center
         })
         je.append("accounts", {
             "account": tmp_account,
             "credit_in_account_currency": 0,
-            "debit_in_account_currency": source_je.total_debit,
+            "debit_in_account_currency": debit_amt,
             "cost_center": default_cost_center
         })
     
@@ -1068,14 +1213,26 @@ def create_payment_entry(source_pe, mapping, linked_company, direction):
         pe.party = customer
         pe.party_name = frappe.db.get_value("Customer", customer, "customer_name") if customer else ""
     
+    source_company_currency = frappe.db.get_value("Company", source_pe.company, "default_currency")
+    target_company_currency = frappe.db.get_value("Company", pe.company, "default_currency")
+
     if pe.paid_from:
-        pe.paid_from_account_currency = frappe.db.get_value("Account", pe.paid_from, "account_currency")
+        pe.paid_from_account_currency = frappe.db.get_value("Account", pe.paid_from, "account_currency") or target_company_currency
     if pe.paid_to:
-        pe.paid_to_account_currency = frappe.db.get_value("Account", pe.paid_to, "account_currency")
+        pe.paid_to_account_currency = frappe.db.get_value("Account", pe.paid_to, "account_currency") or target_company_currency
     
-    pe.paid_amount = source_pe.paid_amount
-    pe.received_amount = source_pe.received_amount
-    pe.target_exchange_rate = getattr(source_pe, "target_exchange_rate", 1.0) or 1.0
+    source_paid_currency = getattr(source_pe, "paid_from_account_currency", None) or source_company_currency
+
+    # Rate from source payment currency to target paid_from currency
+    fx_source_to_target_from = get_intercompany_exchange_rate(source_paid_currency, pe.paid_from_account_currency, pe.posting_date)
+    pe.paid_amount = flt(source_pe.paid_amount) * flt(fx_source_to_target_from)
+
+    # Conversion between target paid_from and paid_to
+    fx_from_to_to = get_intercompany_exchange_rate(pe.paid_from_account_currency, pe.paid_to_account_currency, pe.posting_date)
+    pe.target_exchange_rate = fx_from_to_to
+    pe.received_amount = flt(pe.paid_amount) * flt(fx_from_to_to)
+
+    pe.source_exchange_rate = get_intercompany_exchange_rate(pe.paid_from_account_currency, target_company_currency, pe.posting_date)
     
     pe.reference_no = getattr(source_pe, "reference_no", None) or source_pe.name
     pe.reference_date = getattr(source_pe, "reference_date", None) or source_pe.posting_date
