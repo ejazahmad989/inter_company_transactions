@@ -88,22 +88,23 @@ frappe.ui.form.on('Intercompany Transaction Type', {
 			'Purchase Invoice': 'Sales Invoice',
 			'Delivery Note': 'Purchase Receipt',
 			'Purchase Receipt': 'Delivery Note',
-			'Quotation': 'Supplier Quotation',
-			'Supplier Quotation': 'Quotation',
-			'Material Request': 'Sales Order',
 			'Stock Entry': 'Stock Entry',
 			'Journal Entry': 'Journal Entry',
-			'Payment Entry': 'Payment Entry'
+			'Payment Entry': 'Payment Entry',
+			'Quotation': 'Supplier Quotation',
+			'Supplier Quotation': 'Quotation',
+			'Material Request': 'Purchase Order',
+			'Request for Quotation': 'Supplier Quotation',
+			'Subcontracting Order': 'Purchase Order',
+			'Landed Cost Voucher': 'Journal Entry'
 		};
 
-		if (row.source_type && default_targets[row.source_type]) {
-			// If target_type is blank or invalid, auto-fill standard target
-			if (!row.target_type || (row.target_type === row.source_type && !['Stock Entry', 'Journal Entry', 'Payment Entry'].includes(row.source_type))) {
-				frappe.model.set_value(cdt, cdn, 'target_type', default_targets[row.source_type]);
-			}
+		if (row && row.source_type && default_targets[row.source_type]) {
+			// Auto switch Target Transaction Type whenever Source changes
+			frappe.model.set_value(cdt, cdn, 'target_type', default_targets[row.source_type]);
 		}
 
-		if (!row.direction) {
+		if (row && !row.direction) {
 			frappe.model.set_value(cdt, cdn, 'direction', 'Both');
 		}
 	}

@@ -183,6 +183,17 @@
       "hidden": 1
     }
   ],
+  "Journal Entry Account": [
+    {
+      "fieldname": "intercompany_target_company",
+      "label": "Intercompany Target Company",
+      "fieldtype": "Link",
+      "options": "Company",
+      "insert_after": "party",
+      "description": "Target company for inter-company transaction",
+      "in_list_view": 1
+    }
+  ],
   "Payment Entry": [
     {
       "fieldname": "is_intercompany",

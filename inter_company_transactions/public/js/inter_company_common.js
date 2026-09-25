@@ -373,5 +373,278 @@
 			}
 		});
 	});
+
+	// -------------------------------------------------------------
+	// DYNAMIC INTERCOMPANY PARTY AUTOMATION
+	// Automatically checks customer/supplier against Intercompany Transaction Link
+	// and auto-ticks Is Intercompany & sets Intercompany Target Company
+	// -------------------------------------------------------------
+	window.ict = window.ict || {};
+
+	ict.resolve_target_sync = function(party_name, party_type, current_company, map) {
+		if (!party_name || !map) return null;
+
+		// 1. By current company if available
+		if (current_company && map.by_company && map.by_company[current_company]) {
+			let comp_dict = map.by_company[current_company];
+			let pt = (party_type || '').toLowerCase();
+			if (pt && comp_dict[pt] && comp_dict[pt][party_name]) {
+				return comp_dict[pt][party_name];
+			}
+			if (comp_dict.all && comp_dict.all[party_name]) {
+				return comp_dict.all[party_name];
+			}
+		}
+
+		// 2. By universal party type
+		let pt = (party_type || '').toLowerCase();
+		if (pt && map.universal && map.universal[pt] && map.universal[pt][party_name]) {
+			let tgt = map.universal[pt][party_name];
+			if (!current_company || tgt !== current_company) return tgt;
+		}
+
+		// 3. By global party_to_company
+		if (map.party_to_company && map.party_to_company[party_name]) {
+			let tgt = map.party_to_company[party_name];
+			if (!current_company || tgt !== current_company) return tgt;
+		}
+
+		return null;
+	};
+
+	ict.get_target_company_for_party = function(party_name, party_type, current_company, callback) {
+		let map = (frappe.boot && frappe.boot.intercompany_party_map) || window._ict_party_map;
+
+		if (map) {
+			let tgt = ict.resolve_target_sync(party_name, party_type, current_company, map);
+			if (callback) callback(tgt);
+			return tgt;
+		}
+
+		// Fetch dynamically from backend if not yet cached
+		frappe.call({
+			method: 'inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.get_intercompany_party_map',
+			args: { company: current_company },
+			callback: function(r) {
+				let fresh_map = r.message || { party_to_company: {}, by_company: {}, universal: {} };
+				window._ict_party_map = fresh_map;
+				if (frappe.boot) frappe.boot.intercompany_party_map = fresh_map;
+				let tgt = ict.resolve_target_sync(party_name, party_type, current_company, fresh_map);
+				if (callback) callback(tgt);
+			}
+		});
+	};
+
+	ict.refresh_party_map = function(callback) {
+		frappe.call({
+			method: 'inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.get_intercompany_party_map',
+			callback: function(r) {
+				let fresh_map = r.message || { party_to_company: {}, by_company: {}, universal: {} };
+				window._ict_party_map = fresh_map;
+				if (frappe.boot) frappe.boot.intercompany_party_map = fresh_map;
+				if (callback) callback(fresh_map);
+			}
+		});
+	};
+
+	function handle_party_selection(frm, party_type, party_name) {
+		if (!frm || !frm.fields_dict || !frm.fields_dict.is_intercompany) return;
+		if (frm.doc.docstatus > 0) return; // Only apply to drafts
+
+		if (!party_name) {
+			// Party cleared: if was intercompany, reset to internal mode
+			if (cint(frm.doc.is_intercompany)) {
+				frm.set_value('is_intercompany', 0);
+				if (frm.doc.company) {
+					frm.set_value('intercompany_target_company', frm.doc.company);
+				}
+				sync_intercompany_state(frm);
+			}
+			return;
+		}
+
+		ict.get_target_company_for_party(party_name, party_type, frm.doc.company, function(target_company) {
+			if (target_company && target_company !== frm.doc.company) {
+				frm.set_value('is_intercompany', 1);
+				frm.set_value('intercompany_target_company', target_company);
+				sync_intercompany_state(frm);
+				frappe.show_alert({
+					message: __('Intercompany party detected ({0}) &rarr; Auto-set Target Company to {1}', [party_name, target_company]),
+					indicator: 'blue'
+				}, 5);
+			} else {
+				// Regular third-party: if currently checked, revert to standard internal transaction
+				if (cint(frm.doc.is_intercompany) && !frm.doc.intercompany_linked_doc_name) {
+					frm.set_value('is_intercompany', 0);
+					if (frm.doc.company) {
+						frm.set_value('intercompany_target_company', frm.doc.company);
+					}
+					sync_intercompany_state(frm);
+				}
+			}
+		});
+	}
+
+	function handle_journal_entry_row_party_change(frm, cdt, cdn) {
+		let row = locals[cdt][cdn];
+		if (!row) return;
+
+		let party_name = row.party;
+		let party_type = (row.party_type || '').toLowerCase();
+
+		if (!party_name) {
+			if (row.intercompany_target_company) {
+				frappe.model.set_value(cdt, cdn, 'intercompany_target_company', '');
+			}
+			check_and_sync_journal_entry_accounts(frm);
+			return;
+		}
+
+		ict.get_target_company_for_party(party_name, party_type, frm.doc.company, function(target_company) {
+			if (target_company && target_company !== frm.doc.company) {
+				frappe.model.set_value(cdt, cdn, 'intercompany_target_company', target_company);
+				frm.set_value('is_intercompany', 1);
+				frm.set_value('intercompany_target_company', target_company);
+				sync_intercompany_state(frm);
+				frappe.show_alert({
+					message: __('Intercompany party in row ({0}) &rarr; Auto-set Target Company to {1}', [party_name, target_company]),
+					indicator: 'blue'
+				}, 5);
+			} else {
+				if (row.intercompany_target_company) {
+					frappe.model.set_value(cdt, cdn, 'intercompany_target_company', '');
+				}
+				check_and_sync_journal_entry_accounts(frm);
+			}
+		});
+	}
+
+	function check_and_sync_journal_entry_accounts(frm) {
+		if (!frm || !frm.doc || !frm.doc.accounts) return;
+
+		let map = (frappe.boot && frappe.boot.intercompany_party_map) || window._ict_party_map;
+		let found_target_company = null;
+
+		(frm.doc.accounts || []).forEach(row => {
+			if (row.party) {
+				let tgt = ict.resolve_target_sync(row.party, row.party_type, frm.doc.company, map);
+				if (tgt && tgt !== frm.doc.company) {
+					found_target_company = tgt;
+					if (row.intercompany_target_company !== tgt) {
+						frappe.model.set_value(row.doctype, row.name, 'intercompany_target_company', tgt);
+					}
+				}
+			}
+		});
+
+		if (found_target_company) {
+			frm.set_value('is_intercompany', 1);
+			frm.set_value('intercompany_target_company', found_target_company);
+			sync_intercompany_state(frm);
+		} else if (cint(frm.doc.is_intercompany) && !frm.doc.intercompany_linked_doc_name) {
+			frm.set_value('is_intercompany', 0);
+			if (frm.doc.company) {
+				frm.set_value('intercompany_target_company', frm.doc.company);
+			}
+			sync_intercompany_state(frm);
+		}
+	}
+
+	// Attach customer triggers
+	['Sales Order', 'Sales Invoice', 'Delivery Note', 'Quotation'].forEach(function(dt) {
+		frappe.ui.form.on(dt, {
+			customer: function(frm) {
+				handle_party_selection(frm, 'customer', frm.doc.customer);
+			}
+		});
+	});
+
+	// Attach supplier triggers
+	['Purchase Order', 'Purchase Invoice', 'Purchase Receipt', 'Supplier Quotation'].forEach(function(dt) {
+		frappe.ui.form.on(dt, {
+			supplier: function(frm) {
+				handle_party_selection(frm, 'supplier', frm.doc.supplier);
+			}
+		});
+	});
+
+	// Attach Payment Entry triggers
+	frappe.ui.form.on('Payment Entry', {
+		party: function(frm) {
+			handle_party_selection(frm, (frm.doc.party_type || '').toLowerCase(), frm.doc.party);
+		},
+		party_type: function(frm) {
+			if (frm.doc.party) {
+				handle_party_selection(frm, (frm.doc.party_type || '').toLowerCase(), frm.doc.party);
+			}
+		}
+	});
+
+	// Attach Journal Entry parent triggers
+	frappe.ui.form.on('Journal Entry', {
+		before_save: function(frm) {
+			check_and_sync_journal_entry_accounts(frm);
+		},
+		validate: function(frm) {
+			check_and_sync_journal_entry_accounts(frm);
+		}
+	});
+
+	// Attach Journal Entry Account child row triggers
+	frappe.ui.form.on('Journal Entry Account', {
+		party: function(frm, cdt, cdn) {
+			handle_journal_entry_row_party_change(frm, cdt, cdn);
+		},
+		party_type: function(frm, cdt, cdn) {
+			handle_journal_entry_row_party_change(frm, cdt, cdn);
+		},
+		accounts_remove: function(frm) {
+			check_and_sync_journal_entry_accounts(frm);
+		}
+	});
+
+	// Refresh cache when Intercompany Transaction Link is saved
+	frappe.ui.form.on('Intercompany Transaction Link', {
+		after_save: function() {
+			if (ict.refresh_party_map) {
+				ict.refresh_party_map();
+			}
+		}
+	});
+
+	// Global auto-switch for Intercompany Transaction Type child rows
+	const ICT_TARGET_MAPPING = {
+		'Sales Order': 'Purchase Order',
+		'Purchase Order': 'Sales Order',
+		'Sales Invoice': 'Purchase Invoice',
+		'Purchase Invoice': 'Sales Invoice',
+		'Delivery Note': 'Purchase Receipt',
+		'Purchase Receipt': 'Delivery Note',
+		'Stock Entry': 'Stock Entry',
+		'Journal Entry': 'Journal Entry',
+		'Payment Entry': 'Payment Entry',
+		'Quotation': 'Supplier Quotation',
+		'Supplier Quotation': 'Quotation',
+		'Material Request': 'Purchase Order',
+		'Request for Quotation': 'Supplier Quotation',
+		'Subcontracting Order': 'Purchase Order',
+		'Landed Cost Voucher': 'Journal Entry'
+	};
+
+	frappe.ui.form.on('Intercompany Transaction Type', {
+		source_type: function(frm, cdt, cdn) {
+			let row = locals[cdt][cdn];
+			if (!row || !row.source_type) return;
+
+			let target = ICT_TARGET_MAPPING[row.source_type];
+			if (target) {
+				frappe.model.set_value(cdt, cdn, 'target_type', target);
+			}
+
+			if (!row.direction) {
+				frappe.model.set_value(cdt, cdn, 'direction', 'Both');
+			}
+		}
+	});
 })();
 

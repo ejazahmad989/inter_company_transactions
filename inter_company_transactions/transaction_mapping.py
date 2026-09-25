@@ -7,8 +7,19 @@ def get_reverse_mapping():
     return {
         "Sales Order": "Purchase Order",
         "Purchase Order": "Sales Order",
+        "Sales Invoice": "Purchase Invoice",
+        "Purchase Invoice": "Sales Invoice",
+        "Delivery Note": "Purchase Receipt",
+        "Purchase Receipt": "Delivery Note",
+        "Stock Entry": "Stock Entry",
         "Journal Entry": "Journal Entry",
-        "Payment Entry": "Payment Entry"
+        "Payment Entry": "Payment Entry",
+        "Quotation": "Supplier Quotation",
+        "Supplier Quotation": "Quotation",
+        "Material Request": "Purchase Order",
+        "Request for Quotation": "Supplier Quotation",
+        "Subcontracting Order": "Purchase Order",
+        "Landed Cost Voucher": "Journal Entry",
     }
 
 def get_valid_mappings():
@@ -16,8 +27,19 @@ def get_valid_mappings():
     return {
         "Sales Order": ["Purchase Order"],
         "Purchase Order": ["Sales Order"],
+        "Sales Invoice": ["Purchase Invoice"],
+        "Purchase Invoice": ["Sales Invoice"],
+        "Delivery Note": ["Purchase Receipt"],
+        "Purchase Receipt": ["Delivery Note"],
+        "Stock Entry": ["Stock Entry"],
         "Journal Entry": ["Journal Entry"],
-        "Payment Entry": ["Payment Entry"]
+        "Payment Entry": ["Payment Entry"],
+        "Quotation": ["Supplier Quotation"],
+        "Supplier Quotation": ["Quotation"],
+        "Material Request": ["Purchase Order", "Sales Order"],
+        "Request for Quotation": ["Supplier Quotation"],
+        "Subcontracting Order": ["Purchase Order"],
+        "Landed Cost Voucher": ["Journal Entry"],
     }
 
 def is_valid_mapping(source_type, target_type):

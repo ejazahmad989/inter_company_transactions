@@ -92,6 +92,13 @@ In normal operations, almost all daily transactions (Payment Entry, Journal Entr
    - If unticked, it resets to read-only with the current company name.
    - Upon submission, the engine creates the reciprocal mirror entry in the chosen target company.
 
+3. **Intelligent Dynamic Party Detection (Zero Manual Ticking Required)**:
+   - When you select a **Customer** in *Sales Invoice*, *Sales Order*, *Delivery Note*, or *Quotation*, the system checks if the customer is configured in `Intercompany Transaction Link`.
+   - When you select a **Supplier** in *Purchase Invoice*, *Purchase Order*, *Purchase Receipt*, or *Supplier Quotation*, the system checks if the supplier is configured in `Intercompany Transaction Link`.
+   - In **Payment Entry**, when choosing `party_type` (Customer/Supplier) and selecting `party`, the engine immediately evaluates the party mapping.
+   - In **Journal Entry**, when you add an account line with Debtors/Creditors and choose the `party` (Customer or Supplier), the system instantly sets `intercompany_target_company` on that row, ticks header `Is Intercompany`, and selects the linked sister company.
+   - If the party is changed to a regular third party, the system automatically unchecks `Is Intercompany` and restores the standard internal company mode.
+
 #### 3.1.1 Comprehensive Matrix of Supported Mirror Transactions (What It CAN Do)
 The engine supports real-time, automated document mirroring across all standard trade and accounting workflows in ERPNext:
 
@@ -110,6 +117,27 @@ The engine supports real-time, automated document mirroring across all standard 
 | 11 | **Stock Entry** | **Stock Entry** | Bi-directional | *Material Issue* in Company A triggers an automated *Material Receipt* in Company B at the designated transfer valuation rate. |
 | 12 | **Journal Entry** | **Journal Entry** | Bi-directional | Cross-entity fund transfers or expense allocations automatically generate balancing voucher with reversed debit/credit accounts. |
 | 13 | **Payment Entry** | **Payment Entry** | Bi-directional | Payment made from Company A to Company B creates a matching Receipt voucher in Company B linked to the open intercompany invoice. |
+
+#### 3.1.2 Intelligent Auto-Switching in Intercompany Transaction Type
+When defining transaction pairings in `Intercompany Transaction Link` -> `Transaction Types` child table or `Intercompany Transaction Type`:
+- **Instant Auto-Switch**: Whenever you choose or change **Source Transaction Type**, the **Target Transaction Type** field automatically switches to its counterpart:
+  - **Sales Order** &rarr; **Purchase Order**
+  - **Purchase Order** &rarr; **Sales Order**
+  - **Sales Invoice** &rarr; **Purchase Invoice**
+  - **Purchase Invoice** &rarr; **Sales Invoice**
+  - **Delivery Note** &rarr; **Purchase Receipt**
+  - **Purchase Receipt** &rarr; **Delivery Note**
+  - **Stock Entry** &rarr; **Stock Entry**
+  - **Journal Entry** &rarr; **Journal Entry**
+  - **Payment Entry** &rarr; **Payment Entry**
+  - **Quotation** &rarr; **Supplier Quotation**
+  - **Supplier Quotation** &rarr; **Quotation**
+  - **Material Request** &rarr; **Purchase Order**
+  - **Request for Quotation** &rarr; **Supplier Quotation**
+  - **Subcontracting Order** &rarr; **Purchase Order**
+  - **Landed Cost Voucher** &rarr; **Journal Entry**
+- **Direction Default**: Direction automatically defaults to **Both** (bi-directional sync) if not specified.
+- **Preload All Types Button**: You can also click **Populate All Transaction Types** in `Intercompany Transaction Link` to insert all standard combinations with one click.
 
 ---
 

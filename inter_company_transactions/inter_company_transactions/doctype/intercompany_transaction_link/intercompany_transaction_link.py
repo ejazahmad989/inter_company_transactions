@@ -11,7 +11,8 @@ class IntercompanyTransactionLink(Document):
     def validate(self):
         self.validate_companies()
         self.validate_parties()
-    
+        self.validate_transaction_types_child_table()
+
     def validate_companies(self):
         """Ensure main company and linked companies are different"""
         linked_companies = [d.company for d in self.linked_companies if d.company]
@@ -29,6 +30,75 @@ class IntercompanyTransactionLink(Document):
             
             if linked_company.main_company_supplier and not linked_company.other_company_customer:
                 frappe.throw(_("Other Company Customer is required when Main Company Supplier is set for {0}").format(linked_company.company))
+
+    def validate_transaction_types_child_table(self):
+        """Auto-populate or fix target_type and direction for any child row"""
+        default_targets = {
+            "Sales Order": "Purchase Order",
+            "Purchase Order": "Sales Order",
+            "Sales Invoice": "Purchase Invoice",
+            "Purchase Invoice": "Sales Invoice",
+            "Delivery Note": "Purchase Receipt",
+            "Purchase Receipt": "Delivery Note",
+            "Stock Entry": "Stock Entry",
+            "Journal Entry": "Journal Entry",
+            "Payment Entry": "Payment Entry",
+            "Quotation": "Supplier Quotation",
+            "Supplier Quotation": "Quotation",
+            "Material Request": "Purchase Order",
+            "Request for Quotation": "Supplier Quotation",
+            "Subcontracting Order": "Purchase Order",
+            "Landed Cost Voucher": "Journal Entry"
+        }
+        for row in (self.get("transaction_types") or []):
+            if row.source_type and not row.target_type:
+                row.target_type = default_targets.get(row.source_type, row.source_type)
+            if not row.direction:
+                row.direction = "Both"
+
+    @frappe.whitelist()
+    def populate_default_transaction_types(self):
+        """Populate standard supported intercompany transaction types"""
+        default_pairs = [
+            ("Sales Order", "Purchase Order", "Both"),
+            ("Purchase Order", "Sales Order", "Both"),
+            ("Sales Invoice", "Purchase Invoice", "Both"),
+            ("Purchase Invoice", "Sales Invoice", "Both"),
+            ("Delivery Note", "Purchase Receipt", "Both"),
+            ("Purchase Receipt", "Delivery Note", "Both"),
+            ("Quotation", "Supplier Quotation", "Both"),
+            ("Supplier Quotation", "Quotation", "Both"),
+            ("Material Request", "Sales Order", "Both"),
+            ("Material Request", "Purchase Order", "Both"),
+            ("Stock Entry", "Stock Entry", "Both"),
+            ("Journal Entry", "Journal Entry", "Both"),
+            ("Payment Entry", "Payment Entry", "Both"),
+            ("Request for Quotation", "Supplier Quotation", "Both"),
+            ("Subcontracting Order", "Purchase Order", "Both"),
+            ("Landed Cost Voucher", "Journal Entry", "Both")
+        ]
+        
+        existing = {
+            (r.source_type, r.target_type)
+            for r in (self.get("transaction_types") or [])
+            if r.source_type and r.target_type
+        }
+        
+        count = 0
+        for src, tgt, direction in default_pairs:
+            if (src, tgt) not in existing:
+                self.append("transaction_types", {
+                    "source_type": src,
+                    "target_type": tgt,
+                    "direction": direction
+                })
+                existing.add((src, tgt))
+                count += 1
+        
+        if not self.is_new() and count > 0:
+            self.save(ignore_permissions=True)
+            
+        return count
 
 
 def create_linked_documents(doc, method=None):
@@ -1436,4 +1506,199 @@ def download_user_guide_pdf():
         frappe.response["type"] = "download"
     else:
         frappe.throw(_("User guide PDF file could not be found."))
+
+
+@frappe.whitelist()
+def get_intercompany_party_map(company=None):
+    """
+    Returns dynamic mapping of Customer and Supplier parties to their linked target companies.
+    Structure:
+    {
+        "party_to_company": { party_name: target_company },
+        "by_company": {
+            company_name: {
+                "customer": { customer_name: target_company },
+                "supplier": { supplier_name: target_company },
+                "all": { party_name: target_company }
+            }
+        },
+        "universal": {
+            "customer": { customer_name: target_company },
+            "supplier": { supplier_name: target_company }
+        }
+    }
+    """
+    party_map = {
+        "party_to_company": {},
+        "by_company": {},
+        "universal": {
+            "customer": {},
+            "supplier": {}
+        }
+    }
+
+    if not (hasattr(frappe, "db") and frappe.db):
+        return party_map
+
+    try:
+        if not frappe.db.table_exists("Intercompany Transaction Link"):
+            return party_map
+
+        links = frappe.get_all(
+            "Intercompany Transaction Link",
+            filters={"enabled": 1},
+            fields=["name", "main_company"]
+        )
+
+        for link in links:
+            main_co = link.main_company
+            if not main_co:
+                continue
+
+            if main_co not in party_map["by_company"]:
+                party_map["by_company"][main_co] = {
+                    "customer": {},
+                    "supplier": {},
+                    "all": {}
+                }
+
+            if frappe.db.table_exists("Intercompany Linked Company"):
+                linked_rows = frappe.get_all(
+                    "Intercompany Linked Company",
+                    filters={"parent": link.name},
+                    fields=[
+                        "company",
+                        "main_company_customer",
+                        "main_company_supplier",
+                        "other_company_customer",
+                        "other_company_supplier"
+                    ]
+                )
+
+                for row in linked_rows:
+                    other_co = row.company
+                    if not other_co:
+                        continue
+
+                    if other_co not in party_map["by_company"]:
+                        party_map["by_company"][other_co] = {
+                            "customer": {},
+                            "supplier": {},
+                            "all": {}
+                        }
+
+                    # Main company perspective (user in main company selects party)
+                    if row.main_company_customer:
+                        party_map["by_company"][main_co]["customer"][row.main_company_customer] = other_co
+                        party_map["by_company"][main_co]["all"][row.main_company_customer] = other_co
+                        party_map["universal"]["customer"][row.main_company_customer] = other_co
+                        party_map["party_to_company"][row.main_company_customer] = other_co
+
+                    if row.main_company_supplier:
+                        party_map["by_company"][main_co]["supplier"][row.main_company_supplier] = other_co
+                        party_map["by_company"][main_co]["all"][row.main_company_supplier] = other_co
+                        party_map["universal"]["supplier"][row.main_company_supplier] = other_co
+                        party_map["party_to_company"][row.main_company_supplier] = other_co
+
+                    # Other company perspective (user in other company selects party)
+                    if row.other_company_customer:
+                        party_map["by_company"][other_co]["customer"][row.other_company_customer] = main_co
+                        party_map["by_company"][other_co]["all"][row.other_company_customer] = main_co
+                        party_map["universal"]["customer"][row.other_company_customer] = main_co
+                        party_map["party_to_company"][row.other_company_customer] = main_co
+
+                    if row.other_company_supplier:
+                        party_map["by_company"][other_co]["supplier"][row.other_company_supplier] = main_co
+                        party_map["by_company"][other_co]["all"][row.other_company_supplier] = main_co
+                        party_map["universal"]["supplier"][row.other_company_supplier] = main_co
+                        party_map["party_to_company"][row.other_company_supplier] = main_co
+
+    except Exception as e:
+        frappe.log_error(f"Error fetching intercompany party map: {str(e)}", "Intercompany Party Map")
+
+    return party_map
+
+
+def resolve_party_target_company(party_name, party_type=None, current_company=None, party_map=None):
+    """Helper to determine target sister company for a given party"""
+    if not party_name:
+        return None
+    if not party_map:
+        party_map = get_intercompany_party_map(current_company)
+
+    party_type_clean = (party_type or "").lower()
+
+    # 1. Check company specific
+    if current_company and current_company in party_map.get("by_company", {}):
+        comp_dict = party_map["by_company"][current_company]
+        if party_type_clean and party_type_clean in comp_dict and party_name in comp_dict[party_type_clean]:
+            return comp_dict[party_type_clean][party_name]
+        if party_name in comp_dict.get("all", {}):
+            return comp_dict["all"][party_name]
+
+    # 2. Check universal by party_type
+    if party_type_clean and party_type_clean in party_map.get("universal", {}):
+        tgt = party_map["universal"][party_type_clean].get(party_name)
+        if tgt and tgt != current_company:
+            return tgt
+
+    # 3. Check party_to_company
+    tgt = party_map.get("party_to_company", {}).get(party_name)
+    if tgt and tgt != current_company:
+        return tgt
+
+    return None
+
+
+def auto_detect_intercompany_party(doc, method=None):
+    """
+    Hooked on document validate/before_save:
+    Automatically sets is_intercompany = 1 and intercompany_target_company
+    when an intercompany customer or supplier is selected.
+    For Journal Entry: inspects accounts rows and populates row & parent target company.
+    """
+    if not hasattr(doc, "doctype") or not doc.get("company"):
+        return
+
+    # If document was already created by the intercompany engine as a linked document, don't overwrite
+    if doc.get("intercompany_linked_doc_name"):
+        return
+
+    company = doc.company
+    party_map = get_intercompany_party_map(company)
+    target_company = None
+
+    if doc.doctype in ["Sales Order", "Sales Invoice", "Delivery Note", "Quotation"]:
+        customer = doc.get("customer")
+        if customer:
+            target_company = resolve_party_target_company(customer, "customer", company, party_map)
+
+    elif doc.doctype in ["Purchase Order", "Purchase Invoice", "Purchase Receipt", "Supplier Quotation"]:
+        supplier = doc.get("supplier")
+        if supplier:
+            target_company = resolve_party_target_company(supplier, "supplier", company, party_map)
+
+    elif doc.doctype == "Payment Entry":
+        party = doc.get("party")
+        party_type = (doc.get("party_type") or "").lower()
+        if party:
+            target_company = resolve_party_target_company(party, party_type, company, party_map)
+
+    elif doc.doctype == "Journal Entry":
+        for row in doc.get("accounts") or []:
+            row_party = row.get("party")
+            row_party_type = (row.get("party_type") or "").lower()
+            if row_party:
+                row_target = resolve_party_target_company(row_party, row_party_type, company, party_map)
+                if row_target and row_target != company:
+                    if hasattr(row, "intercompany_target_company") or "intercompany_target_company" in row.as_dict():
+                        row.intercompany_target_company = row_target
+                    if not target_company:
+                        target_company = row_target
+
+    if target_company and target_company != company:
+        doc.is_intercompany = 1
+        if not doc.get("intercompany_target_company") or doc.get("intercompany_target_company") == company:
+            doc.intercompany_target_company = target_company
+
 
