@@ -152,6 +152,101 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 		self.assertIsInstance(rate, float)
 		self.assertGreater(rate, 0)
 
+	def test_party_target_company_resolution(self):
+		"""Verify party-to-target-company mapping lookup across multiple sister companies"""
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			resolve_party_target_company
+		)
+		mock_map = {
+			"by_company": {
+				"Main Holding Corp": {
+					"customer": {"Akram Shezad": "Sister Co B", "Rahil Ali": "Sister Co B"},
+					"supplier": {"Sister Supplier": "Sister Co B"},
+					"all": {"Akram Shezad": "Sister Co B", "Rahil Ali": "Sister Co B"}
+				}
+			},
+			"universal": {
+				"customer": {"Akram Shezad": "Sister Co B", "Rahil Ali": "Sister Co B"},
+				"supplier": {"Sister Supplier": "Sister Co B"}
+			},
+			"party_to_company": {
+				"Akram Shezad": "Sister Co B",
+				"Rahil Ali": "Sister Co B"
+			}
+		}
+		target1 = resolve_party_target_company("Akram Shezad", "customer", "Main Holding Corp", mock_map)
+		self.assertEqual(target1, "Sister Co B")
+
+		target2 = resolve_party_target_company("Rahil Ali", "customer", "Main Holding Corp", mock_map)
+		self.assertEqual(target2, "Sister Co B")
+
+		# Non-intercompany third party should resolve to None
+		target3 = resolve_party_target_company("External Third Party Ltd", "customer", "Main Holding Corp", mock_map)
+		self.assertIsNone(target3)
+
+	def test_transaction_type_bidirectional_pairing(self):
+		"""Verify transaction type dictionary maps all ERPNext transactions to counterparts"""
+		from inter_company_transactions.transaction_mapping import get_reverse_mapping
+		reverse_map = get_reverse_mapping()
+		self.assertEqual(reverse_map.get("Sales Order"), "Purchase Order")
+		self.assertEqual(reverse_map.get("Purchase Order"), "Sales Order")
+		self.assertEqual(reverse_map.get("Sales Invoice"), "Purchase Invoice")
+		self.assertEqual(reverse_map.get("Purchase Invoice"), "Sales Invoice")
+		self.assertEqual(reverse_map.get("Delivery Note"), "Purchase Receipt")
+		self.assertEqual(reverse_map.get("Purchase Receipt"), "Delivery Note")
+		self.assertEqual(reverse_map.get("Stock Entry"), "Stock Entry")
+		self.assertEqual(reverse_map.get("Journal Entry"), "Journal Entry")
+		self.assertEqual(reverse_map.get("Payment Entry"), "Payment Entry")
+		self.assertEqual(reverse_map.get("Quotation"), "Supplier Quotation")
+		self.assertEqual(reverse_map.get("Supplier Quotation"), "Quotation")
+
+	def test_remote_payload_serialization(self):
+		"""Verify serialization of local transaction into cross-site federated payload"""
+		from inter_company_transactions.sync import prepare_remote_payload
+		mock_doc = frappe._dict({
+			"doctype": "Sales Invoice",
+			"name": "ACC-SINV-2026-00001",
+			"company": "Company A",
+			"posting_date": "2026-10-13",
+			"currency": "USD",
+			"conversion_rate": 1.0,
+			"grand_total": 5000.0,
+			"items": [
+				frappe._dict({
+					"item_code": "ITEM-101",
+					"item_name": "Industrial Valve",
+					"qty": 10,
+					"rate": 500.0,
+					"amount": 5000.0,
+					"uom": "Nos"
+				})
+			]
+		})
+		payload = prepare_remote_payload(mock_doc, "Company B")
+		self.assertEqual(payload["source_doctype"], "Sales Invoice")
+		self.assertEqual(payload["source_name"], "ACC-SINV-2026-00001")
+		self.assertEqual(payload["target_company"], "Company B")
+		self.assertEqual(payload["grand_total"], 5000.0)
+		self.assertEqual(len(payload["items"]), 1)
+		self.assertEqual(payload["items"][0]["item_code"], "ITEM-101")
+		self.assertIn("idempotency_key", payload)
+
+	def test_app_version_and_capabilities_handshake(self):
+		"""Verify app handshake endpoint returns version and supported capabilities"""
+		from inter_company_transactions.sync import get_app_version_and_capabilities
+		resp = get_app_version_and_capabilities()
+		self.assertEqual(resp["app"], "inter_company_transactions")
+		self.assertIn("federated_multi_site_sync", resp["capabilities"])
+		self.assertIn("Sales Invoice", resp["supported_doctypes"])
+		self.assertIn("Purchase Invoice", resp["supported_doctypes"])
+
+	def test_network_diagnostics_url_validation(self):
+		"""Verify network diagnostic engine detects invalid URLs and formats remedies"""
+		from inter_company_transactions.sync import diagnose_remote_site_connectivity
+		diag = diagnose_remote_site_connectivity("invalid-domain-without-protocol")
+		self.assertEqual(diag["overall_status"], "Failed")
+		self.assertIn("URL Format", [s["step"] for s in diag["steps"]])
+
 
 
 

@@ -26,6 +26,16 @@ on_session_creation = "inter_company_transactions.session.on_session_creation"
 # Boot Session
 boot_session = "inter_company_transactions.boot.boot_session"
 
+# Notification Configuration
+notification_config = "inter_company_transactions.notifications.get_notification_config"
+
+# Scheduled Background Tasks
+scheduler_events = {
+    "hourly": [
+        "inter_company_transactions.inter_company_transactions.doctype.inter_company_error_log.inter_company_error_log.auto_retry_pending_errors"
+    ]
+}
+
 # Migration & Install Hooks
 # Custom fields are safely created in the backend only if not already existing,
 # ensuring bench migrate never overwrites user customizations or triggers fixture conflicts.
@@ -33,6 +43,7 @@ fixtures = []
 after_install = "inter_company_transactions.install.after_install"
 before_migrate = "inter_company_transactions.patches.before_migrate.before_migrate"
 after_migrate = "inter_company_transactions.patches.after_migrate.after_migrate"
+
 
 # Document Events for Inter-Company Transactions
 doc_events = {

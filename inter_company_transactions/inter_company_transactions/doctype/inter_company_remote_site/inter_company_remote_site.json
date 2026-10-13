@@ -10,8 +10,11 @@
     "api_secret",
     "hmac_secret",
     "is_active",
+    "verify_ssl",
+    "timeout_seconds",
     "last_sync_time",
-    "sync_status"
+    "sync_status",
+    "last_error"
   ],
   "fields": [
     {
@@ -54,9 +57,21 @@
       "label": "Active"
     },
     {
+      "default": "1",
+      "fieldname": "verify_ssl",
+      "fieldtype": "Check",
+      "label": "Verify SSL / TLS"
+    },
+    {
+      "default": "15",
+      "fieldname": "timeout_seconds",
+      "fieldtype": "Int",
+      "label": "Connection Timeout (Seconds)"
+    },
+    {
       "fieldname": "last_sync_time",
       "fieldtype": "Datetime",
-      "label": "Last Handshake",
+      "label": "Last Handshake / Sync",
       "read_only": 1
     },
     {
@@ -66,6 +81,12 @@
       "in_list_view": 1,
       "label": "Status",
       "options": "Connected\nDisconnected\nError"
+    },
+    {
+      "fieldname": "last_error",
+      "fieldtype": "Small Text",
+      "label": "Last Error Message",
+      "read_only": 1
     }
   ],
   "istable": 1,

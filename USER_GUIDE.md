@@ -219,10 +219,58 @@ In enterprise multi-company accounting, certain ERPNext DocTypes **cannot and mu
   - `Issue Debit Note`: Automatically posts a Return Purchase Invoice.
   - `Journal Adjustment`: Posts balancing GL adjustment for rounding/rate differences.
 
-### 3.7 Inter Company Remote Site
-* **Location:** `Inter Company > Inter Company Remote Site`
-* **Purpose:** Cross-site federation connecting disparate Frappe sites via REST API.
-* **Features:** API key / secret token management, automated handshake verification (`Test Connection`), and inbound webhook receiver endpoint.
+### 3.7 Inter Company Remote Site (Federated Multi-Site Synchronization)
+* **Location:** `Inter Company > Inter Company Settings > Federated Remote ERPNext Sites`
+* **Purpose:** Enables real-time, zero-touch transaction mirroring across separate, independent ERPNext instances hosted on distinct physical servers, VPS instances, or cloud environments (e.g., AWS, DigitalOcean, Frappe Cloud).
+
+#### 3.7.1 Architecture & Security Model
+1. **REST API Token Authentication:** Communicates via Frappe's standard REST API using API Key and API Secret headers (`Authorization: token api_key:api_secret`).
+2. **HMAC-SHA256 Payload Signatures:** Each outbound payload is hashed with a shared HMAC secret. The receiving instance verifies the signature before processing to guarantee authenticity.
+3. **Idempotency Guarantee:** Every transaction includes an idempotency token (`{source_site}:{doctype}:{name}`). If a network disruption triggers a retry, the receiving instance recognizes the token and returns the existing mirrored document without duplicating entries.
+4. **Offline Resilience & Auto-Retry Worker:** If the remote instance is temporarily offline or unreachable due to a firewall issue, the transaction is saved locally and queued in *Inter Company Error Log* (`Pending Retry`). The hourly background scheduler automatically retries pending syncs once connectivity is restored.
+5. **Bi-Directional Cancellation:** When a source document is cancelled on Site A, a signed cancellation request is dispatched to Site B to cleanly cancel or void the mirrored document.
+
+#### 3.7.2 Network, Port & Firewall Configuration Guide
+For successful cross-instance communication, the sending and receiving servers must be able to establish TCP connections:
+
+| Port | Protocol | Purpose | Direction |
+|---|---|---|---|
+| **443** (Recommended) | HTTPS / TLS 1.3 | Encrypted REST API synchronization | Inbound on destination server |
+| **80** | HTTP | Plaintext web traffic & SSL challenges | Inbound on destination server |
+| **8000** | HTTP | Direct Bench developer port (if not using NGINX) | Inbound on destination server |
+
+**Firewall Rules Setup on the Remote Server:**
+* **Ubuntu / Debian (UFW):**
+  ```bash
+  sudo ufw allow 443/tcp comment 'ERPNext Intercompany Sync'
+  sudo ufw reload
+  ```
+  *(To restrict access strictly to the sending server IP: `sudo ufw allow from [SENDING_IP] to any port 443 proto tcp`)*
+
+* **CentOS / RHEL / AlmaLinux (Firewalld):**
+  ```bash
+  sudo firewall-cmd --permanent --add-port=443/tcp
+  sudo firewall-cmd --reload
+  ```
+
+* **AWS EC2 / DigitalOcean Cloud Firewalls:**
+  Add an Inbound Rule allowing TCP port `443` from the sending server's public IP address.
+
+#### 3.7.3 Built-in GUI Network & Firewall Diagnostic Tool
+You do not need server SSH access to test connectivity:
+1. Navigate to **Inter Company Settings**.
+2. Click **Actions > Diagnose Network & Firewall**.
+3. Select your pre-configured Remote Site or enter any target URL.
+4. Click **Run Diagnostic Test**.
+5. The diagnostic engine tests 6 layers in real-time:
+   - **URL & Protocol:** Validates HTTPS encryption.
+   - **DNS Resolution:** Confirms the remote domain name resolves to an IP address.
+   - **TCP Port Reachability:** Connects to port 443/80 and measures round-trip socket latency in milliseconds.
+   - **SSL/TLS Handshake:** Verifies certificate validity.
+   - **Frappe API Authentication:** Tests API Key and Secret against `/api/method/frappe.auth.get_logged_user`.
+   - **App Version Handshake:** Verifies that `inter_company_transactions` is installed on the remote instance.
+6. If any step fails (e.g. firewall blocking port 443), the dialog generates exact copy-pasteable Linux commands to resolve the issue!
+
 
 ### 3.8 Inter Company Customer Group
 * **Location:** `Selling > Customer Group` and `Selling > Customer` (`ic_customer_group`)

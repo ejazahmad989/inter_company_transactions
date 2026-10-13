@@ -1,2 +1,2 @@
-frappe>=15.0.0
-erpnext>=15.0.0
+# Third-party python dependencies (frappe and erpnext are managed by bench and declared in hooks.py)
+reportlab>=3.6.0

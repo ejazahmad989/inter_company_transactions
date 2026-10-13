@@ -102,16 +102,39 @@ class IntercompanyTransactionLink(Document):
 
 
 def create_linked_documents(doc, method=None):
-    """Create corresponding documents in all linked companies"""
+    """Create corresponding documents in all linked companies (Local & Remote Federated)"""
     if doc.get("intercompany_linked_doc_doctype") or doc.get("intercompany_linked_doc_name"):
         return
-    
+
+    # Check for direct target company remote push
+    target_company_hint = doc.get("intercompany_target_company")
+    if target_company_hint:
+        try:
+            from inter_company_transactions.sync import get_remote_site_for_company, push_document_to_remote_site
+            remote_site = get_remote_site_for_company(target_company_hint)
+            if remote_site:
+                push_document_to_remote_site(doc, target_company_hint, remote_site)
+                return
+        except Exception as e:
+            frappe.logger().error(f"Error checking remote site for target company {target_company_hint}: {str(e)}")
+
     mappings = find_applicable_mappings(doc)
     if not mappings:
         return
     
     for i, mapping in enumerate(mappings):
         try:
+            target_comp = mapping.get("company")
+            # Check if this mapped company belongs to an external federated ERPNext site
+            try:
+                from inter_company_transactions.sync import get_remote_site_for_company, push_document_to_remote_site
+                remote_site = get_remote_site_for_company(target_comp)
+                if remote_site:
+                    push_document_to_remote_site(doc, target_comp, remote_site)
+                    continue
+            except Exception as e:
+                frappe.logger().error(f"Error checking remote site for mapped company {target_comp}: {str(e)}")
+
             direction = mapping.get("direction")
             if not direction:
                 is_main_to_other = (doc.company == mapping["mapping"].main_company)
@@ -159,6 +182,10 @@ def cancel_linked_documents(doc, method=None):
     
     # Documents where current doc is the SOURCE
     try:
+        fields_to_fetch = ["target_doctype", "target_name", "target_company"]
+        if frappe.db.has_column("Inter Company Document Reference", "is_remote"):
+            fields_to_fetch.extend(["is_remote", "remote_site_url"])
+
         linked_docs = frappe.get_all(
             "Inter Company Document Reference",
             filters=[
@@ -166,15 +193,33 @@ def cancel_linked_documents(doc, method=None):
                 ["source_name", "=", doc.name],
                 ["source_company", "=", doc.company]
             ],
-            fields=["target_doctype", "target_name", "target_company"]
+            fields=fields_to_fetch
         )
         for ld in linked_docs:
-            all_related_docs.append({
-                "doctype": ld.target_doctype,
-                "name": ld.target_name,
-                "company": ld.target_company,
-                "relationship": "target"
-            })
+            if ld.get("is_remote") and ld.get("remote_site_url"):
+                try:
+                    from inter_company_transactions.sync import get_remote_site_for_company
+                    remote_site = get_remote_site_for_company(ld.target_company)
+                    if remote_site:
+                        import urllib.request, json
+                        endpoint = f"{remote_site['site_url']}/api/method/inter_company_transactions.sync.cancel_remote_transaction"
+                        c_payload = json.dumps({"source_doctype": doc.doctype, "source_name": doc.name}).encode("utf-8")
+                        c_headers = {
+                            "Content-Type": "application/json",
+                            "Authorization": f"token {remote_site['api_key']}:{remote_site['api_secret']}"
+                        }
+                        c_req = urllib.request.Request(endpoint, data=c_payload, headers=c_headers, method="POST")
+                        with urllib.request.urlopen(c_req, timeout=10) as c_resp:
+                            frappe.msgprint(_("Notified remote instance ({0}) to cancel mirrored transaction.").format(remote_site['site_url']))
+                except Exception as ex:
+                    frappe.logger().error(f"Failed to cancel remote document on {ld.get('remote_site_url')}: {str(ex)}")
+            else:
+                all_related_docs.append({
+                    "doctype": ld.target_doctype,
+                    "name": ld.target_name,
+                    "company": ld.target_company,
+                    "relationship": "target"
+                })
     except Exception as e:
         frappe.logger().error(f"Error finding linked documents (as source): {str(e)}")
     

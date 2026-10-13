@@ -5,6 +5,7 @@
   "engine": "InnoDB",
   "field_order": [
     "status",
+    "error_type",
     "source_doctype",
     "source_name",
     "source_company",
@@ -13,6 +14,7 @@
     "target_doctype",
     "section_break_details",
     "error_message",
+    "payload_snapshot",
     "traceback",
     "resolved_by",
     "resolved_at"
@@ -25,7 +27,15 @@
       "in_list_view": 1,
       "in_standard_filter": 1,
       "label": "Status",
-      "options": "Failed\nRetried Successfully\nIgnored"
+      "options": "Failed\nRetried Successfully\nIgnored\nPending Retry"
+    },
+    {
+      "default": "Local Mirror",
+      "fieldname": "error_type",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Error Type",
+      "options": "Local Mirror\nRemote Sync\nReconciliation\nOther"
     },
     {
       "fieldname": "source_doctype",
@@ -58,10 +68,9 @@
     },
     {
       "fieldname": "target_company",
-      "fieldtype": "Link",
+      "fieldtype": "Data",
       "in_list_view": 1,
       "label": "Target Company",
-      "options": "Company",
       "reqd": 1
     },
     {
@@ -79,6 +88,12 @@
       "fieldname": "error_message",
       "fieldtype": "Small Text",
       "label": "Error Summary"
+    },
+    {
+      "fieldname": "payload_snapshot",
+      "fieldtype": "Code",
+      "label": "Payload Snapshot (for Sync Retry)",
+      "options": "JSON"
     },
     {
       "fieldname": "traceback",

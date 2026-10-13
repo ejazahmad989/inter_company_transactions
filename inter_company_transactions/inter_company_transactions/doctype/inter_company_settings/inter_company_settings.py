@@ -79,60 +79,29 @@ def get_enterprise_health_check():
 def test_remote_site_connection(site_url, api_key, api_secret):
 	"""
 	Tests REST API handshake with an external federated ERPNext instance.
+	Delegates to diagnose_remote_site_connectivity for deep diagnostic.
 	"""
-	if not site_url or not api_key or not api_secret:
-		frappe.throw(_("Site URL, API Key, and API Secret are required."))
+	from inter_company_transactions.sync import diagnose_remote_site_connectivity
+	return diagnose_remote_site_connectivity(site_url, api_key, api_secret)
 
-	endpoint = f"{site_url.rstrip('/')}/api/method/frappe.auth.get_logged_user"
-	headers = {
-		"Authorization": f"token {api_key}:{api_secret}",
-		"Accept": "application/json"
-	}
 
-	try:
-		req = urllib.request.Request(endpoint, headers=headers)
-		with urllib.request.urlopen(req, timeout=10) as resp:
-			result = json.loads(resp.read().decode('utf-8'))
-			return {
-				"success": True,
-				"message": _("Connection successful! Authenticated as: {0}").format(result.get("message"))
-			}
-	except urllib.error.HTTPError as e:
-		return {
-			"success": False,
-			"message": _("HTTP {0}: {1}").format(e.code, e.reason)
-		}
-	except Exception as e:
-		return {
-			"success": False,
-			"message": str(e)
-		}
+@frappe.whitelist()
+def diagnose_network_and_firewall(site_url, api_key=None, api_secret=None):
+	"""
+	Runs full multi-layer socket, DNS, SSL, and firewall diagnostics.
+	"""
+	from inter_company_transactions.sync import diagnose_remote_site_connectivity
+	return diagnose_remote_site_connectivity(site_url, api_key, api_secret)
 
 
 @frappe.whitelist(allow_guest=False)
 def receive_intercompany_webhook(payload):
 	"""
 	Receives cross-site intercompany transaction payloads via REST API/Webhook,
-	allowing federated multi-instance synchronization.
+	delegating to idempotent sync receiver.
 	"""
-	if isinstance(payload, str):
-		data = json.loads(payload)
-	else:
-		data = payload
-
-	source_doctype = data.get("doctype")
-	source_name = data.get("name")
-	source_company = data.get("company")
-	target_company = data.get("target_company")
-
-	if not (source_doctype and source_name and source_company and target_company):
-		frappe.throw(_("Incomplete payload: source doctype, name, source company, and target company are required."))
-
-	return {
-		"status": "Accepted",
-		"received_doc": f"{source_doctype} {source_name}",
-		"target_company": target_company
-	}
+	from inter_company_transactions.sync import receive_remote_transaction
+	return receive_remote_transaction(payload)
 
 
 @frappe.whitelist()
