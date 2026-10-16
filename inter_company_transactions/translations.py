@@ -1,6 +1,5 @@
-# -*- coding: utf-8 -*-
-from __future__ import unicode_literals
 import frappe
+
 
 def get_doctype_translations():
     """Get translations for doctypes"""
@@ -44,5 +43,5 @@ def get_doctype_translations():
         }
         return translations
     except Exception as e:
-        frappe.log_error(f"Error getting translations: {str(e)}", "Translation Error")
+        frappe.log_error(f"Error getting translations: {e!s}", "Translation Error")
         return {}

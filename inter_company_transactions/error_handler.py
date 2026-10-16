@@ -1,18 +1,17 @@
-# -*- coding: utf-8 -*-
-from __future__ import unicode_literals
 import frappe
+
 
 def handle_error(error):
     """Handle application errors"""
     try:
         frappe.log_error(
-            f"Application Error: {str(error)}\nUser: {frappe.session.user}\nURL: {frappe.request.url if frappe.request else 'N/A'}",
+            f"Application Error: {error!s}\nUser: {frappe.session.user}\nURL: {frappe.request.url if frappe.request else 'N/A'}",
             "Inter Company Transactions Error"
         )
         if is_critical_error(error):
             send_error_notification(error)
     except Exception as e:
-        frappe.log_error(f"Error in error handler: {str(e)}", "Error Handler")
+        frappe.log_error(f"Error in error handler: {e!s}", "Error Handler")
 
 def is_critical_error(error):
     """Check if error is critical"""
@@ -37,9 +36,9 @@ def send_error_notification(error):
             frappe.sendmail(
                 recipients=[admin.parent],
                 subject="Critical Error in Inter Company Transactions",
-                message=f"A critical error occurred: {str(error)}",
+                message=f"A critical error occurred: {error!s}",
                 reference_doctype="Error Log",
                 reference_name=frappe.utils.now()
             )
     except Exception as e:
-        frappe.log_error(f"Error sending error notification: {str(e)}", "Error Notification")
+        frappe.log_error(f"Error sending error notification: {e!s}", "Error Notification")

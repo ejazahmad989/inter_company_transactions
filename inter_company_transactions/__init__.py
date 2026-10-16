@@ -1,7 +1,5 @@
-# -*- coding: utf-8 -*-
-from __future__ import unicode_literals
 
-__version__ = '0.0.1'
+__version__ = '1.0.0'
 
 try:
     from inter_company_transactions.safe_eval_patch import apply_safe_eval_patch

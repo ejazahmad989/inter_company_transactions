@@ -87,4 +87,4 @@ def auto_retry_pending_errors():
 				# Error is updated within retry_sync
 				pass
 	except Exception as e:
-		frappe.log_error(f"Error in auto_retry_pending_errors: {str(e)}", "Inter Company Error Log")
+		frappe.log_error(f"Error in auto_retry_pending_errors: {e!s}", "Inter Company Error Log")

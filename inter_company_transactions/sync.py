@@ -1,20 +1,19 @@
-# -*- coding: utf-8 -*-
 # Copyright (c) 2024-2026, Inter Company Transactions and contributors
 # For license information, please see license.txt
 
-from __future__ import unicode_literals
-import frappe
-from frappe import _
-from frappe.utils import flt, cint, nowdate, now_datetime
+import hashlib
+import hmac
 import json
 import socket
 import ssl
 import time
-import hmac
-import hashlib
-import urllib.request
 import urllib.error
 import urllib.parse
+import urllib.request
+
+import frappe
+from frappe import _
+from frappe.utils import cint, flt, now_datetime, nowdate
 
 
 @frappe.whitelist()
@@ -72,7 +71,7 @@ def get_remote_site_for_company(company_name):
 					"verify_ssl": cint(site.verify_ssl) if site.get("verify_ssl") is not None else 1
 				}
 	except Exception as e:
-		frappe.logger().error(f"Error fetching remote site for company {company_name}: {str(e)}")
+		frappe.logger().error(f"Error fetching remote site for company {company_name}: {e!s}")
 
 	return None
 
@@ -253,7 +252,7 @@ def create_remote_document_reference(source_doc, target_doctype, target_name, ta
 		ref.flags.ignore_links = True
 		ref.insert(ignore_permissions=True, ignore_links=True)
 	except Exception as e:
-		frappe.logger().error(f"Error creating remote document reference: {str(e)}")
+		frappe.logger().error(f"Error creating remote document reference: {e!s}")
 
 
 def update_remote_site_status(company_name, status, error_message=None):
@@ -298,7 +297,7 @@ def log_remote_sync_failure(doc, target_company, site_url, payload_json, error_m
 		err_log.insert(ignore_permissions=True)
 		frappe.db.commit()
 	except Exception as e:
-		frappe.logger().error(f"Failed to log remote sync error: {str(e)}")
+		frappe.logger().error(f"Failed to log remote sync error: {e!s}")
 
 
 @frappe.whitelist(allow_guest=False)
@@ -672,7 +671,7 @@ def diagnose_remote_site_connectivity(site_url, api_key=None, api_secret=None, t
 		diag["steps"].append({
 			"step": "DNS Resolution",
 			"status": "Failed",
-			"details": f"DNS Lookup failed for host '{hostname}': {str(e)}. Ensure domain is configured in DNS or /etc/hosts."
+			"details": f"DNS Lookup failed for host '{hostname}': {e!s}. Ensure domain is configured in DNS or /etc/hosts."
 		})
 		_generate_firewall_remedy(diag, hostname, port)
 		return diag
@@ -691,7 +690,7 @@ def diagnose_remote_site_connectivity(site_url, api_key=None, api_secret=None, t
 			"status": "Passed",
 			"details": f"Port {port} on {ip_address} is OPEN and reachable. (TCP handshake: {sock_latency} ms)"
 		})
-	except socket.timeout:
+	except TimeoutError:
 		diag["overall_status"] = "Failed"
 		diag["steps"].append({
 			"step": "TCP Port & Firewall Reachability",
@@ -714,7 +713,7 @@ def diagnose_remote_site_connectivity(site_url, api_key=None, api_secret=None, t
 		diag["steps"].append({
 			"step": "TCP Port & Firewall Reachability",
 			"status": "Failed",
-			"details": f"Network error reaching port {port}: {str(e)}"
+			"details": f"Network error reaching port {port}: {e!s}"
 		})
 		_generate_firewall_remedy(diag, hostname, port)
 		return diag
@@ -735,13 +734,13 @@ def diagnose_remote_site_connectivity(site_url, api_key=None, api_secret=None, t
 			diag["steps"].append({
 				"step": "SSL / TLS Handshake",
 				"status": "Warning",
-				"details": f"SSL Warning: {str(e)}. If using self-signed certificate, uncheck 'Verify SSL' in Remote Site configuration."
+				"details": f"SSL Warning: {e!s}. If using self-signed certificate, uncheck 'Verify SSL' in Remote Site configuration."
 			})
 		except Exception as e:
 			diag["steps"].append({
 				"step": "SSL / TLS Handshake",
 				"status": "Warning",
-				"details": f"SSL handshake note: {str(e)}"
+				"details": f"SSL handshake note: {e!s}"
 			})
 
 	# Step 5: Frappe REST API Token Authentication
@@ -781,7 +780,7 @@ def diagnose_remote_site_connectivity(site_url, api_key=None, api_secret=None, t
 			diag["steps"].append({
 				"step": "Frappe REST API Authentication",
 				"status": "Warning",
-				"details": f"Auth check error: {str(e)}"
+				"details": f"Auth check error: {e!s}"
 			})
 	else:
 		diag["steps"].append({
@@ -825,5 +824,5 @@ def _generate_firewall_remedy(diag, hostname, port):
 		"centos_firewalld": f"sudo firewall-cmd --permanent --add-port={port}/tcp && sudo firewall-cmd --reload",
 		"iptables": f"sudo iptables -A INPUT -p tcp --dport {port} -j ACCEPT",
 		"aws_security_group": f"Inbound Rule: Type=Custom TCP, Port Range={port}, Source=0.0.0.0/0 (or IP of sending server)",
-		"nginx_check": f"sudo systemctl status nginx && sudo nginx -t"
+		"nginx_check": "sudo systemctl status nginx && sudo nginx -t"
 	}

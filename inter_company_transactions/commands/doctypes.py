@@ -1,11 +1,13 @@
-import frappe
 import json
 import os
+
+import frappe
+
 
 def execute():
     """Import doctypes for inter-company transactions"""
     app_path = frappe.get_app_path('inter_company_transactions')
-    
+
     # List of doctypes to import
     doctypes = [
         'Inter Company Transaction Map',
@@ -13,7 +15,7 @@ def execute():
         'Intercompany Transaction Link',
         'Intercompany Transaction Type Mapping'
     ]
-    
+
     for doctype in doctypes:
         try:
             # Convert doctype name to file path format
@@ -25,11 +27,11 @@ def execute():
                 file_name,
                 f'{file_name}.json'
             )
-            
+
             if os.path.exists(json_file):
-                with open(json_file, 'r') as f:
+                with open(json_file) as f:
                     doc_data = json.load(f)
-                
+
                 # Create or update doctype
                 if not frappe.db.exists('DocType', doctype):
                     doc = frappe.new_doc('DocType')
@@ -41,11 +43,11 @@ def execute():
                     doc.update(doc_data)
                     doc.save(ignore_permissions=True)
                     print(f'Updated DocType: {doctype}')
-                
+
                 frappe.db.commit()
             else:
                 print(f'JSON file not found for DocType: {doctype}')
-        
+
         except Exception as e:
-            print(f'Error importing DocType {doctype}: {str(e)}')
-            frappe.log_error(f"DocType Import Error: {str(e)}", "Inter Company Transaction Setup")
+            print(f'Error importing DocType {doctype}: {e!s}')
+            frappe.log_error(f"DocType Import Error: {e!s}", "Inter Company Transaction Setup")

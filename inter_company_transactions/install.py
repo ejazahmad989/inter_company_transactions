@@ -1,55 +1,55 @@
-# -*- coding: utf-8 -*-
-from __future__ import unicode_literals
-import frappe
 import json
 import os
+
+import frappe
+
 
 def after_install():
     """Run after app installation"""
     print("Starting Inter Company Transactions app installation...")
-    
+
     try:
         # Create custom roles first
         create_custom_roles()
     except Exception as e:
         print(f"Notice during role creation: {e}")
         frappe.log_error(f"Error in create_custom_roles: {e}", "App Installation")
-    
+
     try:
         # Create doctypes
         create_doctypes()
     except Exception as e:
         print(f"Notice during doctype creation: {e}")
         frappe.log_error(f"Error in create_doctypes: {e}", "App Installation")
-    
+
     try:
         # Create custom fields
         create_custom_fields()
     except Exception as e:
         print(f"Notice during custom fields creation: {e}")
         frappe.log_error(f"Error in create_custom_fields: {e}", "App Installation")
-    
+
     try:
         # Set default permissions
         set_default_permissions()
     except Exception as e:
         print(f"Notice during permissions setup: {e}")
         frappe.log_error(f"Error in set_default_permissions: {e}", "App Installation")
-    
+
     try:
         # Create sample data
         create_sample_data()
     except Exception as e:
         print(f"Notice during sample data creation: {e}")
         frappe.log_error(f"Error in create_sample_data: {e}", "App Installation")
-    
+
     try:
         # Ensure page and workspace exist
         create_page_and_workspace()
     except Exception as e:
         print(f"Notice during page/workspace creation: {e}")
         frappe.log_error(f"Error in create_page_and_workspace: {e}", "App Installation")
-    
+
     print("Inter Company Transactions app installation completed successfully!")
 
 def create_custom_roles():
@@ -60,7 +60,7 @@ def create_custom_roles():
             "description": "Can view and process inter-company transactions"
         }
     ]
-    
+
     for role_data in roles:
         if not frappe.db.exists("Role", role_data["role_name"]):
             role = frappe.get_doc({
@@ -150,7 +150,7 @@ def create_doctypes():
                 }
             ]
         },
-        
+
         # 2. Intercompany Transaction Type (Child Table)
         {
             "doctype": "DocType",
@@ -185,7 +185,7 @@ def create_doctypes():
                 }
             ]
         },
-        
+
         # 3. Intercompany Transaction Link (Main DocType)
         {
             "doctype": "DocType",
@@ -237,7 +237,7 @@ def create_doctypes():
                 }
             ]
         },
-        
+
         # 4. Inter Company Document Reference
         {
             "doctype": "DocType",
@@ -296,7 +296,7 @@ def create_doctypes():
                 }
             ]
         },
-        
+
         # 5. ICT Notification Setting
         {
             "doctype": "DocType",
@@ -398,7 +398,7 @@ def create_doctypes():
             ]
         }
     ]
-    
+
     for doctype in doctypes:
         try:
             if not frappe.db.exists("DocType", doctype["name"]):
@@ -408,14 +408,14 @@ def create_doctypes():
                 print(f"Created DocType: {doctype['name']}")
             else:
                 print(f"DocType already exists: {doctype['name']}")
-            
+
             frappe.db.commit()
-            
+
         except Exception as e:
             frappe.db.rollback()
-            print(f"Error creating DocType {doctype['name']}: {str(e)}")
+            print(f"Error creating DocType {doctype['name']}: {e!s}")
             frappe.log_error(
-                f"DocType Creation Error: {str(e)}\nDocType: {doctype['name']}", 
+                f"DocType Creation Error: {e!s}\nDocType: {doctype['name']}",
                 "Inter Company Transaction Setup"
             )
 
@@ -424,7 +424,7 @@ def create_custom_fields():
     try:
         # Load custom fields from JSON file
         custom_fields_file = os.path.join(os.path.dirname(__file__), "custom_fields.json")
-        
+
         if os.path.exists(custom_fields_file):
             with open(custom_fields_file) as f:
                 custom_fields = json.load(f)
@@ -436,7 +436,7 @@ def create_custom_fields():
                 "Stock Entry", "Quotation", "Supplier Quotation", "Material Request",
                 "Request for Quotation"
             ]
-            
+
             def _get_fallback_tx_fields():
                 return [
                     {
@@ -486,7 +486,7 @@ def create_custom_fields():
                         "hidden": 1
                     }
                 ]
-            
+
             custom_fields = {
                 "Customer": [
                     {
@@ -567,7 +567,7 @@ def create_custom_fields():
             }
             for dt in tx_doctypes:
                 custom_fields[dt] = _get_fallback_tx_fields()
-            
+
         for doctype, fields in custom_fields.items():
             for field in fields:
                 try:
@@ -606,20 +606,20 @@ def create_custom_fields():
                     else:
                         # Custom field already exists; do not overwrite user customizations or trigger migrate conflicts
                         pass
-                        
+
                 except Exception as e:
-                    print(f"Error creating custom field {field['fieldname']} for {doctype}: {str(e)}")
+                    print(f"Error creating custom field {field['fieldname']} for {doctype}: {e!s}")
                     frappe.log_error(
-                        f"Custom Field Creation Error: {str(e)}\nField: {field['fieldname']}\nDocType: {doctype}",
+                        f"Custom Field Creation Error: {e!s}\nField: {field['fieldname']}\nDocType: {doctype}",
                         "Inter Company Transaction Setup"
                     )
-                    
+
         frappe.db.commit()
-        
+
     except Exception as e:
         frappe.db.rollback()
-        print(f"Error creating custom fields: {str(e)}")
-        frappe.log_error(f"Custom Fields Creation Error: {str(e)}", "Inter Company Transaction Setup")
+        print(f"Error creating custom fields: {e!s}")
+        frappe.log_error(f"Custom Fields Creation Error: {e!s}", "Inter Company Transaction Setup")
 
 def set_default_permissions():
     """Set default permissions for custom doctypes"""
@@ -717,7 +717,7 @@ def set_default_permissions():
             "report": 0, "export": 0, "print": 0, "email": 0, "share": 0
         }
     ]
-    
+
     for perm in permissions:
         try:
             if frappe.db.exists("DocType", perm["doctype"]):
@@ -725,7 +725,7 @@ def set_default_permissions():
                     "parent": perm["doctype"],
                     "role": perm["role"]
                 })
-                
+
                 if not existing_perm:
                     doctype_doc = frappe.get_doc("DocType", perm["doctype"])
                     doctype_doc.append("permissions", {
@@ -749,9 +749,9 @@ def set_default_permissions():
                     print(f"Permission already exists for {perm['role']} on {perm['doctype']}")
             else:
                 print(f"DocType {perm['doctype']} does not exist, skipping permissions")
-                    
+
         except Exception as e:
-            print(f"Error setting permissions for {perm['doctype']}: {str(e)}")
+            print(f"Error setting permissions for {perm['doctype']}: {e!s}")
 
 def create_sample_data():
     """Ensure Inter Company Settings single doctype is initialized with default values"""
@@ -776,7 +776,7 @@ def create_sample_data():
             print("Initialized Inter Company Settings default values")
         frappe.db.commit()
     except Exception as e:
-        print(f"Notice during sample data initialization: {str(e)}")
+        print(f"Notice during sample data initialization: {e!s}")
 
 def create_page_and_workspace():
     """Ensure Inter-Company Control Console page and Inter Company workspace exist in DB"""
@@ -806,7 +806,7 @@ def create_page_and_workspace():
         # 2. Workspace
         ws_file = os.path.join(os.path.dirname(__file__), "inter_company_transactions", "workspace", "inter_company", "inter_company.json")
         if os.path.exists(ws_file):
-            with open(ws_file, "r") as f:
+            with open(ws_file) as f:
                 ws_data = json.load(f)
             if not frappe.db.exists("Workspace", "Inter Company"):
                 ws_doc = frappe.get_doc(ws_data)
@@ -815,18 +815,18 @@ def create_page_and_workspace():
                 print("Created Workspace: Inter Company")
         frappe.db.commit()
     except Exception as e:
-        print(f"Error creating page or workspace: {str(e)}")
+        print(f"Error creating page or workspace: {e!s}")
 
 def before_uninstall():
     """Clean up before app uninstall"""
     print("Cleaning up Inter Company Transactions app...")
-    
-    custom_fields = frappe.get_all("Custom Field", 
+
+    custom_fields = frappe.get_all("Custom Field",
         filters={"module": "Inter Company Transactions"},
         fields=["name"]
     )
-    
+
     for field in custom_fields:
         frappe.delete_doc("Custom Field", field.name, ignore_permissions=True)
-    
+
     print("Inter Company Transactions app cleanup completed!")

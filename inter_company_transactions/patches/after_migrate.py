@@ -1,43 +1,46 @@
-# -*- coding: utf-8 -*-
-from __future__ import unicode_literals
 import frappe
+
 
 def after_migrate():
     """Execute after migration to restore data and verify setup"""
     print("Running post-migration tasks for Inter Company Transactions...")
-    
+
     # Sanitize custom fields and doctypes to prevent SyntaxError
     try:
-        from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import fix_legacy_custom_fields
+        from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+            fix_legacy_custom_fields,
+        )
         fix_legacy_custom_fields(force=True)
     except Exception as e:
         print(f"Error sanitizing custom fields: {e}")
 
     # Recreate any missing doctypes
     recreate_missing_doctypes()
-    
+
     # Ensure custom fields are in place
     ensure_custom_fields()
 
     # Re-sanitize immediately after custom fields creation
     try:
-        from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import fix_legacy_custom_fields
+        from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+            fix_legacy_custom_fields,
+        )
         fix_legacy_custom_fields(force=True)
     except Exception as e:
         print(f"Error re-sanitizing custom fields: {e}")
 
     # Update permissions
     update_permissions()
-    
+
     # Ensure all users have valid Notification Settings
     ensure_notification_settings_for_all_users()
-    
+
     # Ensure ICT Notification Setting exists for all users
     ensure_ict_notification_settings_for_all_users()
 
     # Ensure Page and Workspace exist
     ensure_page_and_workspace()
-    
+
     print("Post-migration tasks completed successfully!")
 
 def execute():
@@ -51,7 +54,7 @@ def ensure_custom_fields():
         create_custom_fields()
         print("Ensured custom fields exist")
     except Exception as e:
-        print(f"Error ensuring custom fields: {str(e)}")
+        print(f"Error ensuring custom fields: {e!s}")
 
 def recreate_missing_doctypes():
     """Recreate any missing doctypes"""
@@ -60,7 +63,7 @@ def recreate_missing_doctypes():
         create_doctypes()
         print("Recreated missing doctypes")
     except Exception as e:
-        print(f"Error recreating doctypes: {str(e)}")
+        print(f"Error recreating doctypes: {e!s}")
 
 def update_permissions():
     """Update permissions after migration"""
@@ -69,7 +72,7 @@ def update_permissions():
         set_default_permissions()
         print("Updated permissions")
     except Exception as e:
-        print(f"Error updating permissions: {str(e)}")
+        print(f"Error updating permissions: {e!s}")
 
 def ensure_notification_settings_for_all_users():
     """Ensure every existing User has a valid Notification Settings record"""
@@ -81,7 +84,7 @@ def ensure_notification_settings_for_all_users():
                 frappe.reload_doctype("Notification Settings", force=True)
             except Exception:
                 pass
-            
+
         users = frappe.get_all("User", pluck="name")
         for u in users:
             if u and u not in ("Guest", "None"):
@@ -97,7 +100,7 @@ def ensure_notification_settings_for_all_users():
                         created = True
                     except Exception:
                         pass
-                    
+
                     if not created:
                         try:
                             frappe.db.sql("""
@@ -107,21 +110,23 @@ def ensure_notification_settings_for_all_users():
                             """, (u, u, u, u))
                         except Exception:
                             pass
-                
+
                 try:
                     frappe.clear_document_cache("Notification Settings", u)
                 except Exception:
                     pass
-                    
+
         frappe.db.commit()
         print("Ensured all users have Notification Settings")
     except Exception as e:
-        print(f"Error ensuring Notification Settings: {str(e)}")
+        print(f"Error ensuring Notification Settings: {e!s}")
 
 def ensure_ict_notification_settings_for_all_users():
     """Ensure every existing User has a valid ICT Notification Setting record"""
     try:
-        from inter_company_transactions.inter_company_transactions.doctype.ict_notification_setting.ict_notification_setting import get_ict_notification_settings
+        from inter_company_transactions.inter_company_transactions.doctype.ict_notification_setting.ict_notification_setting import (
+            get_ict_notification_settings,
+        )
         users = frappe.get_all("User", pluck="name")
         for u in users:
             if u and u not in ("Guest", "None"):
@@ -132,12 +137,12 @@ def ensure_ict_notification_settings_for_all_users():
         frappe.db.commit()
         print("Ensured all users have ICT Notification Settings")
     except Exception as e:
-        print(f"Error ensuring ICT Notification Settings: {str(e)}")
+        print(f"Error ensuring ICT Notification Settings: {e!s}")
 
 def ensure_page_and_workspace():
     """Ensure Page inter-company-console and Workspace Inter Company exist"""
-    import os
     import json
+    import os
     try:
         # Page
         if not frappe.db.exists("Page", "inter-company-console"):
@@ -170,7 +175,7 @@ def ensure_page_and_workspace():
             "inter_company.json"
         )
         if os.path.exists(ws_file):
-            with open(ws_file, "r") as f:
+            with open(ws_file) as f:
                 ws_data = json.load(f)
             if not frappe.db.exists("Workspace", "Inter Company"):
                 ws_doc = frappe.get_doc(ws_data)
@@ -179,4 +184,4 @@ def ensure_page_and_workspace():
                 print("Ensured Workspace: Inter Company")
         frappe.db.commit()
     except Exception as e:
-        print(f"Error ensuring page or workspace: {str(e)}")
+        print(f"Error ensuring page or workspace: {e!s}")

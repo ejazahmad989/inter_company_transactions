@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Safe Eval & Safe Exec Utility for Frappe v15 / ERPNext v15
 Provides seamless expression sanitization (translating JS operators into Python)
@@ -6,7 +5,6 @@ and suppresses unhandled syntax errors so document transactions, status updates,
 and form loads never crash with 'Syntax Error: Invalid python code on line 1'.
 Guaranteed zero recursion.
 """
-from __future__ import unicode_literals
 import re
 import threading
 

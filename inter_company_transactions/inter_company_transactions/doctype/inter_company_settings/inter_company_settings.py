@@ -1,13 +1,14 @@
 # Copyright (c) 2024-2026, Inter Company Transactions and contributors
 # For license information, please see license.txt
 
+import json
+import urllib.error
+import urllib.request
+
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import flt, cint
-import json
-import urllib.request
-import urllib.error
+from frappe.utils import cint, flt
 
 
 class InterCompanySettings(Document):
@@ -140,7 +141,7 @@ def get_console_dashboard_data():
 			order_by="modified desc"
 		)
 		data["metrics"]["active_links"] = sum(1 for l in links if l.get("enabled"))
-		
+
 		# Enrich with linked counterparties
 		for l in links:
 			counterparties = frappe.get_all(
@@ -361,7 +362,7 @@ def quick_setup_intercompany_pair(main_company, counterparty_company, preset="fu
 	elif preset == "financial":
 		selected_mappings = financial_rules
 	elif preset == "inventory":
-		selected_mappings = stock_rules + [("Delivery Note", "Purchase Receipt", "Both")]
+		selected_mappings = [*stock_rules, ("Delivery Note", "Purchase Receipt", "Both")]
 	else:
 		selected_mappings = trading_rules + financial_rules + stock_rules
 

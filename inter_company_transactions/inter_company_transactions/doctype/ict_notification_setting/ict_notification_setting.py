@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
 # Copyright (c) 2024-2026, Inter Company Transactions and contributors
 # For license information, please see license.txt
 
-from __future__ import unicode_literals
 import frappe
 from frappe import _
 from frappe.model.document import Document
@@ -33,7 +31,7 @@ def get_ict_notification_settings(user=None):
 	try:
 		if frappe.db.exists("ICT Notification Setting", user):
 			return frappe.get_doc("ICT Notification Setting", user)
-		
+
 		# Auto create default settings
 		doc = frappe.new_doc("ICT Notification Setting")
 		doc.name = user

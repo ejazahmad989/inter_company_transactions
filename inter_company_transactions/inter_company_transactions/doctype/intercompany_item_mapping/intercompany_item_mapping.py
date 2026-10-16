@@ -3,5 +3,6 @@
 
 from frappe.model.document import Document
 
+
 class IntercompanyItemMapping(Document):
 	pass

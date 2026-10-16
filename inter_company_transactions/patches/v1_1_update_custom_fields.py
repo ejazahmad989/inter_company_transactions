@@ -1,7 +1,7 @@
-# -*- coding: utf-8 -*-
-from __future__ import unicode_literals
 import frappe
+
 from inter_company_transactions.install import create_custom_fields, set_default_permissions
+
 
 def execute():
 	"""

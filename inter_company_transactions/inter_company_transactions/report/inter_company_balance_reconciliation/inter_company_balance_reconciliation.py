@@ -141,7 +141,7 @@ def get_data(filters):
 	)
 
 	from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
-		get_intercompany_exchange_rate
+		get_intercompany_exchange_rate,
 	)
 
 	for ref in refs:
@@ -153,8 +153,8 @@ def get_data(filters):
 			doc_a_type, doc_a_name = ref.target_doctype, ref.target_name
 			doc_b_type, doc_b_name = ref.source_doctype, ref.source_name
 
-		amt_a, date_a, status_a, cur_a = get_doc_amount_and_date(doc_a_type, doc_a_name, company_a)
-		amt_b, date_b, status_b, cur_b = get_doc_amount_and_date(doc_b_type, doc_b_name, company_b)
+		amt_a, date_a, _status_a, cur_a = get_doc_amount_and_date(doc_a_type, doc_a_name, company_a)
+		amt_b, date_b, _status_b, cur_b = get_doc_amount_and_date(doc_b_type, doc_b_name, company_b)
 
 		posting_date = date_a or date_b or ref.creation
 

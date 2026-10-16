@@ -1,6 +1,5 @@
-# -*- coding: utf-8 -*-
-from __future__ import unicode_literals
 import frappe
+
 
 def get_reverse_mapping():
     """Get reverse mapping for transaction types"""

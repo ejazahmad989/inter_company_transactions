@@ -1,6 +1,5 @@
-# -*- coding: utf-8 -*-
-from __future__ import unicode_literals
 import frappe
+
 
 def ensure_user_notification_settings(user=None):
     """Ensure that the given user has a Notification Settings document in the database"""
@@ -9,7 +8,7 @@ def ensure_user_notification_settings(user=None):
             user = getattr(getattr(frappe, "session", None), "user", None)
         if not user or user in ("Guest", "None"):
             return
-        
+
         if frappe.db and hasattr(frappe.db, "table_exists") and frappe.db.table_exists("Notification Settings"):
             if not frappe.db.exists("Notification Settings", user):
                 created = False
@@ -24,7 +23,7 @@ def ensure_user_notification_settings(user=None):
                     created = True
                 except Exception:
                     pass
-                
+
                 if not created:
                     try:
                         frappe.db.sql("""
@@ -35,7 +34,7 @@ def ensure_user_notification_settings(user=None):
                         frappe.db.commit()
                     except Exception:
                         pass
-                
+
                 try:
                     frappe.clear_document_cache("Notification Settings", user)
                 except Exception:
@@ -47,7 +46,9 @@ def before_request():
     """Ensure database is clean of legacy expressions and user has valid settings"""
     try:
         try:
-            from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import fix_legacy_custom_fields
+            from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+                fix_legacy_custom_fields,
+            )
             fix_legacy_custom_fields()
         except Exception:
             pass
@@ -66,8 +67,10 @@ def ensure_user_ict_notification_settings(user=None):
             user = getattr(getattr(frappe, "session", None), "user", None)
         if not user or user in ("Guest", "None"):
             return
-        
-        from inter_company_transactions.inter_company_transactions.doctype.ict_notification_setting.ict_notification_setting import get_ict_notification_settings
+
+        from inter_company_transactions.inter_company_transactions.doctype.ict_notification_setting.ict_notification_setting import (
+            get_ict_notification_settings,
+        )
         get_ict_notification_settings(user)
     except Exception:
         pass
@@ -79,4 +82,4 @@ def on_session_creation(login_manager):
             ensure_user_notification_settings(frappe.session.user)
             ensure_user_ict_notification_settings(frappe.session.user)
     except Exception as e:
-        frappe.log_error(f"Error in session creation: {str(e)}", "Session Management")
+        frappe.log_error(f"Error in session creation: {e!s}", "Session Management")

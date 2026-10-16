@@ -4,19 +4,20 @@ Generate a professional PDF version of the Inter-Company Transactions User Guide
 This script builds a multi-page PDF using standard Python without external dependencies.
 """
 
-import sys
 import os
+import sys
 import textwrap
+
 
 def create_pdf(output_path=None):
     # Read the markdown content
     script_dir = os.path.dirname(os.path.abspath(__file__))
     md_path = os.path.join(script_dir, "USER_GUIDE.md")
-    
+
     if not os.path.exists(md_path):
         md_path = os.path.join(script_dir, "..", "USER_GUIDE.md")
-    
-    with open(md_path, "r", encoding="utf-8") as f:
+
+    with open(md_path, encoding="utf-8") as f:
         lines = f.readlines()
 
     # Determine default output path
@@ -39,7 +40,7 @@ def create_pdf(output_path=None):
 
     for raw_line in lines:
         line = raw_line.rstrip()
-        
+
         # Determine formatting type and height
         if line.startswith("# "):
             text = line[2:].strip()
@@ -131,7 +132,7 @@ def create_pdf(output_path=None):
         pages.append(current_page_items)
 
     total_pages = len(pages)
-    
+
     # Lay out PDF objects:
     # 1: Catalog
     # 2: Pages
@@ -152,7 +153,7 @@ def create_pdf(output_path=None):
     obj_pages = f"<< /Type /Pages /Kids [{kids_str}] /Count {total_pages} >>"
     obj_font = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"
     obj_font_bold = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>"
-    
+
     pdf_objs = [
         (1, obj_catalog),
         (2, obj_pages),
@@ -163,10 +164,10 @@ def create_pdf(output_path=None):
     for page_id, content_id, p_items, page_num in page_entries:
         page_dict = f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents {content_id} 0 R /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> >>"
         pdf_objs.append((page_id, page_dict))
-        
+
         stream_cmds = []
         stream_cmds.append("q")
-        
+
         # Header banner or running header
         if page_num == 1:
             # Header bar
@@ -187,7 +188,7 @@ def create_pdf(output_path=None):
         stream_cmds.append("0.8 0.8 0.8 RG 40 40 m 572 40 l S")
         stream_cmds.append(f"BT /F1 9 Tf 520 28 Td (Page {page_num} of {total_pages}) Tj ET")
         stream_cmds.append("0 0 0 rg")
-        
+
         for item_type, text, y in p_items:
             if item_type == 'h1':
                 stream_cmds.append(f"0.12 0.23 0.53 rg BT /F2 13 Tf 40 {y} Td ({text}) Tj ET 0 0 0 rg")
@@ -205,7 +206,7 @@ def create_pdf(output_path=None):
                 stream_cmds.append(f"BT /F1 8.5 Tf 65 {y} Td ({text}) Tj ET")
             else:
                 stream_cmds.append(f"BT /F1 8.5 Tf 40 {y} Td ({text}) Tj ET")
-                
+
         stream_cmds.append("Q")
         stream_data = "\n".join(stream_cmds).encode('latin-1', 'replace')
         content_dict = f"<< /Length {len(stream_data)} >>\nstream\n{stream_data.decode('latin-1')}\nendstream"
@@ -213,7 +214,7 @@ def create_pdf(output_path=None):
 
     # Sort objects by id
     pdf_objs.sort(key=lambda x: x[0])
-    
+
     # Write PDF file with accurate xref table
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
     with open(output_path, "wb") as f:
@@ -222,7 +223,7 @@ def create_pdf(output_path=None):
         for obj_id, obj_body in pdf_objs:
             offsets[obj_id] = f.tell()
             f.write(f"{obj_id} 0 obj\n{obj_body}\nendobj\n".encode('latin-1'))
-            
+
         xref_offset = f.tell()
         total_objs = len(pdf_objs) + 1
         f.write(f"xref\n0 {total_objs}\n".encode('latin-1'))
@@ -230,7 +231,7 @@ def create_pdf(output_path=None):
         for obj_id in range(1, total_objs):
             pos = offsets.get(obj_id, 0)
             f.write(f"{pos:010d} 00000 n \n".encode('latin-1'))
-            
+
         f.write(f"trailer\n<< /Size {total_objs} /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF\n".encode('latin-1'))
 
     print(f"Successfully generated User Guide PDF at {output_path} ({os.path.getsize(output_path)} bytes, {total_pages} pages)")
@@ -241,7 +242,7 @@ if __name__ == "__main__":
     target_public = os.path.join(script_dir, "public", "Inter_Company_Transactions_User_Guide.pdf")
     out = sys.argv[1] if len(sys.argv) > 1 else target_public
     pdf_path = create_pdf(out)
-    
+
     # Also copy to root for quick access
     root_pdf = os.path.join(script_dir, "..", "Inter_Company_Transactions_User_Guide.pdf")
     try:

@@ -2,8 +2,10 @@
 # See license.txt
 
 import unittest
+
 import frappe
 from frappe.utils import flt, nowdate
+
 from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
 	calculate_transfer_rate,
 	ensure_item_exists,
@@ -93,7 +95,7 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 	def test_netting_settlement_calculation(self):
 		"""Verify multilateral netting algorithm balances debts and credits"""
 		from inter_company_transactions.inter_company_transactions.doctype.inter_company_netting_cycle.inter_company_netting_cycle import (
-			InterCompanyNettingCycle
+			InterCompanyNettingCycle,
 		)
 		cycle = frappe.new_doc("InterCompany Netting Cycle")
 		cycle.cycle_name = "Q1 Test Settlement"
@@ -115,7 +117,7 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 	def test_dispute_variance_calculation(self):
 		"""Verify dispute document automatically calculates variance"""
 		from inter_company_transactions.inter_company_transactions.doctype.inter_company_dispute.inter_company_dispute import (
-			InterCompanyDispute
+			InterCompanyDispute,
 		)
 		dispute = frappe.new_doc("Inter Company Dispute")
 		dispute.dispute_title = "Pricing discrepancy on Item A"
@@ -127,7 +129,7 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 	def test_enterprise_health_check(self):
 		"""Verify enterprise health check telemetry returns valid status"""
 		from inter_company_transactions.inter_company_transactions.doctype.inter_company_settings.inter_company_settings import (
-			get_enterprise_health_check
+			get_enterprise_health_check,
 		)
 		health = get_enterprise_health_check()
 		self.assertIn("status", health)
@@ -136,8 +138,8 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 	def test_multi_currency_resolution_same_currency(self):
 		"""Verify currency resolver handles identical currencies seamlessly"""
 		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			get_intercompany_exchange_rate,
 			resolve_intercompany_currency_and_rate,
-			get_intercompany_exchange_rate
 		)
 		self.assertEqual(get_intercompany_exchange_rate("USD", "USD"), 1.0)
 		self.assertEqual(get_intercompany_exchange_rate("EUR", "EUR"), 1.0)
@@ -146,7 +148,7 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 	def test_multi_currency_rate_factor_safe_fallback(self):
 		"""Verify exchange rate resolver provides safe fallbacks when rates are not in DB"""
 		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
-			get_intercompany_exchange_rate
+			get_intercompany_exchange_rate,
 		)
 		rate = get_intercompany_exchange_rate("USD", "PKR", nowdate())
 		self.assertIsInstance(rate, float)
@@ -155,7 +157,7 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 	def test_party_target_company_resolution(self):
 		"""Verify party-to-target-company mapping lookup across multiple sister companies"""
 		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
-			resolve_party_target_company
+			resolve_party_target_company,
 		)
 		mock_map = {
 			"by_company": {

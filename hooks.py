@@ -1,14 +1,15 @@
-# -*- coding: utf-8 -*-
-from __future__ import unicode_literals
 
 app_name = "inter_company_transactions"
 app_title = "Inter Company Transactions"
 app_publisher = "Rahil Ali"
 app_description = "Enterprise Inter-Company Transactions, Transfer Pricing, Elimination and Netting for ERPNext"
+app_version = "1.0.0"
 app_icon = "octicon octicon-git-compare"
 app_color = "blue"
 app_email = "rahilali3311@gmail.com"
 app_license = "MIT"
+app_logo_url = "/assets/inter_company_transactions/images/inter_company_logo.svg"
+app_home = "inter_company_transactions"
 
 required_apps = ["erpnext"]
 
