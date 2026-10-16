@@ -1,3 +1,5 @@
+import sys
+
 import frappe
 
 from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
@@ -26,3 +28,7 @@ def execute():
 		print(f"Notice during backfill_sister_company_names: {e}")
 
 	print("Patch v1_2_sister_company_title executed successfully.")
+
+
+# Module alias for backward compatibility in case an environment imports with trailing .execute
+sys.modules[__name__ + ".execute"] = sys.modules[__name__]

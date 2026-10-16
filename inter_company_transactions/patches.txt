@@ -4,5 +4,5 @@
 
 [post_model_sync]
 # Patches added in this section will be executed after doctypes are migrated
-inter_company_transactions.patches.v1_1_update_custom_fields.execute
-inter_company_transactions.patches.v1_2_sister_company_title.execute
+inter_company_transactions.patches.v1_1_update_custom_fields
+inter_company_transactions.patches.v1_2_sister_company_title
