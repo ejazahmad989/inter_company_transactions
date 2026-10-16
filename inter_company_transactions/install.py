@@ -193,6 +193,9 @@ def create_doctypes():
             "module": "Inter Company Transactions",
             "custom": 1,
             "allow_import": 0,
+            "title_field": "sister_company",
+            "show_title_field_in_link": 1,
+            "search_fields": "sister_company,main_company",
             "fields": [
                 {
                     "fieldname": "main_company",
@@ -201,6 +204,17 @@ def create_doctypes():
                     "label": "Main Company",
                     "options": "Company",
                     "reqd": 1
+                },
+                {
+                    "fieldname": "sister_company",
+                    "fieldtype": "Data",
+                    "in_list_view": 1,
+                    "in_standard_filter": 1,
+                    "in_global_search": 1,
+                    "label": "Sister Company",
+                    "read_only": 1,
+                    "bold": 1,
+                    "description": "Sister company name resolved from Linked Companies"
                 },
                 {
                     "fieldname": "linked_companies",

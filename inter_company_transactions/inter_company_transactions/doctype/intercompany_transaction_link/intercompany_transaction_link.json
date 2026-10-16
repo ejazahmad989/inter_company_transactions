@@ -5,8 +5,9 @@
   "engine": "InnoDB",
   "field_order": [
     "main_company",
-    "linked_companies",
+    "sister_company",
     "enabled",
+    "linked_companies",
     "section_break_1",
     "auto_create_draft",
     "auto_cancel_linked_document",
@@ -25,11 +26,15 @@
       "reqd": 1
     },
     {
-      "fieldname": "linked_companies",
-      "fieldtype": "Table",
-      "label": "Linked Companies",
-      "options": "Intercompany Linked Company",
-      "reqd": 1
+      "bold": 1,
+      "description": "Sister company name resolved from Linked Companies",
+      "fieldname": "sister_company",
+      "fieldtype": "Data",
+      "in_global_search": 1,
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Sister Company",
+      "read_only": 1
     },
     {
       "default": "1",
@@ -37,6 +42,13 @@
       "fieldtype": "Check",
       "in_list_view": 1,
       "label": "Enabled"
+    },
+    {
+      "fieldname": "linked_companies",
+      "fieldtype": "Table",
+      "label": "Linked Companies",
+      "options": "Intercompany Linked Company",
+      "reqd": 1
     },
     {
       "fieldname": "section_break_1",
@@ -73,14 +85,14 @@
       "label": "SKU / Item Code Mappings (Optional)"
     },
     {
+      "description": "Translate Item Code in Source Company to different Item Code in Target Company",
       "fieldname": "item_mappings",
       "fieldtype": "Table",
       "label": "Item Code Cross-Mappings",
-      "options": "Intercompany Item Mapping",
-      "description": "Translate Item Code in Source Company to different Item Code in Target Company"
+      "options": "Intercompany Item Mapping"
     }
   ],
-  "modified": "2024-03-14 00:00:00.000000",
+  "modified": "2026-10-16 06:30:00.000000",
   "modified_by": "Administrator",
   "module": "Inter Company Transactions",
   "name": "Intercompany Transaction Link",
@@ -99,6 +111,9 @@
       "write": 1
     }
   ],
+  "search_fields": "sister_company,main_company",
+  "show_title_field_in_link": 1,
   "sort_field": "modified",
-  "sort_order": "DESC"
+  "sort_order": "DESC",
+  "title_field": "sister_company"
 }

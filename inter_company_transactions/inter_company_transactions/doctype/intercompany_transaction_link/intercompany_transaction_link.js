@@ -72,10 +72,36 @@ frappe.ui.form.on('Intercompany Transaction Link', {
 			});
 		}
 
+		// Ensure sister company field is populated if missing
+		if (!frm.doc.sister_company && frm.doc.linked_companies && frm.doc.linked_companies.length) {
+			update_sister_company_field(frm);
+		}
+
 		// Render informative helper banner above transaction types grid
 		render_transaction_types_guide(frm);
 	}
 });
+
+// Real-time synchronization of sister_company field when linked companies table changes
+frappe.ui.form.on('Intercompany Linked Company', {
+	company: function(frm, cdt, cdn) {
+		update_sister_company_field(frm);
+	},
+	linked_companies_remove: function(frm) {
+		update_sister_company_field(frm);
+	}
+});
+
+function update_sister_company_field(frm) {
+	let companies = (frm.doc.linked_companies || [])
+		.map(d => d.company)
+		.filter(Boolean);
+	let unique = [...new Set(companies)];
+	let sister_str = unique.join(', ');
+	if (frm.doc.sister_company !== sister_str) {
+		frm.set_value('sister_company', sister_str);
+	}
+}
 
 // Auto-fill Target Type intelligently when Source Type is selected in child table
 frappe.ui.form.on('Intercompany Transaction Type', {

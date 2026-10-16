@@ -41,6 +41,15 @@ def after_migrate():
     # Ensure Page and Workspace exist
     ensure_page_and_workspace()
 
+    # Ensure sister company names and titles are populated for all links
+    try:
+        from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+            backfill_sister_company_names,
+        )
+        backfill_sister_company_names()
+    except Exception as e:
+        print(f"Error backfilling sister company names: {e}")
+
     print("Post-migration tasks completed successfully!")
 
 def execute():

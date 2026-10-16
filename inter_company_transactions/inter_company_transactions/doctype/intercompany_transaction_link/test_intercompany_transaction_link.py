@@ -249,6 +249,33 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 		self.assertEqual(diag["overall_status"], "Failed")
 		self.assertIn("URL Format", [s["step"] for s in diag["steps"]])
 
+	def test_sister_company_auto_population(self):
+		"""Verify set_sister_company populates sister_company field from child table"""
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			IntercompanyTransactionLink,
+		)
+		doc = IntercompanyTransactionLink.__new__(IntercompanyTransactionLink)
+		doc.main_company = "AYP MAIN"
+		doc.linked_companies = [
+			frappe._dict({"company": "AYP SISTER 1"}),
+			frappe._dict({"company": "AYP SISTER 2"}),
+		]
+		doc.set_sister_company()
+		self.assertEqual(doc.sister_company, "AYP SISTER 1, AYP SISTER 2")
+
+	def test_sister_company_single_auto_population(self):
+		"""Verify single sister company populates exact company name"""
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			IntercompanyTransactionLink,
+		)
+		doc = IntercompanyTransactionLink.__new__(IntercompanyTransactionLink)
+		doc.main_company = "AYP MAIN"
+		doc.linked_companies = [
+			frappe._dict({"company": "AYP SISTER"}),
+		]
+		doc.set_sister_company()
+		self.assertEqual(doc.sister_company, "AYP SISTER")
+
 
 
 

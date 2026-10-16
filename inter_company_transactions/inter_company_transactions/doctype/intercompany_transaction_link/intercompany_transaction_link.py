@@ -6,7 +6,55 @@ from frappe.utils import cint, flt, getdate, nowdate
 
 
 class IntercompanyTransactionLink(Document):
+    def autoname(self):
+        self.set_sister_company()
+        sister = getattr(self, "sister_company", None) or self.get_sister_company_name()
+        if self.main_company and sister:
+            base = f"{self.main_company} - {sister}"[:130]
+            name = base
+            count = 1
+            while frappe.db.exists("Intercompany Transaction Link", name):
+                name = f"{base} ({count})"
+                count += 1
+            self.name = name
+        else:
+            from frappe.model.naming import set_new_name
+            set_new_name(self)
+
+    def before_insert(self):
+        self.set_sister_company()
+
+    def before_save(self):
+        self.set_sister_company()
+
+    def onload(self):
+        if not getattr(self, "sister_company", None) and self.get("linked_companies"):
+            self.set_sister_company()
+
+    def on_update(self):
+        sister = self.get_sister_company_name()
+        if sister and getattr(self, "sister_company", None) != sister:
+            self.db_set("sister_company", sister, update_modified=False)
+
+    def get_sister_company_name(self):
+        """Extract sister company name(s) from linked_companies child table"""
+        companies = []
+        for d in (self.get("linked_companies") or []):
+            comp = getattr(d, "company", None) or (d.get("company") if isinstance(d, dict) else None)
+            if comp and comp not in companies:
+                companies.append(comp)
+        return ", ".join(companies)
+
+    def set_sister_company(self):
+        """Auto-populate sister_company field from child table"""
+        sister = self.get_sister_company_name()
+        if sister:
+            self.sister_company = sister
+        elif not getattr(self, "sister_company", None):
+            self.sister_company = ""
+
     def validate(self):
+        self.set_sister_company()
         self.validate_companies()
         self.validate_parties()
         self.validate_transaction_types_child_table()
@@ -1750,5 +1798,67 @@ def auto_detect_intercompany_party(doc, method=None):
         doc.is_intercompany = 1
         if not doc.get("intercompany_target_company") or doc.get("intercompany_target_company") == company:
             doc.intercompany_target_company = target_company
+
+
+def backfill_sister_company_names():
+    """
+    Ensure all existing Intercompany Transaction Link records have their
+    sister_company column populated and properly named/titled so list views
+    display the Sister Company name instead of random hash IDs (e.g. pdlbej2fjb).
+    """
+    if not frappe.db.exists("DocType", "Intercompany Transaction Link"):
+        return
+
+    import re
+
+    try:
+        links = frappe.get_all(
+            "Intercompany Transaction Link",
+            fields=["name", "main_company", "sister_company"],
+        )
+    except Exception:
+        return
+
+    for link in links:
+        child_rows = frappe.get_all(
+            "Intercompany Linked Company",
+            filters={"parent": link.name},
+            fields=["company"],
+            order_by="idx asc",
+        )
+        companies = [c.company for c in child_rows if c.company]
+        sister_name = ", ".join(companies) if companies else ""
+
+        if sister_name:
+            if link.sister_company != sister_name:
+                frappe.db.set_value(
+                    "Intercompany Transaction Link",
+                    link.name,
+                    "sister_company",
+                    sister_name,
+                    update_modified=False,
+                )
+
+            # If the name is a legacy random hash (e.g. 10 chars like pdlbej2fjb, sh6m81t121)
+            # and main_company is present, safely rename to clean readable format
+            is_legacy_hash = bool(re.match(r"^[a-z0-9]{10}$", link.name))
+            if is_legacy_hash and link.main_company:
+                target_name = f"{link.main_company} - {sister_name}"[:130]
+                if not frappe.db.exists("Intercompany Transaction Link", target_name):
+                    try:
+                        frappe.rename_doc(
+                            "Intercompany Transaction Link",
+                            link.name,
+                            target_name,
+                            force=True,
+                            show_alert=False,
+                        )
+                    except Exception as e:
+                        frappe.log_error(
+                            f"Could not rename legacy link {link.name} to {target_name}: {e}",
+                            "Intercompany Transaction Link Migration",
+                        )
+
+    frappe.db.commit()
 
 
