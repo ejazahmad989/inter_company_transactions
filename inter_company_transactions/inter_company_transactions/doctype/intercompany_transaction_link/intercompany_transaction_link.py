@@ -190,11 +190,15 @@ class IntercompanyTransactionLink(Document):
 
 def create_linked_documents(doc, method=None):
     """Create corresponding documents in all linked companies (Local & Remote Federated)"""
+    if not hasattr(doc, "doctype") or not doc.get("company"):
+        return
+
+    # Never process a document that was itself generated as an intercompany counterpart
     if doc.get("intercompany_linked_doc_doctype") or doc.get("intercompany_linked_doc_name"):
         return
 
     # Check for direct target company remote push
-    target_company_hint = doc.get("intercompany_target_company")
+    target_company_hint = (doc.get("intercompany_target_company") or "").strip()
     if target_company_hint:
         try:
             from inter_company_transactions.sync import (
@@ -212,9 +216,40 @@ def create_linked_documents(doc, method=None):
     if not mappings:
         return
 
+    created_targets = set()
+
     for _i, mapping in enumerate(mappings):
         try:
             target_comp = mapping.get("company")
+            target_dt = mapping.get("target_doctype")
+
+            # 1. Absolute rule: Target company cannot be source company
+            if not target_comp or target_comp == doc.company:
+                continue
+
+            # 2. If target_company_hint is specified, strictly respect it
+            if target_company_hint and target_comp != target_company_hint:
+                continue
+
+            # 3. Deduplication: Only create ONE counterpart document per target company & target doctype
+            dedup_key = (target_comp, target_dt)
+            if dedup_key in created_targets:
+                continue
+
+            # 4. Check existing document reference in database to prevent double creation
+            if frappe.db.exists("DocType", "Inter Company Document Reference"):
+                existing = frappe.db.exists(
+                    "Inter Company Document Reference",
+                    {
+                        "source_doctype": doc.doctype,
+                        "source_name": doc.name,
+                        "target_company": target_comp,
+                        "target_doctype": target_dt
+                    }
+                )
+                if existing:
+                    continue
+
             # Check if this mapped company belongs to an external federated ERPNext site
             try:
                 from inter_company_transactions.sync import (
@@ -224,6 +259,7 @@ def create_linked_documents(doc, method=None):
                 remote_site = get_remote_site_for_company(target_comp)
                 if remote_site:
                     push_document_to_remote_site(doc, target_comp, remote_site)
+                    created_targets.add(dedup_key)
                     continue
             except Exception as e:
                 frappe.logger().error(f"Error checking remote site for mapped company {target_comp}: {e!s}")
@@ -239,6 +275,8 @@ def create_linked_documents(doc, method=None):
             linked_doc = create_corresponding_document(doc, mapping, direction)
 
             if linked_doc:
+                # Ensure correct target company
+                linked_doc.company = target_comp
                 linked_doc.intercompany_linked_doc_doctype = doc.doctype
                 linked_doc.intercompany_linked_doc_name = doc.name
                 linked_doc.intercompany_linked_company = doc.company
@@ -248,6 +286,7 @@ def create_linked_documents(doc, method=None):
                 linked_doc.flags.ignore_mandatory = True
                 linked_doc.insert(ignore_permissions=True, ignore_mandatory=True)
 
+                created_targets.add(dedup_key)
                 create_document_reference(doc, linked_doc)
 
                 frappe.msgprint(_("Created draft {0} {1} in company {2}").format(
@@ -393,12 +432,24 @@ def cancel_linked_documents(doc, method=None):
 
 def find_applicable_mappings(doc):
     """
-    Finds matching mapping configurations for the document.
-    Handles bidirectional document pairs (e.g. Sales Invoice <-> Purchase Invoice,
-    Sales Order <-> Purchase Order, Delivery Note <-> Purchase Receipt, Quotation <-> Supplier Quotation,
-    Stock Entry <-> Stock Entry, Journal Entry <-> Journal Entry, Payment Entry <-> Payment Entry).
+    Finds unique, valid matching mapping configurations for the document.
+    Ensures:
+    1. Target company is NEVER the same as source doc.company.
+    2. If doc has intercompany_target_company set, ONLY matches that target company.
+    3. Exactly ONE mapping per (target_company, target_doctype) pair to prevent duplicate documents.
     """
+    if not hasattr(doc, "company") or not doc.company:
+        return []
+
+    # If this document is already a linked counterpart created by ICT, do NOT trigger counter creations
+    if doc.get("intercompany_linked_doc_name") or doc.get("intercompany_linked_doc_doctype"):
+        return []
+
     mappings = []
+    seen_pairs = set()
+
+    source_company = doc.company
+    target_company_hint = (doc.get("intercompany_target_company") or "").strip()
 
     links = frappe.get_all(
         "Intercompany Transaction Link",
@@ -409,23 +460,21 @@ def find_applicable_mappings(doc):
     for link_entry in links:
         link = frappe.get_doc("Intercompany Transaction Link", link_entry.name)
 
-        is_main = (doc.company == link.main_company)
-        is_linked = any(lc.company == doc.company for lc in link.linked_companies)
+        is_main = (source_company == link.main_company)
+        is_linked = any(lc.company == source_company for lc in (link.linked_companies or []))
 
         if not is_main and not is_linked:
             continue
 
-        target_company_hint = doc.get("intercompany_target_company")
-
         if is_main:
-            # Document originates from Main Company -> Target is Linked Company
+            # Source is Main Company -> Target is Linked Company
             candidate_linked_companies = []
             if target_company_hint:
                 matched_lc = next((lc for lc in link.linked_companies if lc.company == target_company_hint), None)
                 if matched_lc:
                     candidate_linked_companies = [matched_lc]
-
-            if not candidate_linked_companies:
+                # If target_company_hint is specified but not in this link, do not fall back to other companies!
+            else:
                 # Try to identify target company by party in Main Company
                 if hasattr(doc, "customer") and doc.customer:
                     matched_lc = next((lc for lc in link.linked_companies if lc.main_company_customer == doc.customer), None)
@@ -435,34 +484,90 @@ def find_applicable_mappings(doc):
                     matched_lc = next((lc for lc in link.linked_companies if lc.main_company_supplier == doc.supplier), None)
                     if matched_lc:
                         candidate_linked_companies = [matched_lc]
+                elif doc.doctype == "Payment Entry" and hasattr(doc, "party") and doc.party:
+                    party_type = (doc.get("party_type") or "").lower()
+                    if party_type == "customer":
+                        matched_lc = next((lc for lc in link.linked_companies if lc.main_company_customer == doc.party), None)
+                    elif party_type == "supplier":
+                        matched_lc = next((lc for lc in link.linked_companies if lc.main_company_supplier == doc.party), None)
+                    if matched_lc:
+                        candidate_linked_companies = [matched_lc]
+                elif doc.doctype == "Journal Entry":
+                    for row in (doc.get("accounts") or []):
+                        row_p = row.get("party")
+                        row_pt = (row.get("party_type") or "").lower()
+                        if row_p:
+                            if row_pt == "customer":
+                                matched_lc = next((lc for lc in link.linked_companies if lc.main_company_customer == row_p), None)
+                            elif row_pt == "supplier":
+                                matched_lc = next((lc for lc in link.linked_companies if lc.main_company_supplier == row_p), None)
+                            if matched_lc:
+                                candidate_linked_companies = [matched_lc]
+                                break
 
-            if not candidate_linked_companies:
-                candidate_linked_companies = list(link.linked_companies)
+            # If still no specific candidate and NO target_company_hint was specified, take linked companies
+            if not candidate_linked_companies and not target_company_hint:
+                candidate_linked_companies = [lc for lc in link.linked_companies if lc.company != source_company]
 
             for linked_company in candidate_linked_companies:
-                for trans_type in link.transaction_types:
+                target_comp = linked_company.company
+                # Target company must never be source company
+                if not target_comp or target_comp == source_company:
+                    continue
+                # If target_company_hint was specified, it must match
+                if target_company_hint and target_comp != target_company_hint:
+                    continue
+
+                for trans_type in (link.transaction_types or []):
                     target_dt = resolve_target_doctype(doc.doctype, trans_type, direction="main_to_other")
                     if target_dt:
+                        pair_key = (target_comp, target_dt)
+                        if pair_key in seen_pairs:
+                            continue
+                        seen_pairs.add(pair_key)
+
                         mappings.append({
                             "mapping": link,
                             "transaction_type": trans_type,
-                            "company": linked_company.company,
+                            "company": target_comp,
                             "linked_company": linked_company,
                             "direction": "main_to_other",
                             "target_doctype": target_dt
                         })
 
         else:
-            # Document originates from Linked Company -> Target is Main Company
-            linked_company = next((lc for lc in link.linked_companies if lc.company == doc.company), None)
+            # Source is Linked Company -> Target is Main Company
+            target_comp = link.main_company
+            # Target company must never be source company
+            if not target_comp or target_comp == source_company:
+                continue
+            # If target_company_hint was specified, it must match
+            if target_company_hint and target_comp != target_company_hint:
+                continue
+
+            linked_company = next((lc for lc in link.linked_companies if lc.company == source_company), None)
             if linked_company:
-                for trans_type in link.transaction_types:
+                # If target_company_hint was not set, verify party matches this link
+                if not target_company_hint:
+                    if hasattr(doc, "customer") and doc.customer and linked_company.other_company_customer:
+                        if doc.customer != linked_company.other_company_customer:
+                            continue
+                    elif hasattr(doc, "supplier") and doc.supplier and linked_company.other_company_supplier:
+                        if doc.supplier != linked_company.other_company_supplier:
+                            continue
+
+                for trans_type in (link.transaction_types or []):
                     target_dt = resolve_target_doctype(doc.doctype, trans_type, direction="other_to_main")
                     if target_dt:
+                        pair_key = (target_comp, target_dt)
+                        if pair_key in seen_pairs:
+                            continue
+                        seen_pairs.add(pair_key)
+
                         mappings.append({
                             "mapping": link,
                             "transaction_type": trans_type,
-                            "company": link.main_company,
+                            "company": target_comp,
                             "linked_company": linked_company,
                             "direction": "other_to_main",
                             "target_doctype": target_dt
@@ -474,7 +579,7 @@ def find_applicable_mappings(doc):
 def resolve_target_doctype(source_doctype, trans_type, direction):
     """
     Resolves the target DocType given the source DocType, mapping rule, and transaction flow direction.
-    Allows bidirectional pairs configured in either direction.
+    Allows bidirectional pairs configured in either direction without duplicate firing.
     """
     rule_src = trans_type.source_type
     rule_tgt = trans_type.target_type
@@ -483,13 +588,13 @@ def resolve_target_doctype(source_doctype, trans_type, direction):
     if direction == "main_to_other":
         if rule_src == source_doctype and rule_dir in ["Main to Other", "Both", ""]:
             return rule_tgt
-        if rule_tgt == source_doctype and rule_dir in ["Other to Main", "Both"]:
+        if rule_src != rule_tgt and rule_tgt == source_doctype and rule_dir in ["Other to Main", "Both"]:
             return rule_src
 
     elif direction == "other_to_main":
         if rule_src == source_doctype and rule_dir in ["Other to Main", "Both", ""]:
             return rule_tgt
-        if rule_tgt == source_doctype and rule_dir in ["Main to Other", "Both"]:
+        if rule_src != rule_tgt and rule_tgt == source_doctype and rule_dir in ["Main to Other", "Both"]:
             return rule_src
 
     return None
@@ -2136,6 +2241,11 @@ def auto_detect_intercompany_party(doc, method=None):
         doc.is_intercompany = 1
         if not doc.get("intercompany_target_company") or doc.get("intercompany_target_company") == company:
             doc.intercompany_target_company = target_company
+    elif doc.get("intercompany_target_company") and doc.get("intercompany_target_company") != company:
+        doc.is_intercompany = 1
+    elif doc.get("intercompany_target_company") == company:
+        doc.intercompany_target_company = ""
+        doc.is_intercompany = 0
 
 
 def backfill_sister_company_names():

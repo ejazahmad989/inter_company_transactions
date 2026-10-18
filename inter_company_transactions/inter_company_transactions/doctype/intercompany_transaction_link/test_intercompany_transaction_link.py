@@ -338,6 +338,33 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 		self.assertIsNone(get_parent_clearing_account(None))
 		self.assertIsNone(get_or_create_intercompany_clearing_account(None, None))
 
+	def test_resolve_target_doctype_rules(self):
+		"""Verify resolve_target_doctype accurately resolves bidirectional rules"""
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			resolve_target_doctype,
+		)
+		trans_type = frappe._dict({
+			"source_type": "Sales Order",
+			"target_type": "Purchase Order",
+			"direction": "Both",
+		})
+		res = resolve_target_doctype("Sales Order", trans_type, "main_to_other")
+		self.assertEqual(res, "Purchase Order")
+
+	def test_target_company_cannot_be_source_company(self):
+		"""Verify target company cannot be source company in mapping resolution"""
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			find_applicable_mappings,
+		)
+		doc = frappe._dict({
+			"doctype": "Sales Order",
+			"company": "GMP FOODS",
+			"intercompany_target_company": "GMP FOODS",
+		})
+		mappings = find_applicable_mappings(doc)
+		for m in mappings:
+			self.assertNotEqual(m["company"], "GMP FOODS")
+
 
 
 
