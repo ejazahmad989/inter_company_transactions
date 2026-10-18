@@ -107,11 +107,11 @@ Seamless bidirectional mirroring for every operational document:
 
 When publishing on Frappe Cloud Marketplace, you can offer one of the following models:
 
-| Tier | Price Model | Target Audience | What's Included |
+| Plan | Price Model | Target Audience | What's Included |
 |---|---|---|---|
-| **Standard Edition** | **$29 / month / site** (or $290/year) | Small to mid-size groups (2–5 companies) | Full 15-doctype sync, dynamic party detection, desk console, email support |
-| **Enterprise Edition** | **$79 / month / site** (or $790/year) | Large conglomerates, multinational groups | Unlimited companies, Federated Multi-Site Sync, Transfer Pricing engine, Netting cycles, Elimination runs, priority SLA |
-| **One-Time Buyout** | **$499 / perpetual** | On-premise self-hosted Frappe Bench instances | Source code, lifetime minor updates, 1-year community support |
+| **Monthly Subscription** | **$49 / month / site** | Multi-company groups, holding entities | Complete intercompany engine, all 15 doctypes, 2-way bilateral trading, automated bridge accounts |
+| **Annual Subscription** | **$490 / year / site** (2 Months Free) | Annual subscribers saving $98/year | All features, continuous updates for ERPNext v14, v15 & v16, community support |
+| **Enterprise Support Retainer** | **$299 / month** | Large conglomerates & holding groups | Federated Multi-Site Sync, custom ERP integrations, priority engineering SLA |
 
 ---
 
