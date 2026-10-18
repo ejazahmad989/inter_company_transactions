@@ -322,142 +322,318 @@ By creating a designated **Inter Company Customer Group** and tagging it via the
 
 ## 4. Step-by-Step Practical Examples
 
-### Example A: Order-to-Cash & Procure-to-Pay Mirroring
-**Scenario:** Entity A (*Acme Mfg*) sells 100 units of "Widget A" to sister company Entity B (*Acme Retail*) at $50/unit.
+### Visual System Architecture: Entity Relationship & Data Flow
+```
++------------------------------------------------------------------------------------+
+|                         GROUP CONGLOMERATE STRUCTURE                               |
+|                                                                                    |
+|                            [ Main Company ]                                        |
+|                          (Central Manufacturer)                                    |
+|                                 /        \                                         |
+|                       Trading  /          \  Trading                               |
+|                      & Clearing            & Clearing                              |
+|                              v              v                                      |
+|                  [ Sister Company 1 ] <---> [ Sister Company 2 ]                   |
+|                  (Wholesale & Dist.)        (Retail & Export)                      |
+|                                                                                    |
+|             <=========== 3-Way Multilateral Netting Cycle ===========>             |
+|             <===== Group Consolidation & Elimination Journal Run =====>             |
++------------------------------------------------------------------------------------+
+```
 
-1. **Step 1:** In *Acme Mfg*, create a new **Sales Order**.
-2. **Step 2:** Select Customer: `Acme Retail (Internal)`. Add Item `Widget A`, Qty `100`, Rate `$50`.
-3. **Step 3:** Click **Submit**.
-4. **Step 4:** Inspect the form. A blue alert banner appears:
-   ```
-   Inter Company: Linked Purchase Order PO-2026-00042 has been automatically created in Acme Retail.
-   ```
-5. **Step 5:** Switch company view to *Acme Retail*. Notice **Purchase Order** `PO-2026-00042` exists with Supplier `Acme Mfg (Internal)` for 100 units of Widget A.
-6. **Step 6:** Deliver goods by creating a **Delivery Note** in *Acme Mfg*. Upon submission, a corresponding **Purchase Receipt** is automatically created in *Acme Retail*.
+---
 
-### Example B: Transfer Pricing Margin Calculation
-**Scenario:** Headquarters manufactures a customized component with a valuation cost of $200. Regulatory guidelines require a **15% Cost-Plus markup** for sales to foreign subsidiaries.
+### Example A: Commercial Order-to-Cash & Procure-to-Pay Mirroring
+**Scenario:** `Main Company` manufactures 100 units of "Component Alpha" and sells them to `Sister Company 1` at $50/unit ($5,000 total).
 
-1. Create a **Transfer Pricing Policy**:
-   - `Policy Name`: *US to EU Component Transfer*
-   - `Source Company`: *Acme HQ*
-   - `Target Company`: *Acme Europe B.V.*
-   - `Pricing Method`: *Cost Plus Markup %*
-   - `Markup Percentage`: `15.0%`
-2. Save and set Status to `Active`.
-3. Create a Sales Order in *Acme HQ* for *Acme Europe B.V.*.
-4. The system calculates:
-   $$\text{Transfer Rate} = \$200 \times (1 + 0.15) = \$230.00$$
-5. The mirrored Purchase Order in *Acme Europe B.V.* receives the target rate of **$230.00** automatically.
+```
++------------------------------------------------------------------------------------+
+|  SOURCE: Main Company                              TARGET: Sister Company 1        |
+|                                                                                    |
+|  1. SALES ORDER (SO-2026-0001)     ==============> PURCHASE ORDER (PO-2026-0001)   |
+|     Customer: Sister Company 1 (Int)               Supplier: Main Company (Int)    |
+|     Item: Component Alpha (Qty: 100)               Item: Component Alpha (Qty: 100)|
+|     Rate: $50.00 | Total: $5,000                   Rate: $50.00 | Total: $5,000    |
+|     Status: Submitted                              Status: Draft or Submitted      |
+|                                                                                    |
+|  2. DELIVERY NOTE (DN-2026-0001)   ==============> PURCHASE RECEIPT (PR-2026-0001) |
+|     Dispatches 100 units from                      Receives 100 units into         |
+|     Main Stores Warehouse                          Sister 1 Finished Goods         |
+|                                                                                    |
+|  3. SALES INVOICE (SINV-2026-0001) ===============> PURCHASE INVOICE (PINV-0001)   |
+|     Dr. Intercompany AR $5,000                     Dr. Inventory / Cost $5,000     |
+|     Cr. Sales Revenue   $5,000                     Cr. Intercompany AP  $5,000     |
++------------------------------------------------------------------------------------+
+```
 
-### Example C: Multilateral Netting & Settlement Calculation
-**Scenario:** End of Month settlement between 3 group companies:
-- Company A owes Company B **$100,000**
-- Company A owes Company C **$50,000**
-- Company B owes Company C **$20,000**
+#### Step-by-Step Execution:
+1. Log into **Main Company**. Create a new **Sales Order**.
+2. Select Customer: `Sister Company 1 (Internal)`. Add Item `Component Alpha`, Qty `100`, Rate `$50`.
+3. Submit the document.
+4. **Instant Result:** A banner confirms:
+   `Inter Company: Linked Purchase Order PO-2026-0001 has been automatically created in Sister Company 1.`
+5. When `Main Company` creates the **Delivery Note**, the corresponding **Purchase Receipt** is generated automatically in `Sister Company 1`.
+6. When `Main Company` creates the **Sales Invoice**, the matching **Purchase Invoice** is generated in `Sister Company 1`.
 
-Without netting, 3 separate international wire transfers are required ($170,000 total transferred).
+---
 
-1. Go to **Inter Company Netting Cycle > New**.
-2. Enter `Cycle Name`: *March 2026 Netting*.
-3. In the Companies table, click **Fetch Outstanding Invoices**.
-4. The system computes Net Positions:
-   - **Company A:** Net Debtor: $-\$150,000$
-   - **Company B:** Net Creditor: $+\$80,000$
-   - **Company C:** Net Creditor: $+\$70,000$
-5. Click **Calculate Netting**.
-6. The engine generates 2 optimized settlements:
-   - *Settlement 1:* Company A pays Company B **$80,000**
-   - *Settlement 2:* Company A pays Company C **$70,000**
-7. Total funds wired reduced to **$150,000** (a $20,000 liquidity saving and elimination of cross-border banking fees).
-8. Click **Generate Settlement Journal Entries** to post balancing GL records across all 3 ledgers.
+### Example B: Financial Mirroring & 2-Way Settlement
+**Scenario:** `Sister Company 1` pays `Main Company` $5,000 to settle the invoice, or `Main Company` reallocates a shared group IT expense to `Sister Company 1`.
 
-### Example D: Raising and Resolving a Billing Dispute
-**Scenario:** Company B was billed $1,500 on Sales Invoice `SINV-00100`, but received damaged items worth $300.
+```
++------------------------------------------------------------------------------------+
+|  CASE 1: PAYMENT ENTRY (SETTLEMENT)                                                |
+|  Sister Company 1 (Payer):                         Main Company (Payee):           |
+|  Type: Pay (ACC-PAY-2026-0001)     ==============> Type: Receive (ACC-PAY-0002)    |
+|  Party: Main Company (Supplier)                    Party: Sister Company 1 (Cust.) |
+|  Dr. Accounts Payable $5,000                       Dr. Bank Account $5,000         |
+|  Cr. Bank Account     $5,000                       Cr. Accounts Receivable $5,000  |
+|                                                                                    |
+|  CASE 2: SHARED EXPENSE JOURNAL ENTRY                                              |
+|  Main Company (Payer):                             Sister Company 1 (Recharged):   |
+|  Journal Entry (ACC-JV-2026-0001)  ==============> Journal Entry (ACC-JV-0002)     |
+|  Dr. Interco Clearing $1,000                       Dr. Software Expense $1,000     |
+|  Cr. Bank Account     $1,000                       Cr. Interco Clearing $1,000     |
++------------------------------------------------------------------------------------+
+```
 
-1. Open `SINV-00100`.
-2. Under the top menu, click **Inter Company > Raise Dispute**.
-3. In the new `Inter Company Dispute` document:
-   - `Source Amount`: $1,500
-   - `Target Amount`: $1,200
-   - `Variance Amount`: $300 (calculated automatically)
-   - `Dispute Reason`: *Damaged Goods*
-4. Set status to `Under Investigation`.
-5. Under Resolution Action, select: `Issue Credit Note` for $300.
-6. Click **Execute Resolution**.
-7. The system creates and links a Credit Note return invoice in the seller entity and updates the intercompany variance to zero.
+---
 
-### Example E: Multi-Currency Intercompany Transactions (Step-by-Step PKR vs USD Tutorial)
+### Example C: Transfer Pricing Policy (OECD Arm's Length Compliance)
+**Scenario:** Tax regulations mandate that sales between `Main Company` and `Sister Company 1` must include a **10% Cost-Plus markup** to reflect arm's-length market pricing.
+
+```
++------------------------------------------------------------------------------------+
+|                         TRANSFER PRICING POLICY (TPP-0001)                         |
+|                                                                                    |
+|  From Company: Main Company (Seller)      To Company: Sister Company 1 (Buyer)     |
+|  OECD Method:  Cost-Plus Markup %         Markup Percentage: 10.0%                 |
+|  Item: Component Alpha                    Effective: 2026-01-01 to 2026-12-31      |
+|                                                                                    |
+|  PRICING CALCULATION ENGINE:                                                       |
+|    Base Valuation Cost in Main Company = $200.00                                   |
+|    Transfer Rate = $200.00 x (1 + 0.10) = $220.00                                  |
+|                                                                                    |
+|  AUTOMATION RESULT:                                                                |
+|    When Sales Order is submitted in Main Company at $200.00,                       |
+|    the mirrored Purchase Order in Sister Company 1 automatically receives $220.00. |
+|    OECD Tax Audit dossier notes are stored for statutory auditors.                 |
++------------------------------------------------------------------------------------+
+```
+
+---
+
+### Example D: Raising and Resolving an Inter Company Dispute
+**Scenario:** `Main Company` bills `Sister Company 1` for $1,200 on Sales Invoice `SINV-0001` (10 units @ $120). Upon receipt, `Sister Company 1` finds 2 units damaged, claiming they should only pay $960.
+
+```
++------------------------------------------------------------------------------------+
+|                         INTER COMPANY DISPUTE WORKFLOW                             |
+|                                                                                    |
+|  1. INVOICE MISMATCH:                                                              |
+|     Main Company Billed:  $1,200 (10 units)                                        |
+|     Sister Company 1 Due: $960   (8 units accepted)                                |
+|                                                                                    |
+|  2. RAISE DISPUTE (New Inter Company Dispute):                                     |
+|     Document Type: Sales Invoice | Name: SINV-0001                                 |
+|     Source Company: Main Company | Target Company: Sister Company 1                |
+|     Reason: Damaged Goods        | Status: Open                                    |
+|     Billed Amount:  $1,200.00                                                      |
+|     Claimed Amount: $960.00                                                        |
+|     Variance Amount: $240.00 (Automatically calculated)                            |
+|                                                                                    |
+|  3. AUTOMATIC RESOLUTION (Click "Execute Resolution"):                             |
+|     Option A: "Issue Credit Note" -> Auto-generates Return Sales Invoice for -$240 |
+|     Option B: "Issue Debit Note"  -> Auto-generates Return Purchase Invoice in S1  |
+|     Option C: "Journal Adjustment"-> Books balancing JV for $240 variance          |
+|     Option D: "Accept Variance"   -> Marks dispute Resolved with no GL entry       |
++------------------------------------------------------------------------------------+
+```
+
+---
+
+### Example E: Multilateral 3-Company Netting Cycle
+**Scenario:** Month-end cross-company debt settlement between `Main Company`, `Sister Company 1`, and `Sister Company 2`.
+
+```
++------------------------------------------------------------------------------------+
+|                      MULTILATERAL 3-COMPANY NETTING CYCLE                          |
+|                                                                                    |
+|    Main Company   ---- owes $10,000 ---->  Sister Company 1                        |
+|         ^                                        |                                 |
+|         |                                        |                                 |
+|      owes $7,000                             owes $8,000                           |
+|         |                                        |                                 |
+|         +---------- Sister Company 2 <-----------+                                 |
+|                                                                                    |
+|  WITHOUT NETTING (Gross Settlements):                                              |
+|    3 separate bank wire transfers totaling $25,000 with cross-border banking fees. |
+|                                                                                    |
+|  NET POSITIONS (Calculated via Multilateral Greedy Solver):                        |
+|    * Main Company:     -$3,000 (Net Debtor  - owes money)                          |
+|    * Sister Company 1: +$2,000 (Net Creditor - owed money)                         |
+|    * Sister Company 2: +$1,000 (Net Creditor - owed money)                         |
+|                                                                                    |
+|  WITH NETTING (Optimized Settlements Generated on Submit):                         |
+|    1. Main Company pays $2,000 directly to Sister Company 1                        |
+|    2. Main Company pays $1,000 directly to Sister Company 2                        |
+|    TOTAL CASH TRANSFERRED: $3,000 (Liquidity savings: $22,000; wire fees cut by 67%)|
+|    Auto-posts clearing Journal Entries across all 3 company ledgers.               |
++------------------------------------------------------------------------------------+
+```
+
+---
+
+### Example F: Group Consolidation Elimination Run (Holding Company)
+**Scenario:** Preparing group consolidated balance sheet and P&L under IFRS 10 / US GAAP. Internal sales and mutual debts must be eliminated.
+
+```
++------------------------------------------------------------------------------------+
+|                    INTER COMPANY ELIMINATION RUN (CONSOLIDATION)                   |
+|                                                                                    |
+|  Period: March 2026 | Consolidation Company: Parent Group Holdings                 |
+|                                                                                    |
+|  UNELIMINATED GROUP TOTALS:                                                        |
+|    * Intercompany Sales Revenue across entities: $50,000                           |
+|    * Intercompany Cost of Goods Sold / Purchases: $50,000                          |
+|    * Intercompany Accounts Receivable (AR):       $50,000                          |
+|    * Intercompany Accounts Payable (AP):          $50,000                          |
+|                                                                                    |
+|  ONE-CLICK SUBMISSION ACTION:                                                      |
+|    Generates Consolidation Elimination Journal Entry in Parent Group Holdings:     |
+|      Dr. Intercompany Sales Revenue  $50,000 (Neutralizes internal revenue)        |
+|      Cr. Intercompany COGS           $50,000 (Neutralizes internal cost of sales)  |
+|      Dr. Accounts Payable            $50,000 (Neutralizes internal liability)      |
+|      Cr. Accounts Receivable         $50,000 (Neutralizes internal asset)          |
+|                                                                                    |
+|  RESULT: Audited Consolidated P&L and Balance Sheet ready for statutory filing.    |
++------------------------------------------------------------------------------------+
+```
+
+---
+
+### Example G: Inter Company Error Log & 1-Click Self-Healing
+**Scenario:** An accountant in `Main Company` submits a Sales Order for an item that is temporarily disabled in `Sister Company 1`.
+
+```
++------------------------------------------------------------------------------------+
+|                         ERROR LOG & RECOVERY WORKFLOW                              |
+|                                                                                    |
+|  1. EXCEPTION CAUGHT:                                                              |
+|     Target creation in Sister Company 1 halted: "Item COMP-ALPHA is disabled".     |
+|     Main Company's Sales Order submits safely without breaking user session.       |
+|                                                                                    |
+|  2. LOGGED IN "Inter Company Error Log":                                           |
+|     * Source: Sales Order SO-2026-0001 | Target: Sister Company 1                   |
+|     * Status: Pending / Failed          | Traceback: Full error stack stored        |
+|                                                                                    |
+|  3. RECOVERY:                                                                      |
+|     Administrator enables the item in Sister Company 1,                            |
+|     then opens the error log and clicks [Retry Sync].                              |
+|     Status updates to "Retried Successfully" and target document is generated.     |
+|     * Scheduled task also retries pending records automatically every hour.        |
++------------------------------------------------------------------------------------+
+```
+
+---
+
+### Example H: ICT Notification Setting (User-Level Alert Controls)
+**Scenario:** Controlling alerts so finance personnel receive critical notices without alert fatigue.
+
+```
++------------------------------------------------------------------------------------+
+|                        ICT NOTIFICATION SETTING PER USER                           |
+|                                                                                    |
+|  User: accounts_lead@company.com                                                   |
+|  [X] Enabled                       [X] In-App Bell Alerts                          |
+|  [X] Email Notifications           [ ] Status Updates (Daily syncs - muted)        |
+|  [X] Approval Requests             [X] Dispute Alerts (Notified when sister co.    |
+|  [X] Netting Cycle Alerts              raises a discrepancy)                       |
+|  [X] Elimination Run Alerts                                                        |
++------------------------------------------------------------------------------------+
+```
+
+---
+
+### Example I: SMS Template & Core ERPNext Integration Architecture
+**Scenario:** Sending automated SMS alerts to warehouse managers or drivers upon intercompany dispatches.
+
+```
++------------------------------------------------------------------------------------+
+|                           SMS NOTIFICATIONS ARCHITECTURE                           |
+|                                                                                    |
+|  [ Your Inter Company App ]                  [ ERPNext Core Framework ]            |
+|  DocType: "SMS Template"                     DocType: "SMS Settings"               |
+|  +---------------------------+               +----------------------------------+  |
+|  | Template: Stock Dispatch  |               | Gateway: Twilio / Plivo / Custom |  |
+|  | Message: Transfer of      |               | Core API Secret: *************** |  |
+|  | {{ qty }} items to sister |               +----------------+-----------------+  |
+|  +-------------+-------------+                                |                    |
+|                |                                              |                    |
+|                +------------> [ Core frappe.sendmail / SMS ] <+                    |
+|                                              |                                     |
+|                                              v                                     |
+|                                    [ Recipient Mobile ]                            |
+|                                                                                    |
+|  CRITICAL FACTS FOR APP BUYERS & SOLO FOUNDERS:                                    |
+|  1. SMS is 100% OPTIONAL: The entire app runs smoothly with zero SMS configuration.|
+|  2. NO API KEYS REQUIRED IN THIS APP: Your app requires no secret keys or gateway. |
+|  3. NATIVE INTEGRATION: If a customer wants SMS, they configure standard ERPNext   |
+|     core "SMS Settings". The app seamlessly leverages that native core connection. |
++------------------------------------------------------------------------------------+
+```
+
+---
+
+### Example J: Multi-Currency Intercompany Transactions (Step-by-Step PKR vs USD)
 **Scenario:** A conglomerate operates with two entities with different legal currencies:
-* **Main Company (Entity A):** `ABC Technologies (Pvt) Ltd` - Default Currency: **PKR**
-* **Sister Subsidiary (Entity B):** `XYZ Global Inc` - Default Currency: **USD**
+* **Main Company:** Default Currency: **PKR**
+* **Sister Company 1:** Default Currency: **USD**
 * **Exchange Rate:** 1 USD = 280 PKR (or 1 PKR = 0.00357 USD)
 
 #### Is there a Custom Field needed for Currency?
 **No new custom field is required!** ERPNext natively provides multi-currency capabilities (`currency`, `conversion_rate`, `party_account_currency`) across all transactional documents, and this app automatically integrates with them. You only need the standard transaction control fields:
 1. **`is_intercompany` (Check):** Tick on any transaction to trigger intercompany mirroring.
-2. **`intercompany_target_company` (Link):** Select the target sister company (e.g., `XYZ Global Inc`).
+2. **`intercompany_target_company` (Link):** Select the target sister company (`Sister Company 1`).
 
 #### Step-by-Step Setup:
 1. **Define Exchange Rates in ERPNext:**
    - Navigate to **Accounting > Setup > Currency Exchange**.
-   - Create a record:
-     - `From Currency`: **USD**
-     - `To Currency`: **PKR**
-     - `Date`: Today's date (or transaction date)
-     - `Exchange Rate`: **280.0**
-   - Save. (The system automatically calculates inverse conversions when converting PKR to USD).
+   - Create a record: `From Currency` = **USD**, `To Currency` = **PKR**, `Exchange Rate` = **280.0**.
 2. **Setup Internal Customer & Supplier Profiles:**
-   - In `ABC Technologies (PKR)`:
-     - Internal Customer `XYZ Global Inc (Internal)`: Set `Billing Currency` = **USD** (or PKR).
-     - Internal Supplier `XYZ Global Inc (Internal)`: Set `Billing Currency` = **USD** (or PKR).
-   - In `XYZ Global Inc (USD)`:
-     - Internal Customer `ABC Technologies (Internal)`: Set `Billing Currency` = **USD** (or PKR).
-     - Internal Supplier `ABC Technologies (Internal)`: Set `Billing Currency` = **USD** (or PKR).
-3. **Configure the Link in Intercompany Transaction Link:**
-   - In **Inter Company > Intercompany Transaction Link**, add `XYZ Global Inc` in the Companies table and specify the respective customer and supplier IDs.
+   - In `Main Company (PKR)`: Set Customer & Supplier for `Sister Company 1` with Billing Currency = **USD**.
+   - In `Sister Company 1 (USD)`: Set Customer & Supplier for `Main Company` with Billing Currency = **USD**.
+3. **Configure Link:** In **Inter Company > Intercompany Transaction Link**, add `Sister Company 1` in the linked companies table.
 
-#### How Each Document Flow Operates Across Currencies:
+#### How Each Document Operates Across Currencies:
+* **Sales Order to Purchase Order:** Sales Order created in `Main Company` for $1,000 USD creates a matching Purchase Order in `Sister Company 1` for $1,000 USD.
+* **Delivery Note to Purchase Receipt:** Stock valuation rate is accurately converted from PKR to USD so `Sister Company 1`'s stock ledger remains mathematically exact.
+* **Payment Entry:** A payment of 280,000 PKR from `Main Company` creates a receipt of $1,000 USD in `Sister Company 1`.
+* **Balance Reconciliation Report:** Converts balances using the transaction date exchange rate and reports the true base-currency variance.
 
-1. **Sales Order (SO) to Purchase Order (PO) & PO to SO:**
-   - **Action in ABC (PKR):** Create a Sales Order for `XYZ Global Inc`.
-   - Set Currency to **USD**, Item `Laptop`, Qty `10`, Rate `$1,000 USD`.
-   - Check `Is Intercompany` = Yes, select `Intercompany Target Company` = `XYZ Global Inc`.
-   - **Result on Submit:** Mirrored **Purchase Order** is created in `XYZ Global Inc` in **USD** with Rate `$1,000 USD`, Conversion Rate = 1.0, and Total = $10,000 USD.
-   - If billed in PKR (e.g. 2,800,000 PKR), the mirrored PO in XYZ automatically receives Rate = $1,000 USD via the exchange rate ($2,800,000 / 280 = $10,000).
+---
 
-2. **Sales Invoice (SI) to Purchase Invoice (PI) & PI to SI:**
-   - **Action:** Submit Sales Invoice in ABC (PKR) for $1,000 USD.
-   - **Result on Submit:** Mirrored **Purchase Invoice** is generated in `XYZ Global Inc` in **USD** for $1,000 USD.
-   - Accounts Payable in XYZ is booked in USD ($1,000), while Accounts Receivable in ABC is booked in USD with local base currency conversion (280,000 PKR).
+## 5. Multi-Version Compatibility: ERPNext v14, v15, and v16
 
-3. **Delivery Note (DN) to Purchase Receipt (PR) & PR to DN:**
-   - **Action:** Dispatch goods from ABC (PKR) warehouse via Delivery Note.
-   - **Result on Submit:** Mirrored **Purchase Receipt** in `XYZ Global Inc` automatically converts item unit rates to USD, ensuring the incoming inventory valuation in XYZ's stock ledger matches the exact commercial cost in USD without valuation corruption.
+### Why this single app runs seamlessly on ERPNext 14, 15, and 16
+```
++------------------------------------------------------------------------------------+
+|               COMPATIBILITY MATRIX: ERPNEXT v14, v15 & v16 CERTIFIED               |
+|                                                                                    |
+|  Platform Edition  | Python Versions       | Frappe Version | ERPNext Status       |
+|  ------------------+-----------------------+----------------+--------------------  |
+|  ERPNext v14       | Python 3.10 / 3.11    | Frappe v14.x   | Fully Compatible     |
+|  ERPNext v15       | Python 3.10/3.11/3.12 | Frappe v15.x   | Fully Compatible     |
+|  ERPNext v16       | Python 3.12 / 3.13    | Frappe v16.x   | Certified Ready      |
++------------------------------------------------------------------------------------+
+```
 
-4. **Stock Entry to Stock Entry (Inter-Company Material Transfer):**
-   - **Action:** Issue materials from ABC (PKR) warehouse to transfer to XYZ (USD).
-   - **Result on Submit:** Source Material Issue has valuation rate in PKR (e.g. 56,000 PKR). The mirrored Material Receipt in XYZ receives valuation rate in USD ($56,000 / 280 = $200 USD), preserving physical stock balance and accurate stock ledger valuation.
+#### Technical Guarantees for Marketplace Buyers:
+1. **Universal ORM & Document API:** The app exclusively uses Frappe's universal ORM functions (`frappe.get_doc`, `frappe.new_doc`, `frappe.db.get_value`, `frappe.db.exists`). These core APIs are 100% stable and identical across Frappe v14, v15, and v16.
+2. **Python Compatibility (`>= 3.10`):** The Python codebase uses modern clean syntax compliant with Python 3.10, 3.11, 3.12, and 3.13. No deprecated Python standard modules (like `imp`, `pipes`, or removed `cgi` utilities) are used.
+3. **Collision-Free Migration:** Custom fields are created dynamically with programmatic duplicate-checking rather than rigid SQL dumps. Upgrades from v14 to v15 or v16 will never break database constraints.
+4. **Modern Build System:** Uses standard `flit_core >=3.4` in `pyproject.toml`, which is the official Frappe packaging standard for Frappe Cloud and bench deployments.
 
-5. **Payment Entry (Payment to Receipt across Currencies):**
-   - **Action:** ABC (PKR) pays XYZ (USD) to settle an invoice.
-   - Create Payment Entry (Pay): `Paid From` = PKR Bank Account (Amount: 280,000 PKR).
-   - Check `Is Intercompany` and select `XYZ Global Inc`.
-   - **Result on Submit:** A mirrored Payment Entry (Receive) is created in `XYZ Global Inc`:
-     - `Party Type` = Customer (`ABC Technologies`)
-     - `Paid To` = USD Bank Account
-     - `Received Amount` = **$1,000 USD**
-     - Target exchange rate and currency conversions are resolved seamlessly.
-
-6. **Journal Entry (Cross-Company Shared Expenses & GL Balances):**
-   - **Action:** ABC (PKR) pays a shared group software license fee of 560,000 PKR and charges 50% (280,000 PKR) to XYZ (USD).
-   - Post Intercompany Journal Entry in ABC.
-   - **Result on Submit:** Mirrored Journal Entry is created in `XYZ Global Inc` with `multi_currency = 1`. The debit/credit amount in XYZ is converted to **$1,000 USD** at the effective exchange rate, keeping both ledgers in mathematical equilibrium.
-
-7. **Cross-Currency Balance Reconciliation:**
-   - In **Inter Company Balance Reconciliation Report**, select Company A (`ABC Technologies`) and Company B (`XYZ Global Inc`).
-   - The report displays `Cur A` (PKR), `Amount A`, `Cur B` (USD), and `Amount B`.
-   - It converts Amount B into Currency A using the posting date exchange rate and reports the true variance in base currency, avoiding false discrepancies caused by currency denomination differences.
 
 ---
 

@@ -38,6 +38,7 @@ def create_pdf(output_path=None):
             current_page_items = []
         current_y = 735
 
+    in_code_block = False
     for raw_line in lines:
         line = raw_line.rstrip()
 
@@ -87,7 +88,18 @@ def create_pdf(output_path=None):
             current_y -= needed_h
 
         elif line.startswith("```"):
+            in_code_block = not in_code_block
             current_y -= 4
+            if current_y < 55:
+                push_page()
+
+        elif in_code_block:
+            text_clean = line.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)')
+            needed_h = 9.5
+            if current_y - needed_h < 55:
+                push_page()
+            current_page_items.append(('code', text_clean[:100], current_y))
+            current_y -= needed_h
 
         elif line.startswith("* ") or line.startswith("- "):
             text = line[2:].strip()
@@ -138,8 +150,9 @@ def create_pdf(output_path=None):
     # 2: Pages
     # 3: Regular Font (Helvetica)
     # 4: Bold Font (Helvetica-Bold)
-    # 5, 6 (Page, Content stream)...
-    next_id = 5
+    # 5: Monospace Font (Courier)
+    # 6, 7 (Page, Content stream)...
+    next_id = 6
     page_entries = []
 
     for idx, p_items in enumerate(pages):
@@ -153,16 +166,18 @@ def create_pdf(output_path=None):
     obj_pages = f"<< /Type /Pages /Kids [{kids_str}] /Count {total_pages} >>"
     obj_font = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"
     obj_font_bold = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>"
+    obj_font_mono = "<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>"
 
     pdf_objs = [
         (1, obj_catalog),
         (2, obj_pages),
         (3, obj_font),
-        (4, obj_font_bold)
+        (4, obj_font_bold),
+        (5, obj_font_mono)
     ]
 
     for page_id, content_id, p_items, page_num in page_entries:
-        page_dict = f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents {content_id} 0 R /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> >>"
+        page_dict = f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents {content_id} 0 R /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> >>"
         pdf_objs.append((page_id, page_dict))
 
         stream_cmds = []
@@ -179,7 +194,7 @@ def create_pdf(output_path=None):
         else:
             # Subtle running header
             stream_cmds.append("0.4 0.4 0.4 rg")
-            stream_cmds.append("BT /F1 9 Tf 40 760 Td (Inter-Company Transactions - Enterprise User Guide & Multi-Currency Tutorial) Tj ET")
+            stream_cmds.append("BT /F1 9 Tf 40 760 Td (Inter-Company Transactions - Enterprise User Guide & Multi-Entity Tutorial) Tj ET")
             stream_cmds.append("0.8 0.8 0.8 RG 40 752 m 572 752 l S")
             stream_cmds.append("0 0 0 rg")
 
@@ -204,6 +219,9 @@ def create_pdf(output_path=None):
                 stream_cmds.append(f"BT /F1 8.5 Tf 50 {y} Td ({text}) Tj ET")
             elif item_type == 'subbullet':
                 stream_cmds.append(f"BT /F1 8.5 Tf 65 {y} Td ({text}) Tj ET")
+            elif item_type == 'code':
+                stream_cmds.append(f"0.96 0.97 0.98 rg 40 {y-1.5} 532 9.5 re f")
+                stream_cmds.append(f"0.15 0.2 0.35 rg BT /F3 7 Tf 44 {y} Td ({text}) Tj ET 0 0 0 rg")
             else:
                 stream_cmds.append(f"BT /F1 8.5 Tf 40 {y} Td ({text}) Tj ET")
 
