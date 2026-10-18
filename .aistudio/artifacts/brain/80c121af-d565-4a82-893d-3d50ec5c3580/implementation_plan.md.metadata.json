@@ -1,6 +1,6 @@
 {
-  "summary": "Final verification report confirming that two-way sync and temporary ledger logic are untouched and preserved as tested, marketplace pricing ($49/month, $490/year) is locked across documentation, auto-setup button state is verified, and all system checks pass.",
-  "updatedAt": "2026-10-18T07:36:44.514325046Z",
+  "summary": "Release commit and tag v1.0.0 are fully prepared with Author Ejaz Ahmed. Step-by-step instructions provided for pushing using a GitHub Personal Access Token and completing the Frappe Cloud Marketplace submission.",
+  "updatedAt": "2026-10-18T12:40:11.537220932Z",
   "requestFeedback": true,
   "userFacing": true
 }

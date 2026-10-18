@@ -1,7 +1,7 @@
 # Inter-Company Transactions for ERPNext: Enterprise User Guide & Tutorial
 **Version:** 2.0 (Enterprise Edition)  
 **Compatibility:** Frappe Framework v14, v15 & v16 / ERPNext v14, v15 & v16 (Certified)  
-**Author:** Inter Company Transactions Contributors  
+**Author:** Ejaz Ahmed (ejazahmad989@gmail.com)  
 **Date:** September 2026  
 
 ---

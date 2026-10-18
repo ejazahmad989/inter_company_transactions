@@ -1,7 +1,8 @@
 [project]
 name = "inter_company_transactions"
 authors = [
-    { name = "Rahil Ali", email = "rahilali3311@gmail.com"}
+    { name = "Ejaz Ahmed", email = "ejazahmad989@gmail.com" },
+    { name = "Rahil Ali", email = "rahilali3311@gmail.com" }
 ]
 description = "Enterprise Inter-Company Transactions, Transfer Pricing, Elimination and Netting for ERPNext (v14, v15 & v16 Compatible)"
 requires-python = ">=3.10"

@@ -1,43 +1,47 @@
-# Final Verification & Marketplace Readiness Plan
+# Production Release Status & Push Instructions
 
-This plan confirms that the existing two-way sync engine and temporary ledger logic were completely preserved as requested. All items in the final verification checklist have been thoroughly audited, validated, and confirmed to pass with zero errors.
-
-## User Review & Critical Decisions
-
-> [!IMPORTANT]
-> **Summary of Completed Verifications:**
->
-> 1. **Two-Way Sync & Temporary Ledger**: Completely untouched and preserved exactly as tested.
-> 2. **Pricing Confirmed & Updated**: **$49 / month** and **$490 / year** (2 months free) updated across `MARKETPLACE.md`.
-> 3. **Bridge Account Auto-Setup Button**: Verified in `intercompany_transaction_link.js`—it auto-provisions compliant clearing accounts, then locks into disabled state (`prop('disabled', true)`) with the label `Bridge Accounts Configured ✓` once both sides are linked.
-> 4. **Patch Migration Architecture**: Verified—both `v1_2_sister_company_title` and `v1_1_update_custom_fields` are robust Python packages with `__init__.py` and `execute.py`, guaranteeing clean `bench migrate` execution without `ModuleNotFoundError`.
-> 5. **Quality & Compilation Checks**: Applet compiles successfully (`compile_applet`) and passes all linting (`lint_applet`) with zero warnings or errors.
+The clean release repository has been prepared inside the project:
+* **Commit:** `feat: initial production release v1.0.0 for ERPNext v14, v15 & v16`
+* **Author:** `Ejaz Ahmed <ejazahmad989@gmail.com>`
+* **Co-author:** `Rahil Ali <rahilali3311@gmail.com>`
+* **Release Tag:** `v1.0.0`
+* **Target Repository:** `https://github.com/ejazahmad989/inter_company_transactions.git`
 
 ---
 
-## 1. Accounting Confirmation: 1 Account Quick-Zero Model
+## Final Push Instructions (2 Minutes)
 
-As confirmed:
-- Main Company Customer ↔ Sister Company Supplier
-- Main Company Supplier ↔ Sister Company Customer
-- **1 Bilateral Clearing Account** per sister pair (`Intercompany Clearing - <Sister Company>`) under Current Assets.
-- Because pass-through expenses and payments are cleared to **$0.00 ASAP**, the account naturally returns to zero, leaving no open suspense balances at closing and giving external auditors zero reasons to raise questions.
+### Step 1: Generate a GitHub Personal Access Token (PAT)
+1. On GitHub (logged into `ejazahmad989`), go to:
+   **[https://github.com/settings/tokens](https://github.com/settings/tokens)**
+2. Click **Generate new token** > **Generate new token (classic)**.
+3. Note: `Marketplace Push`
+4. Expiration: 30 days or No expiration
+5. Select scopes: Check **`repo`** (Full control of repositories).
+6. Click **Generate token** and copy the string (it starts with `ghp_...`).
+
+### Step 2: Push to GitHub
+In your terminal, run:
+```bash
+git push -u origin main --tags
+```
+When prompted:
+* **Username:** `ejazahmad989`
+* **Password:** *(Paste your copied token `ghp_...`)*
 
 ---
 
-## 2. Verified Technical Checklist
+## Frappe Cloud Marketplace Listing Details
+Once pushed, submit your listing at **[https://frappecloud.com/marketplace](https://frappecloud.com/marketplace)**:
 
-| Component | Status | Verification Detail |
-|---|---|---|
-| **Two-Way Document Sync** | Preserved | Preserved existing tested logic for all 15 doctypes |
-| **Temporary Clearing Ledger** | Preserved | Preserved existing mirroring behavior |
-| **Marketplace Pricing** | Complete | $49/month & $490/year documented in `MARKETPLACE.md` |
-| **Auto-Setup Bridge Button** | Complete | Auto-disables and shows green tick when configured |
-| **Migration Patches** | Complete | v1.1 and v1.2 packages resolve `.execute` cleanly |
-| **Compilation & Linting** | Passed | 100% pass on `compile_applet` and `lint_applet` |
-
----
-
-## 3. Deployment & Release
-
-The application is completely prepared for Frappe Cloud Marketplace submission and production deployment.
+| Field | Value |
+| :--- | :--- |
+| **Publisher Name** | `Ejaz Ahmed` |
+| **Publisher Email** | `ejazahmad989@gmail.com` |
+| **App Name** | `inter_company_transactions` |
+| **App Title** | `Inter Company Transactions` |
+| **Repository URL** | `https://github.com/ejazahmad989/inter_company_transactions` |
+| **Release Tag** | `v1.0.0` |
+| **Monthly Pricing** | `$49 / month` |
+| **Yearly Pricing** | `$490 / year` (2 months free) |
+| **Supported Versions** | Frappe & ERPNext v14, v15, and v16 |

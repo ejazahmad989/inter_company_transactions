@@ -17,13 +17,13 @@
 |---|---|
 | **App Name** | `inter_company_transactions` |
 | **App Title** | Inter Company Transactions |
-| **Publisher** | Rahil Ali (`rahilali3311@gmail.com`) |
+| **Publisher** | Ejaz Ahmed (`ejazahmad989@gmail.com`) |
 | **Category** | Accounting & Finance / Supply Chain / Enterprise Management |
 | **Supported Frappe Versions** | **Frappe v14, Frappe v15, Frappe v16 (Verified)** |
 | **Supported ERPNext Versions** | **ERPNext v14, ERPNext v15, ERPNext v16 (Latest)** |
 | **App Version** | `1.0.0` (Production Stable) |
 | **License** | MIT / Commercial Enterprise License |
-| **Repository URL** | `https://github.com/rahilali/inter_company_transactions` |
+| **Repository URL** | `https://github.com/ejazahmad989/inter_company_transactions` |
 | **Documentation** | Included (`USER_GUIDE.md` & `Inter_Company_Transactions_User_Guide.pdf`) |
 | **App Icon** | `inter_company_transactions/public/images/inter_company_icon.svg` |
 | **Hero Banner** | `inter_company_transactions/public/images/marketplace_banner.png` |
