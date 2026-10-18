@@ -1,5 +1,3 @@
-import sys
-
 import frappe
 
 from inter_company_transactions.install import create_custom_fields, set_default_permissions
@@ -53,7 +51,3 @@ def execute():
 
 	frappe.db.commit()
 	print("Patch v1_1_update_custom_fields executed successfully.")
-
-
-# Module alias for backward compatibility in case an environment imports with trailing .execute
-sys.modules[__name__ + ".execute"] = sys.modules[__name__]

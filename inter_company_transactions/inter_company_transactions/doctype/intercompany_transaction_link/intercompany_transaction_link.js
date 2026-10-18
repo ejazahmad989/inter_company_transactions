@@ -61,6 +61,37 @@ frappe.ui.form.on('Intercompany Transaction Link', {
 				});
 			}, __('Actions'));
 
+			// 1-Click Button to auto-create & link GAAP/IFRS compliant Intercompany Clearing Accounts
+			let all_accounts_configured = (frm.doc.linked_companies || []).length > 0 &&
+				(frm.doc.linked_companies || []).every(r => r.main_company_account && r.other_company_account);
+
+			let account_btn_label = all_accounts_configured ? __('Bridge Accounts Configured ✓') : __('Auto-Setup Bridge Accounts');
+			let account_btn = frm.add_custom_button(account_btn_label, function() {
+				frappe.call({
+					doc: frm.doc,
+					method: 'auto_create_intercompany_accounts',
+					freeze: true,
+					freeze_message: __('Configuring Intercompany Clearing Accounts in Chart of Accounts...'),
+					callback: function(r) {
+						if (!r.exc && r.message) {
+							frm.reload_doc();
+							frappe.show_alert({
+								message: r.message.message || __('Intercompany Clearing Accounts verified and linked.'),
+								indicator: 'green'
+							});
+						}
+					}
+				});
+			}, __('Actions'));
+
+			if (all_accounts_configured) {
+				account_btn.addClass('text-success');
+				account_btn.prop('disabled', true);
+				account_btn.attr('title', __('All intercompany clearing / bridge accounts are already configured and active in Chart of Accounts.'));
+			} else {
+				account_btn.addClass('btn-primary font-weight-bold');
+			}
+
 			// Quick Validation helper
 			frm.add_custom_button(__('Validate Setup'), function() {
 				validate_transaction_link_setup(frm);

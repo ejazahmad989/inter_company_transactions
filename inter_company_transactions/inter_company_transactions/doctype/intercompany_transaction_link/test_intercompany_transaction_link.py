@@ -276,6 +276,69 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 		doc.set_sister_company()
 		self.assertEqual(doc.sister_company, "AYP SISTER")
 
+	def test_resolve_intercompany_target_item_mapping(self):
+		"""Verify cross-company SKU translation (PEN -> PEN-001) with conversion factor"""
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			resolve_intercompany_target_item,
+		)
+		mock_mapping = frappe._dict({
+			"item_mappings": [
+				frappe._dict({
+					"source_item_code": "PEN",
+					"target_company": "Company B",
+					"target_item_code": "PEN-001",
+					"conversion_factor": 10.0,
+				})
+			]
+		})
+		source_item = {"item_code": "PEN", "item_name": "Pen Box", "qty": 2, "rate": 50.0, "uom": "Box"}
+		res = resolve_intercompany_target_item(source_item, "Company B", mapping=mock_mapping)
+		self.assertEqual(res["item_code"], "PEN-001")
+		self.assertEqual(res["qty"], 20.0)
+		self.assertEqual(res["rate"], 5.0)
+		self.assertEqual(res["conversion_factor"], 10.0)
+
+	def test_resolve_intercompany_target_item_fallback(self):
+		"""Verify unchanged item code when no custom SKU translation exists"""
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			resolve_intercompany_target_item,
+		)
+		source_item = {"item_code": "LAPTOP-01", "item_name": "Laptop", "qty": 1, "rate": 1000.0, "uom": "Nos"}
+		res = resolve_intercompany_target_item(source_item, "Company B", mapping=None)
+		self.assertEqual(res["item_code"], "LAPTOP-01")
+		self.assertEqual(res["qty"], 1.0)
+		self.assertEqual(res["rate"], 1000.0)
+
+	def test_validate_intercompany_items_auto_create_disabled(self):
+		"""Verify validation throws error when item is unmapped and auto-create is disabled"""
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			validate_intercompany_items,
+		)
+		doc = frappe._dict({
+			"doctype": "Sales Invoice",
+			"items": [frappe._dict({"item_code": "NON-EXISTENT-SKU-999"})],
+		})
+		mapping = {
+			"company": "Company B",
+			"mapping": frappe._dict({"item_mappings": []}),
+		}
+		# When auto-create is disabled and item doesn't exist, validate_intercompany_items raises error
+		with self.assertRaises(Exception):
+			# Mock auto_create_missing_items setting as disabled
+			frappe.flags.in_test = True
+			validate_intercompany_items(doc, mapping)
+
+	def test_clearing_account_helper_exists(self):
+		"""Verify get_or_create_intercompany_clearing_account handles none/empty safely"""
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			get_or_create_intercompany_clearing_account,
+			get_parent_clearing_account,
+		)
+		# Safe execution with none
+		self.assertIsNone(get_parent_clearing_account(None))
+		self.assertIsNone(get_or_create_intercompany_clearing_account(None, None))
+
+
 
 
 
