@@ -2,6 +2,17 @@
 // For license information, please see license.txt
 
 frappe.ui.form.on("Role Replication", {
+	onload(frm) {
+		frm.set_query("existing_role", () => {
+			return {
+				filters: {
+					disabled: 0
+				},
+				order_by: "name asc",
+				page_length: 100
+			};
+		});
+	},
 	refresh(frm) {
 		if (!frm.is_new()) {
 			frm.add_custom_button(__("Re-replicate Permissions"), () => {

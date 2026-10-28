@@ -31,14 +31,8 @@ Author: Ejaz Ahmed <ejazahmad989@gmail.com>
 Co-authored-by: Rahil Ali <rahilali3311@gmail.com>" || echo "Working tree clean, proceeding to tag..."
 
 # Create annotated release tag v1.0.0
-if ! git rev-parse v1.0.0 >/dev/null 2>&1; then
-    echo "Creating git release tag v1.0.0..."
-    git tag -a v1.0.0 -m "Release v1.0.0: Certified for Frappe/ERPNext v14, v15 & v16"
-fi
-
-# Set remote origin to public inter_company_transactions repo
-echo "Setting git remote to https://github.com/ejazahmad989/inter_company_transactions.git..."
-git remote remove ict 2>/dev/null || true
+git tag -f -a v1.0.0 -m "Release v1.0.0: Certified for Frappe/ERPNext v14, v15 & v16"
+git remote remove origin 2>/dev/null || true
 git remote add origin https://github.com/ejazahmad989/inter_company_transactions.git
 
 echo ""
