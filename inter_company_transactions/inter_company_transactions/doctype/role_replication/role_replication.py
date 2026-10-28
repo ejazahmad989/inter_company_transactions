@@ -97,3 +97,8 @@ class RoleReplication(Document):
 				new_role, copied_count, source_role
 			)
 		)
+		return {
+			"new_role": new_role,
+			"copied_count": copied_count,
+			"source_role": source_role
+		}
