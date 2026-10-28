@@ -1,18 +1,19 @@
-// Copyright (c) 2024, Frappe Technologies and contributors
+// Copyright (c) 2024-2026, Inter Company Transactions and contributors
 // For license information, please see license.txt
 
 frappe.ui.form.on("Role Replication", {
 	refresh(frm) {
-		frm.disable_save();
-		frm.page.set_primary_action(__("Replicate"), ($btn) => {
-			$btn.text(__("Replicating..."));
-			frappe.run_serially([
-				() => frappe.dom.freeze("Replicating..."),
-				() => frm.call("replicate_role"),
-				() => frappe.dom.unfreeze(),
-				() => frappe.msgprint(__("Replication completed.")),
-				() => $btn.text(__("Replicate")),
-			]);
-		});
+		if (!frm.is_new()) {
+			frm.add_custom_button(__("Re-replicate Permissions"), () => {
+				frappe.dom.freeze(__("Replicating role permissions..."));
+				frm.call("replicate_role").then(() => {
+					frappe.dom.unfreeze();
+					frappe.msgprint(__("Role replication completed."));
+				});
+			});
+		}
 	},
+	after_save(frm) {
+		frappe.msgprint(__("Role '{0}' created and replicated in Role list.", [frm.doc.new_role]));
+	}
 });
