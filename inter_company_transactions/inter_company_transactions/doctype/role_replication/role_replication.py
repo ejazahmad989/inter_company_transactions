@@ -56,6 +56,7 @@ class RoleReplication(Document):
 		if source_role == "Administrator" and not frappe.db.exists("DocPerm", {"role": source_role}):
 			source_role = "System Manager"
 
+		copied_count = 0
 		# 3. Copy permissions from source role to new role
 		perms = get_permissions(role=source_role)
 		for perm in perms:
@@ -85,8 +86,14 @@ class RoleReplication(Document):
 			try:
 				cdp = frappe.get_doc(perm_dict)
 				cdp.insert(ignore_permissions=True)
+				copied_count += 1
 			except Exception as e:
 				frappe.logger().error(f"Error replicating perm for {parent_doctype} to {new_role}: {e!s}")
 
+		frappe.db.commit()
 		frappe.clear_cache()
-		frappe.msgprint(_("Role '{0}' replicated from '{1}' successfully.").format(new_role, source_role))
+		frappe.msgprint(
+			_("Role '<b>{0}</b>' created and replicated <b>{1}</b> permissions from '<b>{2}</b>' successfully.").format(
+				new_role, copied_count, source_role
+			)
+		)
