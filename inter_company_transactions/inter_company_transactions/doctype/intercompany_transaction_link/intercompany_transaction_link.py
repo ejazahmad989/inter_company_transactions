@@ -300,8 +300,261 @@ def create_linked_documents(doc, method=None):
             ))
 
 
+def get_linked_counterpart_documents(doc):
+    """
+    Fetch all linked counterpart documents (both where doc is source and where doc is target).
+    Uses ignore_permissions=True so server-side validation does not hit user company restrictions.
+    """
+    if not hasattr(doc, "company") or not doc.company:
+        return []
+    if not frappe.db.exists("DocType", "Inter Company Document Reference"):
+        return []
+
+    related_docs = []
+
+    # 1. Documents where current doc is the SOURCE
+    try:
+        fields = ["target_doctype", "target_name", "target_company"]
+        if frappe.db.has_column("Inter Company Document Reference", "is_remote"):
+            fields.extend(["is_remote", "remote_site_url"])
+
+        linked_docs = frappe.get_all(
+            "Inter Company Document Reference",
+            filters=[
+                ["source_doctype", "=", doc.doctype],
+                ["source_name", "=", doc.name],
+                ["source_company", "=", doc.company],
+            ],
+            fields=fields,
+            ignore_permissions=True,
+        )
+        for ld in linked_docs:
+            related_docs.append({
+                "doctype": ld.target_doctype,
+                "name": ld.target_name,
+                "company": ld.target_company,
+                "relationship": "target",
+                "is_remote": ld.get("is_remote"),
+                "remote_site_url": ld.get("remote_site_url"),
+            })
+    except Exception as e:
+        frappe.logger().error(f"Error finding linked documents (as source): {e!s}")
+
+    # 2. Documents where current doc is the TARGET
+    try:
+        reverse_links = frappe.get_all(
+            "Inter Company Document Reference",
+            filters=[
+                ["target_doctype", "=", doc.doctype],
+                ["target_name", "=", doc.name],
+                ["target_company", "=", doc.company],
+            ],
+            fields=["source_doctype", "source_name", "source_company"],
+            ignore_permissions=True,
+        )
+        for rl in reverse_links:
+            related_docs.append({
+                "doctype": rl.source_doctype,
+                "name": rl.source_name,
+                "company": rl.source_company,
+                "relationship": "source",
+                "is_remote": False,
+                "remote_site_url": None,
+            })
+    except Exception as e:
+        frappe.logger().error(f"Error finding reverse links (as target): {e!s}")
+
+    return related_docs
+
+
+def check_active_downstream_transactions(doctype, docname, company):
+    """
+    Checks if a document in any company has active downstream transactions (such as
+    submitted Payment Entries, Journal Entries, Delivery Notes, Purchase Receipts, or Invoices).
+    Returns a list of descriptive strings for any active blocking records found.
+    """
+    blocking_records = []
+
+    # 1. Active Payment Entries (Sales Invoice or Purchase Invoice)
+    if doctype in ["Sales Invoice", "Purchase Invoice"]:
+        try:
+            if frappe.db.exists("DocType", "Payment Entry Reference"):
+                pe_refs = frappe.get_all(
+                    "Payment Entry Reference",
+                    filters={
+                        "reference_doctype": doctype,
+                        "reference_name": docname,
+                        "docstatus": 1,
+                    },
+                    fields=["parent"],
+                    ignore_permissions=True,
+                )
+                for pe in pe_refs:
+                    if pe.parent and f"Payment Entry '{pe.parent}'" not in blocking_records:
+                        blocking_records.append(f"Payment Entry '{pe.parent}'")
+        except Exception as e:
+            frappe.logger().error(f"Error checking Payment Entry Reference for {doctype} {docname}: {e!s}")
+
+        # 2. Active Journal Entries (linked vouchers/payments)
+        try:
+            if frappe.db.exists("DocType", "Journal Entry Account"):
+                je_refs = frappe.get_all(
+                    "Journal Entry Account",
+                    filters={
+                        "reference_type": doctype,
+                        "reference_name": docname,
+                        "docstatus": 1,
+                    },
+                    fields=["parent"],
+                    ignore_permissions=True,
+                )
+                for je in je_refs:
+                    if je.parent and f"Journal Entry '{je.parent}'" not in blocking_records:
+                        blocking_records.append(f"Journal Entry '{je.parent}'")
+        except Exception as e:
+            frappe.logger().error(f"Error checking Journal Entry Account for {doctype} {docname}: {e!s}")
+
+    # 3. Downstream fulfillment for Sales Order
+    elif doctype == "Sales Order":
+        try:
+            if frappe.db.exists("DocType", "Delivery Note Item"):
+                dns = frappe.get_all(
+                    "Delivery Note Item",
+                    filters={"against_sales_order": docname, "docstatus": 1},
+                    fields=["parent"],
+                    ignore_permissions=True,
+                )
+                for dn in dns:
+                    if dn.parent and f"Delivery Note '{dn.parent}'" not in blocking_records:
+                        blocking_records.append(f"Delivery Note '{dn.parent}'")
+
+            if frappe.db.exists("DocType", "Sales Invoice Item"):
+                sis = frappe.get_all(
+                    "Sales Invoice Item",
+                    filters={"sales_order": docname, "docstatus": 1},
+                    fields=["parent"],
+                    ignore_permissions=True,
+                )
+                for si in sis:
+                    if si.parent and f"Sales Invoice '{si.parent}'" not in blocking_records:
+                        blocking_records.append(f"Sales Invoice '{si.parent}'")
+        except Exception as e:
+            frappe.logger().error(f"Error checking Sales Order downstream for {docname}: {e!s}")
+
+    # 4. Downstream fulfillment for Purchase Order
+    elif doctype == "Purchase Order":
+        try:
+            if frappe.db.exists("DocType", "Purchase Receipt Item"):
+                prs = frappe.get_all(
+                    "Purchase Receipt Item",
+                    filters={"purchase_order": docname, "docstatus": 1},
+                    fields=["parent"],
+                    ignore_permissions=True,
+                )
+                for pr in prs:
+                    if pr.parent and f"Purchase Receipt '{pr.parent}'" not in blocking_records:
+                        blocking_records.append(f"Purchase Receipt '{pr.parent}'")
+
+            if frappe.db.exists("DocType", "Purchase Invoice Item"):
+                pis = frappe.get_all(
+                    "Purchase Invoice Item",
+                    filters={"purchase_order": docname, "docstatus": 1},
+                    fields=["parent"],
+                    ignore_permissions=True,
+                )
+                for pi in pis:
+                    if pi.parent and f"Purchase Invoice '{pi.parent}'" not in blocking_records:
+                        blocking_records.append(f"Purchase Invoice '{pi.parent}'")
+        except Exception as e:
+            frappe.logger().error(f"Error checking Purchase Order downstream for {docname}: {e!s}")
+
+    # 5. Downstream invoice for Delivery Note
+    elif doctype == "Delivery Note":
+        try:
+            if frappe.db.exists("DocType", "Sales Invoice Item"):
+                sis = frappe.get_all(
+                    "Sales Invoice Item",
+                    filters={"delivery_note": docname, "docstatus": 1},
+                    fields=["parent"],
+                    ignore_permissions=True,
+                )
+                for si in sis:
+                    if si.parent and f"Sales Invoice '{si.parent}'" not in blocking_records:
+                        blocking_records.append(f"Sales Invoice '{si.parent}'")
+        except Exception as e:
+            frappe.logger().error(f"Error checking Delivery Note downstream for {docname}: {e!s}")
+
+    # 6. Downstream invoice for Purchase Receipt
+    elif doctype == "Purchase Receipt":
+        try:
+            if frappe.db.exists("DocType", "Purchase Invoice Item"):
+                pis = frappe.get_all(
+                    "Purchase Invoice Item",
+                    filters={"purchase_receipt": docname, "docstatus": 1},
+                    fields=["parent"],
+                    ignore_permissions=True,
+                )
+                for pi in pis:
+                    if pi.parent and f"Purchase Invoice '{pi.parent}'" not in blocking_records:
+                        blocking_records.append(f"Purchase Invoice '{pi.parent}'")
+        except Exception as e:
+            frappe.logger().error(f"Error checking Purchase Receipt downstream for {docname}: {e!s}")
+
+    return blocking_records
+
+
+def validate_intercompany_cancellation(doc, method=None):
+    """
+    Validates before cancellation that neither this document nor any linked
+    intercompany counterpart documents have active payments or downstream transactions.
+    If active transactions exist, cancellation is blocked with clear, actionable instructions.
+    """
+    if not hasattr(doc, "company") or not doc.company:
+        return
+
+    if doc.flags.get("intercompany_auto_cancel"):
+        return
+
+    # Check counterpart documents
+    counterparts = get_linked_counterpart_documents(doc)
+    for cp in counterparts:
+        if cp.get("is_remote"):
+            continue
+
+        c_doctype = cp["doctype"]
+        c_name = cp["name"]
+        c_company = cp.get("company") or "Linked Company"
+
+        if not frappe.db.exists(c_doctype, c_name):
+            continue
+
+        status = frappe.db.get_value(c_doctype, c_name, "docstatus")
+        if status != 1:
+            # If draft or already cancelled, no active payments can block
+            continue
+
+        blocking = check_active_downstream_transactions(c_doctype, c_name, c_company)
+        if blocking:
+            blocking_bullets = "".join([f"<li><b>{b}</b></li>" for b in blocking])
+            frappe.throw(
+                _(
+                    "<div style='font-size: 13px; line-height: 1.6;'>"
+                    "<h4><b>Inter-Company Cancellation Blocked</b></h4>"
+                    "Cannot cancel <b>{0} {1}</b> because the linked counterpart <b>{2} {3}</b> "
+                    "in company <b>{4}</b> has active downstream transaction(s):"
+                    "<ul style='margin: 8px 0 12px 20px;'>{5}</ul>"
+                    "<b>Required Action:</b><br>"
+                    "Please contact the accounting team in <b>{4}</b> (via phone or WhatsApp) to cancel "
+                    "or remove the above payment/downstream transactions first, then cancel <b>{3}</b>, "
+                    "after which this document can be cancelled."
+                    "</div>"
+                ).format(doc.doctype, doc.name, c_doctype, c_name, c_company, blocking_bullets),
+                title=_("Active Transactions Exist in Linked Company")
+            )
+
+
 def cancel_linked_documents(doc, method=None):
-    """Cancel corresponding documents in all linked companies - BIDIRECTIONAL"""
+    """Cancel corresponding documents in all linked companies - BIDIRECTIONAL with transaction integrity"""
     if not hasattr(doc, 'company') or not doc.company:
         return
 
@@ -311,82 +564,50 @@ def cancel_linked_documents(doc, method=None):
     if not frappe.db.exists("DocType", "Inter Company Document Reference"):
         return
 
-    all_related_docs = []
+    # Step 1: Pre-validate downstream payments and transactions
+    validate_intercompany_cancellation(doc)
 
-    # Documents where current doc is the SOURCE
-    try:
-        fields_to_fetch = ["target_doctype", "target_name", "target_company"]
-        if frappe.db.has_column("Inter Company Document Reference", "is_remote"):
-            fields_to_fetch.extend(["is_remote", "remote_site_url"])
+    all_related_docs = get_linked_counterpart_documents(doc)
 
-        linked_docs = frappe.get_all(
-            "Inter Company Document Reference",
-            filters=[
-                ["source_doctype", "=", doc.doctype],
-                ["source_name", "=", doc.name],
-                ["source_company", "=", doc.company]
-            ],
-            fields=fields_to_fetch
-        )
-        for ld in linked_docs:
-            if ld.get("is_remote") and ld.get("remote_site_url"):
-                try:
-                    from inter_company_transactions.sync import get_remote_site_for_company
-                    remote_site = get_remote_site_for_company(ld.target_company)
-                    if remote_site:
-                        import json
-                        import urllib.request
-                        endpoint = f"{remote_site['site_url']}/api/method/inter_company_transactions.sync.cancel_remote_transaction"
-                        c_payload = json.dumps({"source_doctype": doc.doctype, "source_name": doc.name}).encode("utf-8")
-                        c_headers = {
-                            "Content-Type": "application/json",
-                            "Authorization": f"token {remote_site['api_key']}:{remote_site['api_secret']}"
-                        }
-                        c_req = urllib.request.Request(endpoint, data=c_payload, headers=c_headers, method="POST")
-                        with urllib.request.urlopen(c_req, timeout=10):
-                            frappe.msgprint(_("Notified remote instance ({0}) to cancel mirrored transaction.").format(remote_site['site_url']))
-                except Exception as ex:
-                    frappe.logger().error(f"Failed to cancel remote document on {ld.get('remote_site_url')}: {ex!s}")
-            else:
-                all_related_docs.append({
-                    "doctype": ld.target_doctype,
-                    "name": ld.target_name,
-                    "company": ld.target_company,
-                    "relationship": "target"
-                })
-    except Exception as e:
-        frappe.logger().error(f"Error finding linked documents (as source): {e!s}")
+    # Step 2: Handle remote instances if enabled
+    for ld in all_related_docs:
+        if ld.get("is_remote") and ld.get("remote_site_url"):
+            try:
+                from inter_company_transactions.sync import get_remote_site_for_company
+                remote_site = get_remote_site_for_company(ld.get("company"))
+                if remote_site:
+                    import json
+                    import urllib.request
+                    endpoint = f"{remote_site['site_url']}/api/method/inter_company_transactions.sync.cancel_remote_transaction"
+                    c_payload = json.dumps({"source_doctype": doc.doctype, "source_name": doc.name}).encode("utf-8")
+                    c_headers = {
+                        "Content-Type": "application/json",
+                        "Authorization": f"token {remote_site['api_key']}:{remote_site['api_secret']}"
+                    }
+                    c_req = urllib.request.Request(endpoint, data=c_payload, headers=c_headers, method="POST")
+                    with urllib.request.urlopen(c_req, timeout=10):
+                        frappe.msgprint(_("Notified remote instance ({0}) to cancel mirrored transaction.").format(remote_site['site_url']))
+            except Exception as ex:
+                frappe.logger().error(f"Failed to cancel remote document on {ld.get('remote_site_url')}: {ex!s}")
 
-    # Documents where current doc is the TARGET
-    try:
-        reverse_links = frappe.get_all(
-            "Inter Company Document Reference",
-            filters=[
-                ["target_doctype", "=", doc.doctype],
-                ["target_name", "=", doc.name],
-                ["target_company", "=", doc.company]
-            ],
-            fields=["source_doctype", "source_name", "source_company"]
-        )
-        for rl in reverse_links:
-            all_related_docs.append({
-                "doctype": rl.source_doctype,
-                "name": rl.source_name,
-                "company": rl.source_company,
-                "relationship": "source"
-            })
-    except Exception as e:
-        frappe.logger().error(f"Error finding reverse links (as target): {e!s}")
+    # Step 3: Cancel local linked counterpart documents atomically
+    for related_doc in all_related_docs:
+        if related_doc.get("is_remote"):
+            continue
 
-    def cancel_doc(doctype, docname, company=None, relationship=None):
+        doctype = related_doc['doctype']
+        docname = related_doc['name']
+        company = related_doc.get('company')
+        relationship = related_doc.get('relationship')
+
+        if not frappe.db.exists(doctype, docname):
+            continue
+
+        target_doc = frappe.get_doc(doctype, docname)
+        if target_doc.docstatus != 1:
+            continue
+
         try:
-            if not frappe.db.exists(doctype, docname):
-                return False
-
-            target_doc = frappe.get_doc(doctype, docname)
-            if target_doc.docstatus != 1:
-                return False
-
             target_doc.flags.ignore_permissions = True
             target_doc.flags.ignore_mandatory = True
             target_doc.flags.ignore_account_permission = True
@@ -397,36 +618,19 @@ def cancel_linked_documents(doc, method=None):
             target_doc.flags.intercompany_auto_cancel = True
 
             target_doc.cancel()
-            frappe.db.commit()
 
-            frappe.msgprint(_("Cancelled {0} {1} ({2} document)").format(
-                target_doc.doctype, target_doc.name, relationship
+            frappe.msgprint(_("Cancelled {0} {1} in company {2} ({3} document)").format(
+                target_doc.doctype, target_doc.name, company or getattr(target_doc, 'company', ''), relationship
             ))
-            return True
         except Exception as e:
-            frappe.log_error(
-                f"Error cancelling document: {e!s}\n"
-                f"Document: {doctype} {docname}\n"
-                f"Company: {company}\n"
-                f"Relationship: {relationship}\n"
-                f"Traceback: {frappe.get_traceback()}",
-                "Inter Company Transaction Error"
-            )
-            return False
-
-    for related_doc in all_related_docs:
-        try:
-            cancel_doc(
-                related_doc['doctype'],
-                related_doc['name'],
-                related_doc['company'],
-                related_doc['relationship']
-            )
-        except Exception as e:
-            frappe.log_error(
-                f"Error cancelling {related_doc['relationship']} document: {e!s}\n"
-                f"Document: {related_doc['doctype']} {related_doc['name']}",
-                "Inter Company Transaction Error"
+            frappe.throw(
+                _(
+                    "<b>Inter-Company Cancellation Failed:</b><br>"
+                    "Failed to cancel linked {0} <b>{1}</b> in company <b>{2}</b>.<br>"
+                    "Error: {3}<br><br>"
+                    "The cancellation of <b>{4} {5}</b> has been aborted to preserve accounting ledger consistency."
+                ).format(doctype, docname, company or getattr(target_doc, 'company', ''), str(e), doc.doctype, doc.name),
+                title=_("Inter-Company Cancellation Aborted")
             )
 
 

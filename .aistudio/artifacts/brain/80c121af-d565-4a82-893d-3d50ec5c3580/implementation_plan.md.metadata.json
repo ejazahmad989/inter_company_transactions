@@ -1,6 +1,6 @@
 {
-  "summary": "Release commit and tag v1.0.0 are fully prepared with Author Ejaz Ahmed. Step-by-step instructions provided for pushing using a GitHub Personal Access Token and completing the Frappe Cloud Marketplace submission.",
-  "updatedAt": "2026-10-18T12:40:11.537220932Z",
-  "requestFeedback": true,
-  "userFacing": true
+  "summary":  "Updated implementation plan addressing user concerns: zero workflow overwrites, simple standard Draft creation, and permission-safe clear cancellation blocking.",
+  "updatedAt":  "2026-10-28T07:16:36.514451703Z",
+  "requestFeedback":  true,
+  "userFacing":  true
 }
