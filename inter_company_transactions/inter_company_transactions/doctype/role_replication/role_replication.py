@@ -2,6 +2,7 @@
 # For license information, please see license.txt
 
 import frappe
+from frappe import _
 from frappe.core.page.permission_manager.permission_manager import get_permissions
 from frappe.model.document import Document
 
