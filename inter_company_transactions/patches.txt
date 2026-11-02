@@ -6,3 +6,5 @@
 # Patches added in this section will be executed after doctypes are migrated
 inter_company_transactions.patches.v1_1_update_custom_fields
 inter_company_transactions.patches.v1_2_sister_company_title
+inter_company_transactions.patches.v1_3_journal_entry_account_columns
+inter_company_transactions.patches.v1_4_fix_non_intercompany_submit_and_clean_targets

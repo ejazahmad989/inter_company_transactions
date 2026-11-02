@@ -8,6 +8,10 @@ set -e
 
 echo "=== Preparing ICT Release for https://github.com/ejazahmad989/ICT ==="
 
+# Configure safe directory
+git config --global --add safe.directory /app/applet 2>/dev/null || true
+git config --global --add safe.directory "$(pwd)" 2>/dev/null || true
+
 # Check if git is initialized
 if [ ! -d ".git" ]; then
     echo "Initializing clean git repository..."

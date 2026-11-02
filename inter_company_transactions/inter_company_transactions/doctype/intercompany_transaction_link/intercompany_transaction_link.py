@@ -193,6 +193,10 @@ def create_linked_documents(doc, method=None):
     if not hasattr(doc, "doctype") or not doc.get("company"):
         return
 
+    # Never process standard non-intercompany documents
+    if not cint(doc.get("is_intercompany")):
+        return
+
     # Never process a document that was itself generated as an intercompany counterpart
     if doc.get("intercompany_linked_doc_doctype") or doc.get("intercompany_linked_doc_name"):
         return
@@ -512,6 +516,10 @@ def validate_intercompany_cancellation(doc, method=None):
     if not hasattr(doc, "company") or not doc.company:
         return
 
+    # Non-intercompany documents have no linked counterparts to validate
+    if not cint(doc.get("is_intercompany")) and not doc.get("intercompany_linked_doc_name"):
+        return
+
     if doc.flags.get("intercompany_auto_cancel"):
         return
 
@@ -556,6 +564,10 @@ def validate_intercompany_cancellation(doc, method=None):
 def cancel_linked_documents(doc, method=None):
     """Cancel corresponding documents in all linked companies - BIDIRECTIONAL with transaction integrity"""
     if not hasattr(doc, 'company') or not doc.company:
+        return
+
+    # Non-intercompany documents have no linked counterparts to cancel
+    if not cint(doc.get("is_intercompany")) and not doc.get("intercompany_linked_doc_name"):
         return
 
     if doc.flags.get("intercompany_auto_cancel"):
@@ -643,6 +655,10 @@ def find_applicable_mappings(doc):
     3. Exactly ONE mapping per (target_company, target_doctype) pair to prevent duplicate documents.
     """
     if not hasattr(doc, "company") or not doc.company:
+        return []
+
+    # Standard non-intercompany documents have NO applicable intercompany mappings
+    if not cint(doc.get("is_intercompany")):
         return []
 
     # If this document is already a linked counterpart created by ICT, do NOT trigger counter creations
@@ -2445,11 +2461,15 @@ def auto_detect_intercompany_party(doc, method=None):
         doc.is_intercompany = 1
         if not doc.get("intercompany_target_company") or doc.get("intercompany_target_company") == company:
             doc.intercompany_target_company = target_company
-    elif doc.get("intercompany_target_company") and doc.get("intercompany_target_company") != company:
+    elif doc.get("intercompany_target_company") and doc.get("intercompany_target_company") != company and cint(doc.get("is_intercompany")):
         doc.is_intercompany = 1
-    elif doc.get("intercompany_target_company") == company:
-        doc.intercompany_target_company = ""
+    else:
         doc.is_intercompany = 0
+        doc.intercompany_target_company = ""
+        if doc.doctype == "Journal Entry":
+            for row in doc.get("accounts") or []:
+                if getattr(row, "intercompany_target_company", None) == company:
+                    row.intercompany_target_company = ""
 
 
 def backfill_sister_company_names():

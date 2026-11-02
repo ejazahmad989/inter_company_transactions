@@ -473,7 +473,7 @@ def create_custom_fields():
                         "mandatory_depends_on": "is_intercompany",
                         "in_list_view": 1,
                         "in_standard_filter": 1,
-                        "fetch_if_empty": 1
+                        "fetch_if_empty": 0
                     },
                     {
                         "fieldname": "intercompany_linked_doc_doctype",
@@ -611,6 +611,7 @@ def create_custom_fields():
                             "mandatory_depends_on": field.get("mandatory_depends_on", ""),
                             "read_only_depends_on": field.get("read_only_depends_on", ""),
                             "in_list_view": field.get("in_list_view", 0),
+                            "columns": field.get("columns", 0),
                             "in_standard_filter": field.get("in_standard_filter", 0),
                             "fetch_if_empty": field.get("fetch_if_empty", 0)
                         })
@@ -618,8 +619,12 @@ def create_custom_fields():
                         custom_field.insert()
                         print(f"Created Custom Field: {doctype} - {field['fieldname']}")
                     else:
-                        # Custom field already exists; do not overwrite user customizations or trigger migrate conflicts
-                        pass
+                        # Custom field already exists; sync columns if explicitly specified (e.g. Journal Entry Account columns=1)
+                        if "columns" in field:
+                            curr_cols = frappe.db.get_value("Custom Field", existing_cf, "columns")
+                            if curr_cols != field["columns"]:
+                                frappe.db.set_value("Custom Field", existing_cf, "columns", field["columns"], update_modified=False)
+                                print(f"Synced Custom Field columns: {doctype} - {field['fieldname']} -> {field['columns']}")
 
                 except Exception as e:
                     print(f"Error creating custom field {field['fieldname']} for {doctype}: {e!s}")
