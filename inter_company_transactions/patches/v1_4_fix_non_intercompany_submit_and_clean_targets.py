@@ -55,6 +55,33 @@ def execute():
 	except Exception as e:
 		frappe.logger().warning(f"[ICT Patch v1.4] Warning cleaning up Journal Entry Account: {e}")
 
+	# 3. Clean up any erroneously generated draft counterpart documents from non-intercompany transactions
+	try:
+		if frappe.db.table_exists("Inter Company Document Reference"):
+			refs = frappe.get_all(
+				"Inter Company Document Reference",
+				fields=["name", "source_doctype", "source_name", "target_doctype", "target_name"]
+			)
+			for ref in refs:
+				if ref.source_doctype and ref.source_name and frappe.db.exists(ref.source_doctype, ref.source_name):
+					src_is_ic = frappe.db.get_value(ref.source_doctype, ref.source_name, "is_intercompany")
+					if not src_is_ic:
+						# Source was not an intercompany transaction! Delete draft counterpart if still docstatus=0
+						if ref.target_doctype and ref.target_name and frappe.db.exists(ref.target_doctype, ref.target_name):
+							target_status = frappe.db.get_value(ref.target_doctype, ref.target_name, "docstatus")
+							if target_status == 0:
+								try:
+									frappe.delete_doc(ref.target_doctype, ref.target_name, force=True, ignore_permissions=True)
+								except Exception:
+									pass
+						try:
+							frappe.delete_doc("Inter Company Document Reference", ref.name, force=True, ignore_permissions=True)
+						except Exception:
+							pass
+			frappe.db.commit()
+	except Exception as e:
+		frappe.logger().warning(f"[ICT Patch v1.4] Warning cleaning up draft document references: {e}")
+
 	frappe.db.commit()
 	try:
 		frappe.clear_cache()

@@ -194,7 +194,11 @@ def create_linked_documents(doc, method=None):
         return
 
     # Never process standard non-intercompany documents
-    if not cint(doc.get("is_intercompany")):
+    is_intercompany = cint(doc.get("is_intercompany"))
+    if not is_intercompany and hasattr(doc, "name") and doc.name and hasattr(frappe, "db") and frappe.db and frappe.db.has_column(doc.doctype, "is_intercompany"):
+        is_intercompany = cint(frappe.db.get_value(doc.doctype, doc.name, "is_intercompany"))
+
+    if not is_intercompany:
         return
 
     # Never process a document that was itself generated as an intercompany counterpart
@@ -658,7 +662,11 @@ def find_applicable_mappings(doc):
         return []
 
     # Standard non-intercompany documents have NO applicable intercompany mappings
-    if not cint(doc.get("is_intercompany")):
+    is_intercompany = cint(doc.get("is_intercompany"))
+    if not is_intercompany and hasattr(doc, "name") and doc.name and hasattr(frappe, "db") and frappe.db and frappe.db.has_column(doc.doctype, "is_intercompany"):
+        is_intercompany = cint(frappe.db.get_value(doc.doctype, doc.name, "is_intercompany"))
+
+    if not is_intercompany:
         return []
 
     # If this document is already a linked counterpart created by ICT, do NOT trigger counter creations
@@ -670,6 +678,12 @@ def find_applicable_mappings(doc):
 
     source_company = doc.company
     target_company_hint = (doc.get("intercompany_target_company") or "").strip()
+    if not target_company_hint and doc.doctype == "Journal Entry":
+        for row in (doc.get("accounts") or []):
+            r_target = (row.get("intercompany_target_company") or "").strip()
+            if r_target and r_target != source_company:
+                target_company_hint = r_target
+                break
 
     links = frappe.get_all(
         "Intercompany Transaction Link",
@@ -725,9 +739,9 @@ def find_applicable_mappings(doc):
                                 candidate_linked_companies = [matched_lc]
                                 break
 
-            # If still no specific candidate and NO target_company_hint was specified, take linked companies
-            if not candidate_linked_companies and not target_company_hint:
-                candidate_linked_companies = [lc for lc in link.linked_companies if lc.company != source_company]
+            # CRITICAL: If no specific candidate sister company matched, do NOT broadcast to all companies!
+            if not candidate_linked_companies:
+                continue
 
             for linked_company in candidate_linked_companies:
                 target_comp = linked_company.company
@@ -766,29 +780,52 @@ def find_applicable_mappings(doc):
                 continue
 
             linked_company = next((lc for lc in link.linked_companies if lc.company == source_company), None)
-            if linked_company:
-                # If target_company_hint was not set, verify party matches this link
-                if not target_company_hint:
-                    if hasattr(doc, "customer") and doc.customer and linked_company.other_company_customer:
-                        if doc.customer != linked_company.other_company_customer:
-                            continue
-                    elif hasattr(doc, "supplier") and doc.supplier and linked_company.other_company_supplier:
-                        if doc.supplier != linked_company.other_company_supplier:
-                            continue
+            if not linked_company:
+                continue
 
-                for trans_type in (link.transaction_types or []):
-                    target_dt = resolve_target_doctype(doc.doctype, trans_type, direction="other_to_main")
-                    if target_dt:
-                        pair_key = (target_comp, target_dt)
-                        if pair_key in seen_pairs:
-                            continue
-                        seen_pairs.add(pair_key)
+            # If target_company_hint was not set, verify party matches this link
+            if not target_company_hint:
+                matched_party = False
+                if hasattr(doc, "customer") and doc.customer and linked_company.other_company_customer:
+                    if doc.customer == linked_company.other_company_customer:
+                        matched_party = True
+                elif hasattr(doc, "supplier") and doc.supplier and linked_company.other_company_supplier:
+                    if doc.supplier == linked_company.other_company_supplier:
+                        matched_party = True
+                elif doc.doctype == "Payment Entry" and hasattr(doc, "party") and doc.party:
+                    party_type = (doc.get("party_type") or "").lower()
+                    if party_type == "customer" and linked_company.other_company_customer == doc.party:
+                        matched_party = True
+                    elif party_type == "supplier" and linked_company.other_company_supplier == doc.party:
+                        matched_party = True
+                elif doc.doctype == "Journal Entry":
+                    for row in (doc.get("accounts") or []):
+                        row_p = row.get("party")
+                        row_pt = (row.get("party_type") or "").lower()
+                        if row_p:
+                            if row_pt == "customer" and linked_company.other_company_customer == row_p:
+                                matched_party = True
+                                break
+                            elif row_pt == "supplier" and linked_company.other_company_supplier == row_p:
+                                matched_party = True
+                                break
 
-                        mappings.append({
-                            "mapping": link,
-                            "transaction_type": trans_type,
-                            "company": target_comp,
-                            "linked_company": linked_company,
+                if not matched_party:
+                    continue
+
+            for trans_type in (link.transaction_types or []):
+                target_dt = resolve_target_doctype(doc.doctype, trans_type, direction="other_to_main")
+                if target_dt:
+                    pair_key = (target_comp, target_dt)
+                    if pair_key in seen_pairs:
+                        continue
+                    seen_pairs.add(pair_key)
+
+                    mappings.append({
+                        "mapping": link,
+                        "transaction_type": trans_type,
+                        "company": target_comp,
+                        "linked_company": linked_company,
                             "direction": "other_to_main",
                             "target_doctype": target_dt
                         })
@@ -2468,8 +2505,7 @@ def auto_detect_intercompany_party(doc, method=None):
         doc.intercompany_target_company = ""
         if doc.doctype == "Journal Entry":
             for row in doc.get("accounts") or []:
-                if getattr(row, "intercompany_target_company", None) == company:
-                    row.intercompany_target_company = ""
+                row.intercompany_target_company = ""
 
 
 def backfill_sister_company_names():
