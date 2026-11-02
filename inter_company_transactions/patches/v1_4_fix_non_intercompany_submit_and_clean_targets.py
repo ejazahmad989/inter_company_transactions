@@ -11,17 +11,31 @@ def execute():
 	if not (hasattr(frappe, "db") and frappe.db):
 		return
 
-	# 1. Reset fetch_if_empty = 0 on all intercompany_target_company Custom Fields
+	# 1. Reset fetch_if_empty = 0 and default = 0 / NULL on all ICT Custom Fields
 	try:
-		if frappe.db.table_exists("Custom Field") and frappe.db.has_column("Custom Field", "fetch_if_empty"):
-			frappe.db.sql("""
-				UPDATE `tabCustom Field`
-				SET `fetch_if_empty` = 0
-				WHERE `fieldname` = 'intercompany_target_company'
-			""")
+		if frappe.db.table_exists("Custom Field"):
+			if frappe.db.has_column("Custom Field", "fetch_if_empty"):
+				frappe.db.sql("""
+					UPDATE `tabCustom Field`
+					SET `fetch_if_empty` = 0
+					WHERE `fieldname` = 'intercompany_target_company'
+				""")
+			if frappe.db.has_column("Custom Field", "default"):
+				frappe.db.sql("""
+					UPDATE `tabCustom Field`
+					SET `default` = '0'
+					WHERE `fieldname` = 'is_intercompany'
+					  AND (`default` IS NULL OR `default` = '' OR `default` = '1')
+				""")
+				frappe.db.sql("""
+					UPDATE `tabCustom Field`
+					SET `default` = NULL
+					WHERE `fieldname` = 'intercompany_target_company'
+					  AND `default` IS NOT NULL
+				""")
 			frappe.db.commit()
 	except Exception as e:
-		frappe.logger().warning(f"[ICT Patch v1.4] Warning updating fetch_if_empty on Custom Field: {e}")
+		frappe.logger().warning(f"[ICT Patch v1.4] Warning updating Custom Field defaults: {e}")
 
 	# 2. Clean up draft transactions where target company erroneously matches own company
 	doctypes = [

@@ -619,12 +619,26 @@ def create_custom_fields():
                         custom_field.insert()
                         print(f"Created Custom Field: {doctype} - {field['fieldname']}")
                     else:
-                        # Custom field already exists; sync columns if explicitly specified (e.g. Journal Entry Account columns=1)
-                        if "columns" in field:
-                            curr_cols = frappe.db.get_value("Custom Field", existing_cf, "columns")
-                            if curr_cols != field["columns"]:
-                                frappe.db.set_value("Custom Field", existing_cf, "columns", field["columns"], update_modified=False)
-                                print(f"Synced Custom Field columns: {doctype} - {field['fieldname']} -> {field['columns']}")
+                        # Custom field already exists; sync properties to ensure live DB is never stale
+                        sync_props = [
+                            "label", "fieldtype", "options", "default", "description",
+                            "read_only", "hidden", "depends_on", "mandatory_depends_on",
+                            "read_only_depends_on", "in_list_view", "columns",
+                            "in_standard_filter", "fetch_if_empty"
+                        ]
+                        cf_doc = frappe.get_doc("Custom Field", existing_cf)
+                        updated = False
+                        for prop in sync_props:
+                            if prop in field:
+                                target_val = field[prop]
+                                current_val = getattr(cf_doc, prop, None)
+                                if str(target_val or "") != str(current_val or ""):
+                                    setattr(cf_doc, prop, target_val)
+                                    updated = True
+                        if updated:
+                            cf_doc.flags.ignore_permissions = True
+                            cf_doc.save(ignore_permissions=True)
+                            print(f"Synced Custom Field: {doctype} - {field['fieldname']}")
 
                 except Exception as e:
                     print(f"Error creating custom field {field['fieldname']} for {doctype}: {e!s}")

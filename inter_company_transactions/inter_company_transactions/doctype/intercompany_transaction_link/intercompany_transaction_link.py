@@ -2229,6 +2229,26 @@ def fix_legacy_custom_fields(force=False):
                             `{col}` LIKE '%0and(%'
                         )
                     """)
+
+            if frappe.db.has_column("Custom Field", "default"):
+                frappe.db.sql("""
+                    UPDATE `tabCustom Field`
+                    SET `default` = '0'
+                    WHERE `fieldname` = 'is_intercompany'
+                      AND (`default` IS NULL OR `default` = '' OR `default` = '1')
+                """)
+                frappe.db.sql("""
+                    UPDATE `tabCustom Field`
+                    SET `default` = NULL
+                    WHERE `fieldname` = 'intercompany_target_company'
+                      AND `default` IS NOT NULL
+                """)
+            if frappe.db.has_column("Custom Field", "fetch_if_empty"):
+                frappe.db.sql("""
+                    UPDATE `tabCustom Field`
+                    SET `fetch_if_empty` = 0
+                    WHERE `fieldname` = 'intercompany_target_company'
+                """)
         frappe.db.commit()
     except Exception:
         pass
@@ -2462,6 +2482,21 @@ def auto_detect_intercompany_party(doc, method=None):
     if doc.get("intercompany_linked_doc_name"):
         return
 
+    # Respect the user's explicit choice on the "Is Intercompany" checkbox.
+    # If the user has NOT checked it (is_intercompany is 0 or falsy), never
+    # auto-enable intercompany based on party detection alone — this prevents
+    # unintended mirror drafts in sister companies for regular business transactions.
+    if not cint(doc.get("is_intercompany")):
+        # User has explicitly left Is Intercompany unchecked.
+        # Clear any stale target-company values to be 100% safe
+        if doc.get("intercompany_target_company"):
+            doc.intercompany_target_company = ""
+        if doc.doctype == "Journal Entry":
+            for row in doc.get("accounts") or []:
+                if getattr(row, "intercompany_target_company", None):
+                    row.intercompany_target_company = ""
+        return
+
     company = doc.company
     party_map = get_intercompany_party_map(company)
     target_company = None
@@ -2495,7 +2530,6 @@ def auto_detect_intercompany_party(doc, method=None):
                         target_company = row_target
 
     if target_company and target_company != company:
-        doc.is_intercompany = 1
         if not doc.get("intercompany_target_company") or doc.get("intercompany_target_company") == company:
             doc.intercompany_target_company = target_company
     elif doc.get("intercompany_target_company") and doc.get("intercompany_target_company") != company and cint(doc.get("is_intercompany")):

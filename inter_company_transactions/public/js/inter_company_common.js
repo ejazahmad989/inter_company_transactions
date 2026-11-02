@@ -338,6 +338,7 @@
 			},
 			is_intercompany: function(frm) {
 				if (cint(frm.doc.is_intercompany)) {
+					frm._user_unchecked_intercompany = false;
 					frm.set_df_property('intercompany_target_company', 'read_only', 0);
 					frm.set_df_property('intercompany_target_company', 'reqd', 1);
 					if (frm.doc.intercompany_target_company === frm.doc.company) {
@@ -349,10 +350,18 @@
 						indicator: 'blue'
 					});
 				} else {
+					frm._user_unchecked_intercompany = true;
 					frm.set_df_property('intercompany_target_company', 'read_only', 1);
 					frm.set_df_property('intercompany_target_company', 'reqd', 0);
 					if (frm.doc.intercompany_target_company) {
 						frm.set_value('intercompany_target_company', '');
+					}
+					if (frm.doc.doctype === 'Journal Entry' && frm.doc.accounts) {
+						(frm.doc.accounts || []).forEach(row => {
+							if (row.intercompany_target_company) {
+								frappe.model.set_value(row.doctype, row.name, 'intercompany_target_company', '');
+							}
+						});
 					}
 					sync_intercompany_state(frm);
 					frappe.show_alert({
@@ -396,6 +405,13 @@
 				} else {
 					if (frm.doc.intercompany_target_company) {
 						frm.doc.intercompany_target_company = '';
+					}
+					if (frm.doc.doctype === 'Journal Entry' && frm.doc.accounts) {
+						(frm.doc.accounts || []).forEach(row => {
+							if (row.intercompany_target_company) {
+								row.intercompany_target_company = '';
+							}
+						});
 					}
 				}
 			}
@@ -478,6 +494,7 @@
 	function handle_party_selection(frm, party_type, party_name) {
 		if (!frm || !frm.fields_dict || !frm.fields_dict.is_intercompany) return;
 		if (frm.doc.docstatus > 0) return; // Only apply to drafts
+		if (frm._user_unchecked_intercompany) return; // User explicitly chose standard transaction mode
 
 		if (!party_name) {
 			// Party cleared: if was intercompany, reset to internal mode
@@ -526,6 +543,14 @@
 			return;
 		}
 
+		// If user explicitly left Is Intercompany unchecked, do not auto-force intercompany
+		if (frm._user_unchecked_intercompany || !cint(frm.doc.is_intercompany)) {
+			if (row.intercompany_target_company) {
+				frappe.model.set_value(cdt, cdn, 'intercompany_target_company', '');
+			}
+			return;
+		}
+
 		ict.get_target_company_for_party(party_name, party_type, frm.doc.company, function(target_company) {
 			if (target_company && target_company !== frm.doc.company) {
 				frappe.model.set_value(cdt, cdn, 'intercompany_target_company', target_company);
@@ -549,6 +574,7 @@
 
 	function check_and_sync_journal_entry_accounts(frm) {
 		if (!frm || !frm.doc || !frm.doc.accounts) return;
+		if (frm._user_unchecked_intercompany || !cint(frm.doc.is_intercompany)) return;
 
 		let map = (frappe.boot && frappe.boot.intercompany_party_map) || window._ict_party_map;
 		let found_target_company = null;
