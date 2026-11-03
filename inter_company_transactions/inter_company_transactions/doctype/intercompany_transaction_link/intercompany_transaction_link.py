@@ -2289,24 +2289,23 @@ def download_user_guide_pdf():
 
 
 @frappe.whitelist()
+def get_party_target_company(party_name, party_type=None, current_company=None):
+    """
+    Whitelisted endpoint for client-side Desk JavaScript to dynamically resolve
+    whether a selected party (Customer/Supplier) belongs to a sister company.
+    """
+    target = resolve_party_target_company(party_name, party_type, current_company)
+    return {"target_company": target}
+
+
+@frappe.whitelist()
 def get_intercompany_party_map(company=None):
     """
-    Returns dynamic mapping of Customer and Supplier parties to their linked target companies.
-    Structure:
-    {
-        "party_to_company": { party_name: target_company },
-        "by_company": {
-            company_name: {
-                "customer": { customer_name: target_company },
-                "supplier": { supplier_name: target_company },
-                "all": { party_name: target_company }
-            }
-        },
-        "universal": {
-            "customer": { customer_name: target_company },
-            "supplier": { supplier_name: target_company }
-        }
-    }
+    Returns comprehensive mapping of Customer and Supplier parties to their linked target companies.
+    Sources:
+    1. Intercompany Transaction Link (main_company_customer, main_company_supplier, etc.)
+    2. Customer records with represents_company set
+    3. Supplier records with represents_company set
     """
     party_map = {
         "party_to_company": {},
@@ -2321,77 +2320,114 @@ def get_intercompany_party_map(company=None):
         return party_map
 
     try:
-        if not frappe.db.table_exists("Intercompany Transaction Link"):
-            return party_map
+        if frappe.db.table_exists("Intercompany Transaction Link"):
+            link_filters = {"enabled": ["!=", 0]} if frappe.db.has_column("Intercompany Transaction Link", "enabled") else {}
+            links = frappe.get_all(
+                "Intercompany Transaction Link",
+                filters=link_filters,
+                fields=["name", "main_company"]
+            )
 
-        links = frappe.get_all(
-            "Intercompany Transaction Link",
-            filters={"enabled": 1},
-            fields=["name", "main_company"]
-        )
+            for link in links:
+                main_co = link.main_company
+                if not main_co:
+                    continue
 
-        for link in links:
-            main_co = link.main_company
-            if not main_co:
-                continue
+                if main_co not in party_map["by_company"]:
+                    party_map["by_company"][main_co] = {
+                        "customer": {},
+                        "supplier": {},
+                        "all": {}
+                    }
 
-            if main_co not in party_map["by_company"]:
-                party_map["by_company"][main_co] = {
-                    "customer": {},
-                    "supplier": {},
-                    "all": {}
-                }
+                if frappe.db.table_exists("Intercompany Linked Company"):
+                    linked_rows = frappe.get_all(
+                        "Intercompany Linked Company",
+                        filters={"parent": link.name},
+                        fields=[
+                            "company",
+                            "main_company_customer",
+                            "main_company_supplier",
+                            "other_company_customer",
+                            "other_company_supplier"
+                        ]
+                    )
 
-            if frappe.db.table_exists("Intercompany Linked Company"):
-                linked_rows = frappe.get_all(
-                    "Intercompany Linked Company",
-                    filters={"parent": link.name},
-                    fields=[
-                        "company",
-                        "main_company_customer",
-                        "main_company_supplier",
-                        "other_company_customer",
-                        "other_company_supplier"
-                    ]
-                )
+                    for row in linked_rows:
+                        other_co = row.company
+                        if not other_co:
+                            continue
 
-                for row in linked_rows:
-                    other_co = row.company
-                    if not other_co:
-                        continue
+                        if other_co not in party_map["by_company"]:
+                            party_map["by_company"][other_co] = {
+                                "customer": {},
+                                "supplier": {},
+                                "all": {}
+                            }
 
-                    if other_co not in party_map["by_company"]:
-                        party_map["by_company"][other_co] = {
-                            "customer": {},
-                            "supplier": {},
-                            "all": {}
-                        }
+                        # Main company perspective (user in main company selects party)
+                        if row.main_company_customer:
+                            party_map["by_company"][main_co]["customer"][row.main_company_customer] = other_co
+                            party_map["by_company"][main_co]["all"][row.main_company_customer] = other_co
+                            party_map["universal"]["customer"][row.main_company_customer] = other_co
+                            party_map["party_to_company"][row.main_company_customer] = other_co
 
-                    # Main company perspective (user in main company selects party)
-                    if row.main_company_customer:
-                        party_map["by_company"][main_co]["customer"][row.main_company_customer] = other_co
-                        party_map["by_company"][main_co]["all"][row.main_company_customer] = other_co
-                        party_map["universal"]["customer"][row.main_company_customer] = other_co
-                        party_map["party_to_company"][row.main_company_customer] = other_co
+                        if row.main_company_supplier:
+                            party_map["by_company"][main_co]["supplier"][row.main_company_supplier] = other_co
+                            party_map["by_company"][main_co]["all"][row.main_company_supplier] = other_co
+                            party_map["universal"]["supplier"][row.main_company_supplier] = other_co
+                            party_map["party_to_company"][row.main_company_supplier] = other_co
 
-                    if row.main_company_supplier:
-                        party_map["by_company"][main_co]["supplier"][row.main_company_supplier] = other_co
-                        party_map["by_company"][main_co]["all"][row.main_company_supplier] = other_co
-                        party_map["universal"]["supplier"][row.main_company_supplier] = other_co
-                        party_map["party_to_company"][row.main_company_supplier] = other_co
+                        # Other company perspective (user in other company selects party)
+                        if row.other_company_customer:
+                            party_map["by_company"][other_co]["customer"][row.other_company_customer] = main_co
+                            party_map["by_company"][other_co]["all"][row.other_company_customer] = main_co
+                            party_map["universal"]["customer"][row.other_company_customer] = main_co
+                            party_map["party_to_company"][row.other_company_customer] = main_co
 
-                    # Other company perspective (user in other company selects party)
-                    if row.other_company_customer:
-                        party_map["by_company"][other_co]["customer"][row.other_company_customer] = main_co
-                        party_map["by_company"][other_co]["all"][row.other_company_customer] = main_co
-                        party_map["universal"]["customer"][row.other_company_customer] = main_co
-                        party_map["party_to_company"][row.other_company_customer] = main_co
+                        if row.other_company_supplier:
+                            party_map["by_company"][other_co]["supplier"][row.other_company_supplier] = main_co
+                            party_map["by_company"][other_co]["all"][row.other_company_supplier] = main_co
+                            party_map["universal"]["supplier"][row.other_company_supplier] = main_co
+                            party_map["party_to_company"][row.other_company_supplier] = main_co
 
-                    if row.other_company_supplier:
-                        party_map["by_company"][other_co]["supplier"][row.other_company_supplier] = main_co
-                        party_map["by_company"][other_co]["all"][row.other_company_supplier] = main_co
-                        party_map["universal"]["supplier"][row.other_company_supplier] = main_co
-                        party_map["party_to_company"][row.other_company_supplier] = main_co
+        # Also load standard ERPNext internal Customers (represents_company)
+        if frappe.db.table_exists("Customer") and frappe.db.has_column("Customer", "represents_company"):
+            cust_rows = frappe.get_all(
+                "Customer",
+                filters={"represents_company": ["is", "set"]},
+                fields=["name", "customer_name", "represents_company"]
+            )
+            for c in cust_rows:
+                rep_co = c.get("represents_company")
+                if rep_co:
+                    for key in [c.name, c.customer_name]:
+                        if key:
+                            party_map["party_to_company"][key] = rep_co
+                            party_map["universal"]["customer"][key] = rep_co
+                            for co in party_map["by_company"]:
+                                if co != rep_co:
+                                    party_map["by_company"][co]["customer"][key] = rep_co
+                                    party_map["by_company"][co]["all"][key] = rep_co
+
+        # Also load standard ERPNext internal Suppliers (represents_company)
+        if frappe.db.table_exists("Supplier") and frappe.db.has_column("Supplier", "represents_company"):
+            supp_rows = frappe.get_all(
+                "Supplier",
+                filters={"represents_company": ["is", "set"]},
+                fields=["name", "supplier_name", "represents_company"]
+            )
+            for s in supp_rows:
+                rep_co = s.get("represents_company")
+                if rep_co:
+                    for key in [s.name, s.supplier_name]:
+                        if key:
+                            party_map["party_to_company"][key] = rep_co
+                            party_map["universal"]["supplier"][key] = rep_co
+                            for co in party_map["by_company"]:
+                                if co != rep_co:
+                                    party_map["by_company"][co]["supplier"][key] = rep_co
+                                    party_map["by_company"][co]["all"][key] = rep_co
 
     except Exception as e:
         frappe.log_error(f"Error fetching intercompany party map: {e!s}", "Intercompany Party Map")
@@ -2400,32 +2436,103 @@ def get_intercompany_party_map(company=None):
 
 
 def resolve_party_target_company(party_name, party_type=None, current_company=None, party_map=None):
-    """Helper to determine target sister company for a given party"""
+    """
+    Robust helper to determine target sister company for a given party.
+    Checks:
+    1. Active party_map (company-specific -> universal -> global party_to_company)
+    2. Direct database queries on Customer and Supplier represents_company
+    3. Direct database queries on Intercompany Linked Company records
+    Guarantees that target company is NEVER the current source company.
+    """
     if not party_name:
         return None
+
+    party_name_clean = str(party_name).strip()
+    party_type_clean = (party_type or "").lower().strip()
+
     if not party_map:
         party_map = get_intercompany_party_map(current_company)
 
-    party_type_clean = (party_type or "").lower()
-
-    # 1. Check company specific
+    # 1. Check company specific mapping
     if current_company and current_company in party_map.get("by_company", {}):
         comp_dict = party_map["by_company"][current_company]
-        if party_type_clean and party_type_clean in comp_dict and party_name in comp_dict[party_type_clean]:
-            return comp_dict[party_type_clean][party_name]
-        if party_name in comp_dict.get("all", {}):
-            return comp_dict["all"][party_name]
+        if party_type_clean and party_type_clean in comp_dict and party_name_clean in comp_dict[party_type_clean]:
+            tgt = comp_dict[party_type_clean][party_name_clean]
+            if tgt and tgt != current_company:
+                return tgt
+        if party_name_clean in comp_dict.get("all", {}):
+            tgt = comp_dict["all"][party_name_clean]
+            if tgt and tgt != current_company:
+                return tgt
 
     # 2. Check universal by party_type
     if party_type_clean and party_type_clean in party_map.get("universal", {}):
-        tgt = party_map["universal"][party_type_clean].get(party_name)
+        tgt = party_map["universal"][party_type_clean].get(party_name_clean)
         if tgt and tgt != current_company:
             return tgt
 
-    # 3. Check party_to_company
-    tgt = party_map.get("party_to_company", {}).get(party_name)
+    # 3. Check global party_to_company
+    tgt = party_map.get("party_to_company", {}).get(party_name_clean)
     if tgt and tgt != current_company:
         return tgt
+
+    # 4. Direct Database Fallback: Customer represents_company
+    try:
+        if (not party_type_clean or party_type_clean == "customer") and frappe.db.table_exists("Customer"):
+            rep_co = frappe.db.get_value("Customer", party_name_clean, "represents_company")
+            if not rep_co and frappe.db.has_column("Customer", "customer_name"):
+                rep_co = frappe.db.get_value("Customer", {"customer_name": party_name_clean}, "represents_company")
+            if rep_co and rep_co != current_company:
+                return rep_co
+    except Exception:
+        pass
+
+    # 5. Direct Database Fallback: Supplier represents_company
+    try:
+        if (not party_type_clean or party_type_clean == "supplier") and frappe.db.table_exists("Supplier"):
+            rep_co = frappe.db.get_value("Supplier", party_name_clean, "represents_company")
+            if not rep_co and frappe.db.has_column("Supplier", "supplier_name"):
+                rep_co = frappe.db.get_value("Supplier", {"supplier_name": party_name_clean}, "represents_company")
+            if rep_co and rep_co != current_company:
+                return rep_co
+    except Exception:
+        pass
+
+    # 6. Direct Database Fallback: Intercompany Linked Company table
+    try:
+        if frappe.db.table_exists("Intercompany Linked Company"):
+            rows = frappe.db.sql("""
+                SELECT lc.company, lc.parent, ilt.main_company,
+                       lc.main_company_customer, lc.main_company_supplier,
+                       lc.other_company_customer, lc.other_company_supplier
+                FROM `tabIntercompany Linked Company` lc
+                JOIN `tabIntercompany Transaction Link` ilt ON ilt.name = lc.parent
+                WHERE (ilt.enabled IS NULL OR ilt.enabled != 0)
+                  AND (
+                      lc.main_company_customer = %s OR lc.main_company_supplier = %s OR
+                      lc.other_company_customer = %s OR lc.other_company_supplier = %s
+                  )
+            """, (party_name_clean, party_name_clean, party_name_clean, party_name_clean), as_dict=True)
+
+            for r in rows:
+                if current_company == r.main_company:
+                    if party_name_clean in [r.main_company_customer, r.main_company_supplier]:
+                        if r.company and r.company != current_company:
+                            return r.company
+                elif current_company == r.company:
+                    if party_name_clean in [r.other_company_customer, r.other_company_supplier]:
+                        if r.main_company and r.main_company != current_company:
+                            return r.main_company
+                else:
+                    # Generic match when current_company is not set or matches neither
+                    if party_name_clean in [r.main_company_customer, r.main_company_supplier]:
+                        if r.company and r.company != current_company:
+                            return r.company
+                    elif party_name_clean in [r.other_company_customer, r.other_company_supplier]:
+                        if r.main_company and r.main_company != current_company:
+                            return r.main_company
+    except Exception:
+        pass
 
     return None
 
@@ -2433,30 +2540,21 @@ def resolve_party_target_company(party_name, party_type=None, current_company=No
 def auto_detect_intercompany_party(doc, method=None):
     """
     Hooked on document validate/before_save:
-    Automatically sets is_intercompany = 1 and intercompany_target_company
-    when an intercompany customer or supplier is selected.
-    For Journal Entry: inspects accounts rows and populates row & parent target company.
+    1. Checks if customer, supplier, or any journal entry account row belongs to a sister company.
+    2. If an intercompany party IS detected:
+       - Auto-sets is_intercompany = 1
+       - Auto-populates intercompany_target_company = <Target Sister Company>
+       - For Journal Entry: Auto-populates row.intercompany_target_company on applicable rows.
+    3. If NO intercompany party is detected:
+       - If the user did not manually specify an explicit valid target company:
+         Strictly sets is_intercompany = 0 and clears intercompany_target_company,
+         preventing any unwanted draft creation for non-intercompany transactions.
     """
     if not hasattr(doc, "doctype") or not doc.get("company"):
         return
 
     # If document was already created by the intercompany engine as a linked document, don't overwrite
-    if doc.get("intercompany_linked_doc_name"):
-        return
-
-    # Respect the user's explicit choice on the "Is Intercompany" checkbox.
-    # If the user has NOT checked it (is_intercompany is 0 or falsy), never
-    # auto-enable intercompany based on party detection alone — this prevents
-    # unintended mirror drafts in sister companies for regular business transactions.
-    if not cint(doc.get("is_intercompany")):
-        # User has explicitly left Is Intercompany unchecked.
-        # Clear any stale target-company values to be 100% safe
-        if doc.get("intercompany_target_company"):
-            doc.intercompany_target_company = ""
-        if doc.doctype == "Journal Entry":
-            for row in doc.get("accounts") or []:
-                if getattr(row, "intercompany_target_company", None):
-                    row.intercompany_target_company = ""
+    if doc.get("intercompany_linked_doc_name") or doc.get("intercompany_linked_doc_doctype"):
         return
 
     company = doc.company
@@ -2490,16 +2588,34 @@ def auto_detect_intercompany_party(doc, method=None):
                         row.intercompany_target_company = row_target
                     if not target_company:
                         target_company = row_target
+                else:
+                    if hasattr(row, "intercompany_target_company") or "intercompany_target_company" in row.as_dict():
+                        row.intercompany_target_company = ""
 
+    # Case A: Intercompany party detected!
     if target_company and target_company != company:
-        if not doc.get("intercompany_target_company") or doc.get("intercompany_target_company") == company:
-            doc.intercompany_target_company = target_company
-    elif not doc.get("intercompany_target_company") or doc.get("intercompany_target_company") == company:
-        doc.is_intercompany = 0
-        doc.intercompany_target_company = ""
+        doc.is_intercompany = 1
+        doc.intercompany_target_company = target_company
         if doc.doctype == "Journal Entry":
             for row in doc.get("accounts") or []:
-                row.intercompany_target_company = ""
+                row_party = row.get("party")
+                if row_party:
+                    rt = resolve_party_target_company(row_party, row.get("party_type"), company, party_map)
+                    if rt and rt != company:
+                        row.intercompany_target_company = rt
+
+    # Case B: No intercompany party detected
+    else:
+        # If user explicitly selected an intercompany target company different from current company,
+        # respect their manual selection; otherwise enforce clean non-intercompany state.
+        existing_target = (doc.get("intercompany_target_company") or "").strip()
+        if not existing_target or existing_target == company:
+            doc.is_intercompany = 0
+            doc.intercompany_target_company = ""
+            if doc.doctype == "Journal Entry":
+                for row in doc.get("accounts") or []:
+                    if hasattr(row, "intercompany_target_company") or "intercompany_target_company" in row.as_dict():
+                        row.intercompany_target_company = ""
 
 
 def backfill_sister_company_names():

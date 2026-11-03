@@ -346,6 +346,7 @@
 			},
 			is_intercompany: function(frm) {
 				if (cint(frm.doc.is_intercompany)) {
+					frm._user_manually_checked_intercompany = true;
 					frm._user_unchecked_intercompany = false;
 					frm.set_df_property('intercompany_target_company', 'read_only', 0);
 					frm.set_df_property('intercompany_target_company', 'reqd', 1);
@@ -358,6 +359,7 @@
 						indicator: 'blue'
 					});
 				} else {
+					frm._user_manually_checked_intercompany = false;
 					frm._user_unchecked_intercompany = true;
 					frm.set_df_property('intercompany_target_company', 'read_only', 1);
 					frm.set_df_property('intercompany_target_company', 'reqd', 0);
@@ -469,19 +471,31 @@
 
 		if (map) {
 			let tgt = ict.resolve_target_sync(party_name, party_type, current_company, map);
-			if (callback) callback(tgt);
-			return tgt;
+			if (tgt) {
+				if (callback) callback(tgt);
+				return tgt;
+			}
 		}
 
-		// Fetch dynamically from backend if not yet cached
+		// Fallback direct server call: checks represents_company and Intercompany Linked Company dynamically
 		frappe.call({
-			method: 'inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.get_intercompany_party_map',
-			args: { company: current_company },
+			method: 'inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.get_party_target_company',
+			args: {
+				party_name: party_name,
+				party_type: party_type,
+				current_company: current_company
+			},
 			callback: function(r) {
-				let fresh_map = r.message || { party_to_company: {}, by_company: {}, universal: {} };
-				window._ict_party_map = fresh_map;
-				if (frappe.boot) frappe.boot.intercompany_party_map = fresh_map;
-				let tgt = ict.resolve_target_sync(party_name, party_type, current_company, fresh_map);
+				let tgt = (r && r.message && r.message.target_company) || null;
+				if (tgt) {
+					if (!window._ict_party_map) {
+						window._ict_party_map = { party_to_company: {}, by_company: {}, universal: {} };
+					}
+					window._ict_party_map.party_to_company[party_name] = tgt;
+					if (frappe.boot && frappe.boot.intercompany_party_map) {
+						frappe.boot.intercompany_party_map.party_to_company[party_name] = tgt;
+					}
+				}
 				if (callback) callback(tgt);
 			}
 		});
@@ -503,17 +517,37 @@
 		if (!frm || !frm.fields_dict || !frm.fields_dict.is_intercompany) return;
 		if (frm.doc.docstatus > 0) return; // Only apply to drafts
 
-		// If Is Intercompany is NOT checked, NEVER auto-enable it
-		if (!cint(frm.doc.is_intercompany)) {
+		if (!party_name) {
+			if (!frm._user_manually_checked_intercompany) {
+				if (cint(frm.doc.is_intercompany)) {
+					frm.set_value('is_intercompany', 0);
+				}
+				if (frm.doc.intercompany_target_company) {
+					frm.set_value('intercompany_target_company', '');
+				}
+				sync_intercompany_state(frm);
+			}
 			return;
 		}
 
-		if (!party_name) return;
-
 		ict.get_target_company_for_party(party_name, party_type, frm.doc.company, function(target_company) {
 			if (target_company && target_company !== frm.doc.company) {
-				if (frm.doc.intercompany_target_company !== target_company) {
-					frm.set_value('intercompany_target_company', target_company);
+				frm._user_manually_unchecked = false;
+				frm.set_value('is_intercompany', 1);
+				frm.set_value('intercompany_target_company', target_company);
+				sync_intercompany_state(frm);
+				frappe.show_alert({
+					message: __('Intercompany transaction with sister company {0} detected.', [target_company]),
+					indicator: 'blue'
+				});
+			} else {
+				if (!frm._user_manually_checked_intercompany) {
+					if (cint(frm.doc.is_intercompany)) {
+						frm.set_value('is_intercompany', 0);
+					}
+					if (frm.doc.intercompany_target_company) {
+						frm.set_value('intercompany_target_company', '');
+					}
 					sync_intercompany_state(frm);
 				}
 			}
@@ -521,57 +555,47 @@
 	}
 
 	function handle_journal_entry_row_party_change(frm, cdt, cdn) {
-		let row = locals[cdt][cdn];
+		let row = locals[cdt] && locals[cdt][cdn];
 		if (!row) return;
 
 		let party_name = row.party;
 		let party_type = (row.party_type || '').toLowerCase();
 
-		// If user has not enabled Is Intercompany, clear row target and never auto-enable
-		if (!cint(frm.doc.is_intercompany)) {
-			if (row.intercompany_target_company) {
-				frappe.model.set_value(cdt, cdn, 'intercompany_target_company', '');
-			}
-			return;
-		}
-
 		if (!party_name) {
 			if (row.intercompany_target_company) {
 				frappe.model.set_value(cdt, cdn, 'intercompany_target_company', '');
 			}
+			check_and_sync_journal_entry_accounts(frm);
 			return;
 		}
 
 		ict.get_target_company_for_party(party_name, party_type, frm.doc.company, function(target_company) {
 			if (target_company && target_company !== frm.doc.company) {
 				frappe.model.set_value(cdt, cdn, 'intercompany_target_company', target_company);
-				if (!frm.doc.intercompany_target_company || frm.doc.intercompany_target_company === frm.doc.company) {
-					frm.set_value('intercompany_target_company', target_company);
-					sync_intercompany_state(frm);
+				frm._user_manually_unchecked = false;
+				if (!cint(frm.doc.is_intercompany)) {
+					frm.set_value('is_intercompany', 1);
 				}
+				if (!frm.doc.intercompany_target_company || frm.doc.intercompany_target_company !== target_company) {
+					frm.set_value('intercompany_target_company', target_company);
+				}
+				sync_intercompany_state(frm);
+				frappe.show_alert({
+					message: __('Intercompany party {0} mapped to sister company {1}.', [party_name, target_company]),
+					indicator: 'blue'
+				});
 			} else {
 				if (row.intercompany_target_company) {
 					frappe.model.set_value(cdt, cdn, 'intercompany_target_company', '');
 				}
+				check_and_sync_journal_entry_accounts(frm);
 			}
 		});
 	}
 
 	function check_and_sync_journal_entry_accounts(frm) {
 		if (!frm || !frm.doc || !frm.doc.accounts) return;
-
-		// If Is Intercompany is not checked, clean all child rows and return
-		if (!cint(frm.doc.is_intercompany)) {
-			(frm.doc.accounts || []).forEach(row => {
-				if (row.intercompany_target_company) {
-					frappe.model.set_value(row.doctype, row.name, 'intercompany_target_company', '');
-				}
-			});
-			if (frm.doc.intercompany_target_company) {
-				frm.set_value('intercompany_target_company', '');
-			}
-			return;
-		}
+		if (frm.doc.docstatus > 0) return;
 
 		let map = (frappe.boot && frappe.boot.intercompany_party_map) || window._ict_party_map;
 		let found_target_company = null;
@@ -580,16 +604,37 @@
 			if (row.party) {
 				let tgt = ict.resolve_target_sync(row.party, row.party_type, frm.doc.company, map);
 				if (tgt && tgt !== frm.doc.company) {
-					found_target_company = tgt;
+					if (!found_target_company) found_target_company = tgt;
 					if (row.intercompany_target_company !== tgt) {
 						frappe.model.set_value(row.doctype, row.name, 'intercompany_target_company', tgt);
 					}
+				} else if (row.intercompany_target_company && !tgt) {
+					frappe.model.set_value(row.doctype, row.name, 'intercompany_target_company', '');
 				}
 			}
 		});
 
-		if (found_target_company && !frm.doc.intercompany_target_company) {
-			frm.set_value('intercompany_target_company', found_target_company);
+		if (found_target_company) {
+			if (!cint(frm.doc.is_intercompany)) {
+				frm.set_value('is_intercompany', 1);
+			}
+			if (frm.doc.intercompany_target_company !== found_target_company) {
+				frm.set_value('intercompany_target_company', found_target_company);
+			}
+			sync_intercompany_state(frm);
+		} else if (!frm._user_manually_checked_intercompany) {
+			// No intercompany party in any accounts row
+			if (cint(frm.doc.is_intercompany)) {
+				frm.set_value('is_intercompany', 0);
+			}
+			if (frm.doc.intercompany_target_company) {
+				frm.set_value('intercompany_target_company', '');
+			}
+			(frm.doc.accounts || []).forEach(row => {
+				if (row.intercompany_target_company) {
+					frappe.model.set_value(row.doctype, row.name, 'intercompany_target_company', '');
+				}
+			});
 			sync_intercompany_state(frm);
 		}
 	}
@@ -689,6 +734,9 @@
 		},
 		party_type: function(frm, cdt, cdn) {
 			handle_journal_entry_row_party_change(frm, cdt, cdn);
+		},
+		accounts_add: function(frm) {
+			fix_journal_entry_accounts_grid_columns(frm);
 		},
 		accounts_remove: function(frm) {
 			check_and_sync_journal_entry_accounts(frm);
