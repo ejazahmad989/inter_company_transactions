@@ -30,6 +30,14 @@ def before_uninstall():
     # 4. Remove any ICT Custom DocPerms
     cleanup_custom_docperms()
 
+    # 5. Reload standard DocTypes so in-memory schemas and Desk cache are pristine
+    for dt in ["Item", "Customer", "Supplier", "Customer Group", "Supplier Group", "Item Group"]:
+        try:
+            if frappe.db.exists("DocType", dt):
+                frappe.reload_doctype(dt, force=True)
+        except Exception:
+            pass
+
     frappe.db.commit()
     frappe.clear_cache()
     print("Pre-uninstall cleanup for Inter Company Transactions completed successfully.")
@@ -42,9 +50,16 @@ def after_uninstall():
     """
     print("Running after_uninstall for Inter Company Transactions...")
     repair_all_depends_on_expressions()
+    for dt in ["Item", "Customer", "Supplier", "Customer Group", "Supplier Group", "Item Group"]:
+        try:
+            if frappe.db.exists("DocType", dt):
+                frappe.reload_doctype(dt, force=True)
+        except Exception:
+            pass
     frappe.db.commit()
     frappe.clear_cache()
     print("Post-uninstall tasks completed. ERPNext site is clean.")
+
 
 
 def cleanup_custom_fields():
@@ -96,8 +111,10 @@ def cleanup_property_setters():
             DELETE FROM `tabProperty Setter`
             WHERE `module` = 'Inter Company Transactions'
                OR `property` LIKE '%intercompany%'
+               OR (`doc_type` IN ('Customer', 'Supplier') AND `field_name` = 'naming_series')
         """)
         print("Cleaned up Inter Company Transactions Property Setters.")
+
     except Exception as e:
         print(f"Notice during property setters cleanup: {e}")
 
@@ -168,6 +185,16 @@ def repair_all_depends_on_expressions():
                     SET `{col}` = REPLACE(`{col}`, '__islocalanddoc', '__islocal && doc')
                     WHERE `{col}` LIKE '%__islocalanddoc%'
                 """)
+                frappe.db.sql(f"""
+                    UPDATE `{tbl}`
+                    SET `{col}` = REPLACE(`{col}`, '__islocal anddoc', '__islocal && doc')
+                    WHERE `{col}` LIKE '%__islocal anddoc%'
+                """)
+                frappe.db.sql(f"""
+                    UPDATE `{tbl}`
+                    SET `{col}` = REPLACE(`{col}`, '__islocaland doc', '__islocal && doc')
+                    WHERE `{col}` LIKE '%__islocaland doc%'
+                """)
 
                 # 2. Fix __islocaland -> __islocal &&
                 frappe.db.sql(f"""
@@ -182,6 +209,17 @@ def repair_all_depends_on_expressions():
                     SET `{col}` = REPLACE(`{col}`, 'anddoc.', ' && doc.')
                     WHERE `{col}` LIKE '%anddoc.%'
                 """)
+                frappe.db.sql(f"""
+                    UPDATE `{tbl}`
+                    SET `{col}` = REPLACE(`{col}`, 'and!doc.', ' && !doc.')
+                    WHERE `{col}` LIKE '%and!doc.%'
+                """)
+                frappe.db.sql(f"""
+                    UPDATE `{tbl}`
+                    SET `{col}` = REPLACE(`{col}`, 'and !doc.', ' && !doc.')
+                    WHERE `{col}` LIKE '%and !doc.%'
+                """)
+
 
                 # 4. Fix glued or / and operators
                 frappe.db.sql(f"""

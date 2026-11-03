@@ -9,11 +9,19 @@ def after_install():
     print("Starting Inter Company Transactions app installation...")
 
     try:
+        # Run repair patch to fix any corrupted depends_on expressions and clean up trees/masters
+        from inter_company_transactions.patches.v1_5_repair_item_depends_on_and_clean_trees import execute as repair_patch
+        repair_patch()
+    except Exception as e:
+        print(f"Notice during repair patch execution: {e}")
+
+    try:
         # Create custom roles first
         create_custom_roles()
     except Exception as e:
         print(f"Notice during role creation: {e}")
         frappe.log_error(f"Error in create_custom_roles: {e}", "App Installation")
+
 
     try:
         # Create doctypes
@@ -501,66 +509,10 @@ def create_custom_fields():
                     }
                 ]
 
-            custom_fields = {
-                "Customer": [
-                    {
-                        "fieldname": "ic_customer_group",
-                        "label": "Inter Company Customer Group",
-                        "fieldtype": "Link",
-                        "options": "Customer Group",
-                        "insert_after": "customer_group",
-                        "description": "Used for mapping customers between companies"
-                    }
-                ],
-                "Supplier": [
-                    {
-                        "fieldname": "ic_supplier_group",
-                        "label": "Inter Company Supplier Group",
-                        "fieldtype": "Link",
-                        "options": "Supplier Group",
-                        "insert_after": "supplier_group",
-                        "description": "Used for mapping suppliers between companies"
-                    }
-                ],
-                "Item": [
-                    {
-                        "fieldname": "is_intercompany_item",
-                        "label": "Is Intercompany Item",
-                        "fieldtype": "Check",
-                        "default": "0",
-                        "insert_after": "item_group",
-                        "description": "Designates this item for inter-company transactions"
-                    },
-                    {
-                        "fieldname": "ic_item_group",
-                        "label": "Inter Company Item Group",
-                        "fieldtype": "Link",
-                        "options": "Item Group",
-                        "insert_after": "is_intercompany_item",
-                        "description": "Intercompany shared Item Group"
-                    }
-                ],
-                "Warehouse": [
-                    {
-                        "fieldname": "is_intercompany_warehouse",
-                        "label": "Is Intercompany / Transit Warehouse",
-                        "fieldtype": "Check",
-                        "default": "0",
-                        "insert_after": "company",
-                        "description": "Designates this warehouse for inter-company stock transfers and in-transit inventory"
-                    },
-                    {
-                        "fieldname": "ic_warehouse",
-                        "label": "Linked Intercompany Warehouse",
-                        "fieldtype": "Link",
-                        "options": "Warehouse",
-                        "insert_after": "is_intercompany_warehouse",
-                        "description": "Corresponding warehouse in linked partner company"
-                    }
-                ]
-            }
+            custom_fields = {}
             for dt in tx_doctypes:
                 custom_fields[dt] = _get_fallback_tx_fields()
+
 
         for doctype, fields in custom_fields.items():
             for field in fields:
@@ -627,21 +579,13 @@ def create_custom_fields():
                         "Inter Company Transaction Setup"
                     )
 
-        # Delete obsolete Customer Group and Supplier Group custom fields
+        # Run comprehensive repair patch to delete obsolete master/tree custom fields and repair depends_on
         try:
-            frappe.db.sql("""
-                DELETE FROM `tabCustom Field`
-                WHERE `dt` IN ('Customer Group', 'Supplier Group') AND `fieldname` = 'custom_company'
-            """)
-        except Exception:
-            pass
+            from inter_company_transactions.patches.v1_5_repair_item_depends_on_and_clean_trees import execute as repair_patch
+            repair_patch()
+        except Exception as e:
+            print(f"Notice during repair patch execution: {e}")
 
-        # Run fix_legacy_custom_fields to repair __islocalanddoc and any depends_on
-        try:
-            from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import fix_legacy_custom_fields
-            fix_legacy_custom_fields(force=True)
-        except Exception:
-            pass
 
         frappe.db.commit()
 

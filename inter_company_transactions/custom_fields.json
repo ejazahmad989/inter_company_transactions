@@ -1,686 +1,625 @@
 {
-  "Customer": [
-    {
-      "fieldname": "ic_customer_group",
-      "label": "Inter Company Customer Group",
-      "fieldtype": "Link",
-      "options": "Customer Group",
-      "insert_after": "customer_group",
-      "description": "Used for mapping customers between companies"
-    }
-  ],
-  "Supplier": [
-    {
-      "fieldname": "ic_supplier_group",
-      "label": "Inter Company Supplier Group",
-      "fieldtype": "Link",
-      "options": "Supplier Group",
-      "insert_after": "supplier_group",
-      "description": "Used for mapping suppliers between companies"
-    }
-  ],
-  "Sales Order": [
-    {
-      "fieldname": "is_intercompany",
-      "label": "Is Intercompany",
-      "fieldtype": "Check",
-      "default": "0",
-      "insert_after": "company",
-      "description": "Check if this transaction is with a sister company",
-      "in_list_view": 1,
-      "in_standard_filter": 1
-    },
-    {
-      "fieldname": "intercompany_target_company",
-      "label": "Intercompany Target Company",
-      "fieldtype": "Link",
-      "options": "Company",
-      "insert_after": "is_intercompany",
-      "description": "Target company for inter-company transaction (editable only when Is Intercompany is checked)",
-      "in_list_view": 1,
-      "in_standard_filter": 1
-    },
-    {
-      "fieldname": "intercompany_linked_doc_doctype",
-      "label": "Linked Document Type",
-      "fieldtype": "Data",
-      "insert_after": "intercompany_target_company",
-      "read_only": 1,
-      "hidden": 1
-    },
-    {
-      "fieldname": "intercompany_linked_doc_name",
-      "label": "Linked Document",
-      "fieldtype": "Data",
-      "insert_after": "intercompany_linked_doc_doctype",
-      "read_only": 1,
-      "hidden": 1
-    },
-    {
-      "fieldname": "intercompany_linked_company",
-      "label": "Linked Company",
-      "fieldtype": "Link",
-      "options": "Company",
-      "insert_after": "intercompany_linked_doc_name",
-      "read_only": 1,
-      "hidden": 1
-    }
-  ],
-  "Purchase Order": [
-    {
-      "fieldname": "is_intercompany",
-      "label": "Is Intercompany",
-      "fieldtype": "Check",
-      "default": "0",
-      "insert_after": "company",
-      "description": "Check if this transaction is with a sister company",
-      "in_list_view": 1,
-      "in_standard_filter": 1
-    },
-    {
-      "fieldname": "intercompany_target_company",
-      "label": "Intercompany Target Company",
-      "fieldtype": "Link",
-      "options": "Company",
-      "insert_after": "is_intercompany",
-      "description": "Target company for inter-company transaction (editable only when Is Intercompany is checked)",
-      "in_list_view": 1,
-      "in_standard_filter": 1
-    },
-    {
-      "fieldname": "intercompany_linked_doc_doctype",
-      "label": "Linked Document Type",
-      "fieldtype": "Data",
-      "insert_after": "intercompany_target_company",
-      "read_only": 1,
-      "hidden": 1
-    },
-    {
-      "fieldname": "intercompany_linked_doc_name",
-      "label": "Linked Document",
-      "fieldtype": "Data",
-      "insert_after": "intercompany_linked_doc_doctype",
-      "read_only": 1,
-      "hidden": 1
-    },
-    {
-      "fieldname": "intercompany_linked_company",
-      "label": "Linked Company",
-      "fieldtype": "Link",
-      "options": "Company",
-      "insert_after": "intercompany_linked_doc_name",
-      "read_only": 1,
-      "hidden": 1
-    }
-  ],
-  "Journal Entry": [
-    {
-      "fieldname": "is_intercompany",
-      "label": "Is Intercompany",
-      "fieldtype": "Check",
-      "default": "0",
-      "insert_after": "company",
-      "description": "Check if this transaction is with a sister company",
-      "in_list_view": 1,
-      "in_standard_filter": 1
-    },
-    {
-      "fieldname": "intercompany_target_company",
-      "label": "Intercompany Target Company",
-      "fieldtype": "Link",
-      "options": "Company",
-      "insert_after": "is_intercompany",
-      "description": "Target company for inter-company transaction (editable only when Is Intercompany is checked)",
-      "in_list_view": 1,
-      "in_standard_filter": 1
-    },
-    {
-      "fieldname": "intercompany_linked_doc_doctype",
-      "label": "Linked Document Type",
-      "fieldtype": "Data",
-      "insert_after": "intercompany_target_company",
-      "read_only": 1,
-      "hidden": 1
-    },
-    {
-      "fieldname": "intercompany_linked_doc_name",
-      "label": "Linked Document",
-      "fieldtype": "Data",
-      "insert_after": "intercompany_linked_doc_doctype",
-      "read_only": 1,
-      "hidden": 1
-    },
-    {
-      "fieldname": "intercompany_linked_company",
-      "label": "Linked Company",
-      "fieldtype": "Link",
-      "options": "Company",
-      "insert_after": "intercompany_linked_doc_name",
-      "read_only": 1,
-      "hidden": 1
-    }
-  ],
-  "Journal Entry Account": [
-    {
-      "fieldname": "intercompany_target_company",
-      "label": "Intercompany Target Company",
-      "fieldtype": "Link",
-      "options": "Company",
-      "insert_after": "party",
-      "description": "Target company for inter-company transaction",
-      "in_list_view": 1,
-      "columns": 1
-    }
-  ],
-  "Payment Entry": [
-    {
-      "fieldname": "is_intercompany",
-      "label": "Is Intercompany",
-      "fieldtype": "Check",
-      "default": "0",
-      "insert_after": "company",
-      "description": "Check if this transaction is with a sister company",
-      "in_list_view": 1,
-      "in_standard_filter": 1
-    },
-    {
-      "fieldname": "intercompany_target_company",
-      "label": "Intercompany Target Company",
-      "fieldtype": "Link",
-      "options": "Company",
-      "insert_after": "is_intercompany",
-      "description": "Target company for inter-company transaction (editable only when Is Intercompany is checked)",
-      "in_list_view": 1,
-      "in_standard_filter": 1
-    },
-    {
-      "fieldname": "intercompany_linked_doc_doctype",
-      "label": "Linked Document Type",
-      "fieldtype": "Data",
-      "insert_after": "intercompany_target_company",
-      "read_only": 1,
-      "hidden": 1
-    },
-    {
-      "fieldname": "intercompany_linked_doc_name",
-      "label": "Linked Document",
-      "fieldtype": "Data",
-      "insert_after": "intercompany_linked_doc_doctype",
-      "read_only": 1,
-      "hidden": 1
-    },
-    {
-      "fieldname": "intercompany_linked_company",
-      "label": "Linked Company",
-      "fieldtype": "Link",
-      "options": "Company",
-      "insert_after": "intercompany_linked_doc_name",
-      "read_only": 1,
-      "hidden": 1
-    }
-  ],
-  "Sales Invoice": [
-    {
-      "fieldname": "is_intercompany",
-      "label": "Is Intercompany",
-      "fieldtype": "Check",
-      "default": "0",
-      "insert_after": "company",
-      "description": "Check if this transaction is with a sister company",
-      "in_list_view": 1,
-      "in_standard_filter": 1
-    },
-    {
-      "fieldname": "intercompany_target_company",
-      "label": "Intercompany Target Company",
-      "fieldtype": "Link",
-      "options": "Company",
-      "insert_after": "is_intercompany",
-      "description": "Target company for inter-company transaction (editable only when Is Intercompany is checked)",
-      "in_list_view": 1,
-      "in_standard_filter": 1
-    },
-    {
-      "fieldname": "intercompany_linked_doc_doctype",
-      "label": "Linked Document Type",
-      "fieldtype": "Data",
-      "insert_after": "intercompany_target_company",
-      "read_only": 1,
-      "hidden": 1
-    },
-    {
-      "fieldname": "intercompany_linked_doc_name",
-      "label": "Linked Document",
-      "fieldtype": "Data",
-      "insert_after": "intercompany_linked_doc_doctype",
-      "read_only": 1,
-      "hidden": 1
-    },
-    {
-      "fieldname": "intercompany_linked_company",
-      "label": "Linked Company",
-      "fieldtype": "Link",
-      "options": "Company",
-      "insert_after": "intercompany_linked_doc_name",
-      "read_only": 1,
-      "hidden": 1
-    }
-  ],
-  "Purchase Invoice": [
-    {
-      "fieldname": "is_intercompany",
-      "label": "Is Intercompany",
-      "fieldtype": "Check",
-      "default": "0",
-      "insert_after": "company",
-      "description": "Check if this transaction is with a sister company",
-      "in_list_view": 1,
-      "in_standard_filter": 1
-    },
-    {
-      "fieldname": "intercompany_target_company",
-      "label": "Intercompany Target Company",
-      "fieldtype": "Link",
-      "options": "Company",
-      "insert_after": "is_intercompany",
-      "description": "Target company for inter-company transaction (editable only when Is Intercompany is checked)",
-      "in_list_view": 1,
-      "in_standard_filter": 1
-    },
-    {
-      "fieldname": "intercompany_linked_doc_doctype",
-      "label": "Linked Document Type",
-      "fieldtype": "Data",
-      "insert_after": "intercompany_target_company",
-      "read_only": 1,
-      "hidden": 1
-    },
-    {
-      "fieldname": "intercompany_linked_doc_name",
-      "label": "Linked Document",
-      "fieldtype": "Data",
-      "insert_after": "intercompany_linked_doc_doctype",
-      "read_only": 1,
-      "hidden": 1
-    },
-    {
-      "fieldname": "intercompany_linked_company",
-      "label": "Linked Company",
-      "fieldtype": "Link",
-      "options": "Company",
-      "insert_after": "intercompany_linked_doc_name",
-      "read_only": 1,
-      "hidden": 1
-    }
-  ],
-  "Delivery Note": [
-    {
-      "fieldname": "is_intercompany",
-      "label": "Is Intercompany",
-      "fieldtype": "Check",
-      "default": "0",
-      "insert_after": "company",
-      "description": "Check if this transaction is with a sister company",
-      "in_list_view": 1,
-      "in_standard_filter": 1
-    },
-    {
-      "fieldname": "intercompany_target_company",
-      "label": "Intercompany Target Company",
-      "fieldtype": "Link",
-      "options": "Company",
-      "insert_after": "is_intercompany",
-      "description": "Target company for inter-company transaction (editable only when Is Intercompany is checked)",
-      "in_list_view": 1,
-      "in_standard_filter": 1
-    },
-    {
-      "fieldname": "intercompany_linked_doc_doctype",
-      "label": "Linked Document Type",
-      "fieldtype": "Data",
-      "insert_after": "intercompany_target_company",
-      "read_only": 1,
-      "hidden": 1
-    },
-    {
-      "fieldname": "intercompany_linked_doc_name",
-      "label": "Linked Document",
-      "fieldtype": "Data",
-      "insert_after": "intercompany_linked_doc_doctype",
-      "read_only": 1,
-      "hidden": 1
-    },
-    {
-      "fieldname": "intercompany_linked_company",
-      "label": "Linked Company",
-      "fieldtype": "Link",
-      "options": "Company",
-      "insert_after": "intercompany_linked_doc_name",
-      "read_only": 1,
-      "hidden": 1
-    }
-  ],
-  "Purchase Receipt": [
-    {
-      "fieldname": "is_intercompany",
-      "label": "Is Intercompany",
-      "fieldtype": "Check",
-      "default": "0",
-      "insert_after": "company",
-      "description": "Check if this transaction is with a sister company",
-      "in_list_view": 1,
-      "in_standard_filter": 1
-    },
-    {
-      "fieldname": "intercompany_target_company",
-      "label": "Intercompany Target Company",
-      "fieldtype": "Link",
-      "options": "Company",
-      "insert_after": "is_intercompany",
-      "description": "Target company for inter-company transaction (editable only when Is Intercompany is checked)",
-      "in_list_view": 1,
-      "in_standard_filter": 1
-    },
-    {
-      "fieldname": "intercompany_linked_doc_doctype",
-      "label": "Linked Document Type",
-      "fieldtype": "Data",
-      "insert_after": "intercompany_target_company",
-      "read_only": 1,
-      "hidden": 1
-    },
-    {
-      "fieldname": "intercompany_linked_doc_name",
-      "label": "Linked Document",
-      "fieldtype": "Data",
-      "insert_after": "intercompany_linked_doc_doctype",
-      "read_only": 1,
-      "hidden": 1
-    },
-    {
-      "fieldname": "intercompany_linked_company",
-      "label": "Linked Company",
-      "fieldtype": "Link",
-      "options": "Company",
-      "insert_after": "intercompany_linked_doc_name",
-      "read_only": 1,
-      "hidden": 1
-    }
-  ],
-  "Stock Entry": [
-    {
-      "fieldname": "is_intercompany",
-      "label": "Is Intercompany",
-      "fieldtype": "Check",
-      "default": "0",
-      "insert_after": "company",
-      "description": "Check if this transaction is with a sister company",
-      "in_list_view": 1,
-      "in_standard_filter": 1
-    },
-    {
-      "fieldname": "intercompany_target_company",
-      "label": "Intercompany Target Company",
-      "fieldtype": "Link",
-      "options": "Company",
-      "insert_after": "is_intercompany",
-      "description": "Target company for inter-company transaction (editable only when Is Intercompany is checked)",
-      "in_list_view": 1,
-      "in_standard_filter": 1
-    },
-    {
-      "fieldname": "intercompany_linked_doc_doctype",
-      "label": "Linked Document Type",
-      "fieldtype": "Data",
-      "insert_after": "intercompany_target_company",
-      "read_only": 1,
-      "hidden": 1
-    },
-    {
-      "fieldname": "intercompany_linked_doc_name",
-      "label": "Linked Document",
-      "fieldtype": "Data",
-      "insert_after": "intercompany_linked_doc_doctype",
-      "read_only": 1,
-      "hidden": 1
-    },
-    {
-      "fieldname": "intercompany_linked_company",
-      "label": "Linked Company",
-      "fieldtype": "Link",
-      "options": "Company",
-      "insert_after": "intercompany_linked_doc_name",
-      "read_only": 1,
-      "hidden": 1
-    }
-  ],
-  "Quotation": [
-    {
-      "fieldname": "is_intercompany",
-      "label": "Is Intercompany",
-      "fieldtype": "Check",
-      "default": "0",
-      "insert_after": "company",
-      "description": "Check if this transaction is with a sister company",
-      "in_list_view": 1,
-      "in_standard_filter": 1
-    },
-    {
-      "fieldname": "intercompany_target_company",
-      "label": "Intercompany Target Company",
-      "fieldtype": "Link",
-      "options": "Company",
-      "insert_after": "is_intercompany",
-      "description": "Target company for inter-company transaction (editable only when Is Intercompany is checked)",
-      "in_list_view": 1,
-      "in_standard_filter": 1
-    },
-    {
-      "fieldname": "intercompany_linked_doc_doctype",
-      "label": "Linked Document Type",
-      "fieldtype": "Data",
-      "insert_after": "intercompany_target_company",
-      "read_only": 1,
-      "hidden": 1
-    },
-    {
-      "fieldname": "intercompany_linked_doc_name",
-      "label": "Linked Document",
-      "fieldtype": "Data",
-      "insert_after": "intercompany_linked_doc_doctype",
-      "read_only": 1,
-      "hidden": 1
-    },
-    {
-      "fieldname": "intercompany_linked_company",
-      "label": "Linked Company",
-      "fieldtype": "Link",
-      "options": "Company",
-      "insert_after": "intercompany_linked_doc_name",
-      "read_only": 1,
-      "hidden": 1
-    }
-  ],
-  "Supplier Quotation": [
-    {
-      "fieldname": "is_intercompany",
-      "label": "Is Intercompany",
-      "fieldtype": "Check",
-      "default": "0",
-      "insert_after": "company",
-      "description": "Check if this transaction is with a sister company",
-      "in_list_view": 1,
-      "in_standard_filter": 1
-    },
-    {
-      "fieldname": "intercompany_target_company",
-      "label": "Intercompany Target Company",
-      "fieldtype": "Link",
-      "options": "Company",
-      "insert_after": "is_intercompany",
-      "description": "Target company for inter-company transaction (editable only when Is Intercompany is checked)",
-      "in_list_view": 1,
-      "in_standard_filter": 1
-    },
-    {
-      "fieldname": "intercompany_linked_doc_doctype",
-      "label": "Linked Document Type",
-      "fieldtype": "Data",
-      "insert_after": "intercompany_target_company",
-      "read_only": 1,
-      "hidden": 1
-    },
-    {
-      "fieldname": "intercompany_linked_doc_name",
-      "label": "Linked Document",
-      "fieldtype": "Data",
-      "insert_after": "intercompany_linked_doc_doctype",
-      "read_only": 1,
-      "hidden": 1
-    },
-    {
-      "fieldname": "intercompany_linked_company",
-      "label": "Linked Company",
-      "fieldtype": "Link",
-      "options": "Company",
-      "insert_after": "intercompany_linked_doc_name",
-      "read_only": 1,
-      "hidden": 1
-    }
-  ],
-  "Material Request": [
-    {
-      "fieldname": "is_intercompany",
-      "label": "Is Intercompany",
-      "fieldtype": "Check",
-      "default": "0",
-      "insert_after": "company",
-      "description": "Check if this transaction is with a sister company",
-      "in_list_view": 1,
-      "in_standard_filter": 1
-    },
-    {
-      "fieldname": "intercompany_target_company",
-      "label": "Intercompany Target Company",
-      "fieldtype": "Link",
-      "options": "Company",
-      "insert_after": "is_intercompany",
-      "description": "Target company for inter-company transaction (editable only when Is Intercompany is checked)",
-      "in_list_view": 1,
-      "in_standard_filter": 1
-    },
-    {
-      "fieldname": "intercompany_linked_doc_doctype",
-      "label": "Linked Document Type",
-      "fieldtype": "Data",
-      "insert_after": "intercompany_target_company",
-      "read_only": 1,
-      "hidden": 1
-    },
-    {
-      "fieldname": "intercompany_linked_doc_name",
-      "label": "Linked Document",
-      "fieldtype": "Data",
-      "insert_after": "intercompany_linked_doc_doctype",
-      "read_only": 1,
-      "hidden": 1
-    },
-    {
-      "fieldname": "intercompany_linked_company",
-      "label": "Linked Company",
-      "fieldtype": "Link",
-      "options": "Company",
-      "insert_after": "intercompany_linked_doc_name",
-      "read_only": 1,
-      "hidden": 1
-    }
-  ],
-  "Request for Quotation": [
-    {
-      "fieldname": "is_intercompany",
-      "label": "Is Intercompany",
-      "fieldtype": "Check",
-      "default": "0",
-      "insert_after": "company",
-      "description": "Check if this transaction is with a sister company",
-      "in_list_view": 1,
-      "in_standard_filter": 1
-    },
-    {
-      "fieldname": "intercompany_target_company",
-      "label": "Intercompany Target Company",
-      "fieldtype": "Link",
-      "options": "Company",
-      "insert_after": "is_intercompany",
-      "description": "Target company for inter-company transaction (editable only when Is Intercompany is checked)",
-      "in_list_view": 1,
-      "in_standard_filter": 1
-    },
-    {
-      "fieldname": "intercompany_linked_doc_doctype",
-      "label": "Linked Document Type",
-      "fieldtype": "Data",
-      "insert_after": "intercompany_target_company",
-      "read_only": 1,
-      "hidden": 1
-    },
-    {
-      "fieldname": "intercompany_linked_doc_name",
-      "label": "Linked Document",
-      "fieldtype": "Data",
-      "insert_after": "intercompany_linked_doc_doctype",
-      "read_only": 1,
-      "hidden": 1
-    },
-    {
-      "fieldname": "intercompany_linked_company",
-      "label": "Linked Company",
-      "fieldtype": "Link",
-      "options": "Company",
-      "insert_after": "intercompany_linked_doc_name",
-      "read_only": 1,
-      "hidden": 1
-    }
-  ],
-  "Item": [
-    {
-      "fieldname": "is_intercompany_item",
-      "label": "Is Intercompany Item",
-      "fieldtype": "Check",
-      "default": "0",
-      "insert_after": "item_group",
-      "description": "Mark this item as an inter-company catalog item",
-      "in_list_view": 1,
-      "in_standard_filter": 1
-    },
-    {
-      "fieldname": "ic_item_group",
-      "label": "Inter Company Item Group",
-      "fieldtype": "Link",
-      "options": "Item Group",
-      "insert_after": "is_intercompany_item",
-      "description": "Item group for shared inter-company access and catalog mapping",
-      "in_standard_filter": 1
-    }
-  ],
-  "Warehouse": [
-    {
-      "fieldname": "is_intercompany_warehouse",
-      "label": "Is Intercompany / Transit Warehouse",
-      "fieldtype": "Check",
-      "default": "0",
-      "insert_after": "company",
-      "description": "Designates this warehouse for inter-company stock transfers and in-transit inventory",
-      "in_list_view": 1,
-      "in_standard_filter": 1
-    },
-    {
-      "fieldname": "ic_warehouse",
-      "label": "Linked Intercompany Warehouse",
-      "fieldtype": "Link",
-      "options": "Warehouse",
-      "insert_after": "is_intercompany_warehouse",
-      "description": "Corresponding warehouse in the linked sister company"
-    }
-  ]
+    "Sales Order": [
+        {
+            "fieldname": "is_intercompany",
+            "label": "Is Intercompany",
+            "fieldtype": "Check",
+            "default": "0",
+            "insert_after": "company",
+            "description": "Check if this transaction is with a sister company",
+            "in_list_view": 1,
+            "in_standard_filter": 1
+        },
+        {
+            "fieldname": "intercompany_target_company",
+            "label": "Intercompany Target Company",
+            "fieldtype": "Link",
+            "options": "Company",
+            "insert_after": "is_intercompany",
+            "description": "Target company for inter-company transaction (editable only when Is Intercompany is checked)",
+            "in_list_view": 1,
+            "in_standard_filter": 1
+        },
+        {
+            "fieldname": "intercompany_linked_doc_doctype",
+            "label": "Linked Document Type",
+            "fieldtype": "Data",
+            "insert_after": "intercompany_target_company",
+            "read_only": 1,
+            "hidden": 1
+        },
+        {
+            "fieldname": "intercompany_linked_doc_name",
+            "label": "Linked Document",
+            "fieldtype": "Data",
+            "insert_after": "intercompany_linked_doc_doctype",
+            "read_only": 1,
+            "hidden": 1
+        },
+        {
+            "fieldname": "intercompany_linked_company",
+            "label": "Linked Company",
+            "fieldtype": "Link",
+            "options": "Company",
+            "insert_after": "intercompany_linked_doc_name",
+            "read_only": 1,
+            "hidden": 1
+        }
+    ],
+    "Purchase Order": [
+        {
+            "fieldname": "is_intercompany",
+            "label": "Is Intercompany",
+            "fieldtype": "Check",
+            "default": "0",
+            "insert_after": "company",
+            "description": "Check if this transaction is with a sister company",
+            "in_list_view": 1,
+            "in_standard_filter": 1
+        },
+        {
+            "fieldname": "intercompany_target_company",
+            "label": "Intercompany Target Company",
+            "fieldtype": "Link",
+            "options": "Company",
+            "insert_after": "is_intercompany",
+            "description": "Target company for inter-company transaction (editable only when Is Intercompany is checked)",
+            "in_list_view": 1,
+            "in_standard_filter": 1
+        },
+        {
+            "fieldname": "intercompany_linked_doc_doctype",
+            "label": "Linked Document Type",
+            "fieldtype": "Data",
+            "insert_after": "intercompany_target_company",
+            "read_only": 1,
+            "hidden": 1
+        },
+        {
+            "fieldname": "intercompany_linked_doc_name",
+            "label": "Linked Document",
+            "fieldtype": "Data",
+            "insert_after": "intercompany_linked_doc_doctype",
+            "read_only": 1,
+            "hidden": 1
+        },
+        {
+            "fieldname": "intercompany_linked_company",
+            "label": "Linked Company",
+            "fieldtype": "Link",
+            "options": "Company",
+            "insert_after": "intercompany_linked_doc_name",
+            "read_only": 1,
+            "hidden": 1
+        }
+    ],
+    "Journal Entry": [
+        {
+            "fieldname": "is_intercompany",
+            "label": "Is Intercompany",
+            "fieldtype": "Check",
+            "default": "0",
+            "insert_after": "company",
+            "description": "Check if this transaction is with a sister company",
+            "in_list_view": 1,
+            "in_standard_filter": 1
+        },
+        {
+            "fieldname": "intercompany_target_company",
+            "label": "Intercompany Target Company",
+            "fieldtype": "Link",
+            "options": "Company",
+            "insert_after": "is_intercompany",
+            "description": "Target company for inter-company transaction (editable only when Is Intercompany is checked)",
+            "in_list_view": 1,
+            "in_standard_filter": 1
+        },
+        {
+            "fieldname": "intercompany_linked_doc_doctype",
+            "label": "Linked Document Type",
+            "fieldtype": "Data",
+            "insert_after": "intercompany_target_company",
+            "read_only": 1,
+            "hidden": 1
+        },
+        {
+            "fieldname": "intercompany_linked_doc_name",
+            "label": "Linked Document",
+            "fieldtype": "Data",
+            "insert_after": "intercompany_linked_doc_doctype",
+            "read_only": 1,
+            "hidden": 1
+        },
+        {
+            "fieldname": "intercompany_linked_company",
+            "label": "Linked Company",
+            "fieldtype": "Link",
+            "options": "Company",
+            "insert_after": "intercompany_linked_doc_name",
+            "read_only": 1,
+            "hidden": 1
+        }
+    ],
+    "Journal Entry Account": [
+        {
+            "fieldname": "intercompany_target_company",
+            "label": "Intercompany Target Company",
+            "fieldtype": "Link",
+            "options": "Company",
+            "insert_after": "party",
+            "description": "Target company for inter-company transaction",
+            "in_list_view": 1,
+            "columns": 1
+        }
+    ],
+    "Payment Entry": [
+        {
+            "fieldname": "is_intercompany",
+            "label": "Is Intercompany",
+            "fieldtype": "Check",
+            "default": "0",
+            "insert_after": "company",
+            "description": "Check if this transaction is with a sister company",
+            "in_list_view": 1,
+            "in_standard_filter": 1
+        },
+        {
+            "fieldname": "intercompany_target_company",
+            "label": "Intercompany Target Company",
+            "fieldtype": "Link",
+            "options": "Company",
+            "insert_after": "is_intercompany",
+            "description": "Target company for inter-company transaction (editable only when Is Intercompany is checked)",
+            "in_list_view": 1,
+            "in_standard_filter": 1
+        },
+        {
+            "fieldname": "intercompany_linked_doc_doctype",
+            "label": "Linked Document Type",
+            "fieldtype": "Data",
+            "insert_after": "intercompany_target_company",
+            "read_only": 1,
+            "hidden": 1
+        },
+        {
+            "fieldname": "intercompany_linked_doc_name",
+            "label": "Linked Document",
+            "fieldtype": "Data",
+            "insert_after": "intercompany_linked_doc_doctype",
+            "read_only": 1,
+            "hidden": 1
+        },
+        {
+            "fieldname": "intercompany_linked_company",
+            "label": "Linked Company",
+            "fieldtype": "Link",
+            "options": "Company",
+            "insert_after": "intercompany_linked_doc_name",
+            "read_only": 1,
+            "hidden": 1
+        }
+    ],
+    "Sales Invoice": [
+        {
+            "fieldname": "is_intercompany",
+            "label": "Is Intercompany",
+            "fieldtype": "Check",
+            "default": "0",
+            "insert_after": "company",
+            "description": "Check if this transaction is with a sister company",
+            "in_list_view": 1,
+            "in_standard_filter": 1
+        },
+        {
+            "fieldname": "intercompany_target_company",
+            "label": "Intercompany Target Company",
+            "fieldtype": "Link",
+            "options": "Company",
+            "insert_after": "is_intercompany",
+            "description": "Target company for inter-company transaction (editable only when Is Intercompany is checked)",
+            "in_list_view": 1,
+            "in_standard_filter": 1
+        },
+        {
+            "fieldname": "intercompany_linked_doc_doctype",
+            "label": "Linked Document Type",
+            "fieldtype": "Data",
+            "insert_after": "intercompany_target_company",
+            "read_only": 1,
+            "hidden": 1
+        },
+        {
+            "fieldname": "intercompany_linked_doc_name",
+            "label": "Linked Document",
+            "fieldtype": "Data",
+            "insert_after": "intercompany_linked_doc_doctype",
+            "read_only": 1,
+            "hidden": 1
+        },
+        {
+            "fieldname": "intercompany_linked_company",
+            "label": "Linked Company",
+            "fieldtype": "Link",
+            "options": "Company",
+            "insert_after": "intercompany_linked_doc_name",
+            "read_only": 1,
+            "hidden": 1
+        }
+    ],
+    "Purchase Invoice": [
+        {
+            "fieldname": "is_intercompany",
+            "label": "Is Intercompany",
+            "fieldtype": "Check",
+            "default": "0",
+            "insert_after": "company",
+            "description": "Check if this transaction is with a sister company",
+            "in_list_view": 1,
+            "in_standard_filter": 1
+        },
+        {
+            "fieldname": "intercompany_target_company",
+            "label": "Intercompany Target Company",
+            "fieldtype": "Link",
+            "options": "Company",
+            "insert_after": "is_intercompany",
+            "description": "Target company for inter-company transaction (editable only when Is Intercompany is checked)",
+            "in_list_view": 1,
+            "in_standard_filter": 1
+        },
+        {
+            "fieldname": "intercompany_linked_doc_doctype",
+            "label": "Linked Document Type",
+            "fieldtype": "Data",
+            "insert_after": "intercompany_target_company",
+            "read_only": 1,
+            "hidden": 1
+        },
+        {
+            "fieldname": "intercompany_linked_doc_name",
+            "label": "Linked Document",
+            "fieldtype": "Data",
+            "insert_after": "intercompany_linked_doc_doctype",
+            "read_only": 1,
+            "hidden": 1
+        },
+        {
+            "fieldname": "intercompany_linked_company",
+            "label": "Linked Company",
+            "fieldtype": "Link",
+            "options": "Company",
+            "insert_after": "intercompany_linked_doc_name",
+            "read_only": 1,
+            "hidden": 1
+        }
+    ],
+    "Delivery Note": [
+        {
+            "fieldname": "is_intercompany",
+            "label": "Is Intercompany",
+            "fieldtype": "Check",
+            "default": "0",
+            "insert_after": "company",
+            "description": "Check if this transaction is with a sister company",
+            "in_list_view": 1,
+            "in_standard_filter": 1
+        },
+        {
+            "fieldname": "intercompany_target_company",
+            "label": "Intercompany Target Company",
+            "fieldtype": "Link",
+            "options": "Company",
+            "insert_after": "is_intercompany",
+            "description": "Target company for inter-company transaction (editable only when Is Intercompany is checked)",
+            "in_list_view": 1,
+            "in_standard_filter": 1
+        },
+        {
+            "fieldname": "intercompany_linked_doc_doctype",
+            "label": "Linked Document Type",
+            "fieldtype": "Data",
+            "insert_after": "intercompany_target_company",
+            "read_only": 1,
+            "hidden": 1
+        },
+        {
+            "fieldname": "intercompany_linked_doc_name",
+            "label": "Linked Document",
+            "fieldtype": "Data",
+            "insert_after": "intercompany_linked_doc_doctype",
+            "read_only": 1,
+            "hidden": 1
+        },
+        {
+            "fieldname": "intercompany_linked_company",
+            "label": "Linked Company",
+            "fieldtype": "Link",
+            "options": "Company",
+            "insert_after": "intercompany_linked_doc_name",
+            "read_only": 1,
+            "hidden": 1
+        }
+    ],
+    "Purchase Receipt": [
+        {
+            "fieldname": "is_intercompany",
+            "label": "Is Intercompany",
+            "fieldtype": "Check",
+            "default": "0",
+            "insert_after": "company",
+            "description": "Check if this transaction is with a sister company",
+            "in_list_view": 1,
+            "in_standard_filter": 1
+        },
+        {
+            "fieldname": "intercompany_target_company",
+            "label": "Intercompany Target Company",
+            "fieldtype": "Link",
+            "options": "Company",
+            "insert_after": "is_intercompany",
+            "description": "Target company for inter-company transaction (editable only when Is Intercompany is checked)",
+            "in_list_view": 1,
+            "in_standard_filter": 1
+        },
+        {
+            "fieldname": "intercompany_linked_doc_doctype",
+            "label": "Linked Document Type",
+            "fieldtype": "Data",
+            "insert_after": "intercompany_target_company",
+            "read_only": 1,
+            "hidden": 1
+        },
+        {
+            "fieldname": "intercompany_linked_doc_name",
+            "label": "Linked Document",
+            "fieldtype": "Data",
+            "insert_after": "intercompany_linked_doc_doctype",
+            "read_only": 1,
+            "hidden": 1
+        },
+        {
+            "fieldname": "intercompany_linked_company",
+            "label": "Linked Company",
+            "fieldtype": "Link",
+            "options": "Company",
+            "insert_after": "intercompany_linked_doc_name",
+            "read_only": 1,
+            "hidden": 1
+        }
+    ],
+    "Stock Entry": [
+        {
+            "fieldname": "is_intercompany",
+            "label": "Is Intercompany",
+            "fieldtype": "Check",
+            "default": "0",
+            "insert_after": "company",
+            "description": "Check if this transaction is with a sister company",
+            "in_list_view": 1,
+            "in_standard_filter": 1
+        },
+        {
+            "fieldname": "intercompany_target_company",
+            "label": "Intercompany Target Company",
+            "fieldtype": "Link",
+            "options": "Company",
+            "insert_after": "is_intercompany",
+            "description": "Target company for inter-company transaction (editable only when Is Intercompany is checked)",
+            "in_list_view": 1,
+            "in_standard_filter": 1
+        },
+        {
+            "fieldname": "intercompany_linked_doc_doctype",
+            "label": "Linked Document Type",
+            "fieldtype": "Data",
+            "insert_after": "intercompany_target_company",
+            "read_only": 1,
+            "hidden": 1
+        },
+        {
+            "fieldname": "intercompany_linked_doc_name",
+            "label": "Linked Document",
+            "fieldtype": "Data",
+            "insert_after": "intercompany_linked_doc_doctype",
+            "read_only": 1,
+            "hidden": 1
+        },
+        {
+            "fieldname": "intercompany_linked_company",
+            "label": "Linked Company",
+            "fieldtype": "Link",
+            "options": "Company",
+            "insert_after": "intercompany_linked_doc_name",
+            "read_only": 1,
+            "hidden": 1
+        }
+    ],
+    "Quotation": [
+        {
+            "fieldname": "is_intercompany",
+            "label": "Is Intercompany",
+            "fieldtype": "Check",
+            "default": "0",
+            "insert_after": "company",
+            "description": "Check if this transaction is with a sister company",
+            "in_list_view": 1,
+            "in_standard_filter": 1
+        },
+        {
+            "fieldname": "intercompany_target_company",
+            "label": "Intercompany Target Company",
+            "fieldtype": "Link",
+            "options": "Company",
+            "insert_after": "is_intercompany",
+            "description": "Target company for inter-company transaction (editable only when Is Intercompany is checked)",
+            "in_list_view": 1,
+            "in_standard_filter": 1
+        },
+        {
+            "fieldname": "intercompany_linked_doc_doctype",
+            "label": "Linked Document Type",
+            "fieldtype": "Data",
+            "insert_after": "intercompany_target_company",
+            "read_only": 1,
+            "hidden": 1
+        },
+        {
+            "fieldname": "intercompany_linked_doc_name",
+            "label": "Linked Document",
+            "fieldtype": "Data",
+            "insert_after": "intercompany_linked_doc_doctype",
+            "read_only": 1,
+            "hidden": 1
+        },
+        {
+            "fieldname": "intercompany_linked_company",
+            "label": "Linked Company",
+            "fieldtype": "Link",
+            "options": "Company",
+            "insert_after": "intercompany_linked_doc_name",
+            "read_only": 1,
+            "hidden": 1
+        }
+    ],
+    "Supplier Quotation": [
+        {
+            "fieldname": "is_intercompany",
+            "label": "Is Intercompany",
+            "fieldtype": "Check",
+            "default": "0",
+            "insert_after": "company",
+            "description": "Check if this transaction is with a sister company",
+            "in_list_view": 1,
+            "in_standard_filter": 1
+        },
+        {
+            "fieldname": "intercompany_target_company",
+            "label": "Intercompany Target Company",
+            "fieldtype": "Link",
+            "options": "Company",
+            "insert_after": "is_intercompany",
+            "description": "Target company for inter-company transaction (editable only when Is Intercompany is checked)",
+            "in_list_view": 1,
+            "in_standard_filter": 1
+        },
+        {
+            "fieldname": "intercompany_linked_doc_doctype",
+            "label": "Linked Document Type",
+            "fieldtype": "Data",
+            "insert_after": "intercompany_target_company",
+            "read_only": 1,
+            "hidden": 1
+        },
+        {
+            "fieldname": "intercompany_linked_doc_name",
+            "label": "Linked Document",
+            "fieldtype": "Data",
+            "insert_after": "intercompany_linked_doc_doctype",
+            "read_only": 1,
+            "hidden": 1
+        },
+        {
+            "fieldname": "intercompany_linked_company",
+            "label": "Linked Company",
+            "fieldtype": "Link",
+            "options": "Company",
+            "insert_after": "intercompany_linked_doc_name",
+            "read_only": 1,
+            "hidden": 1
+        }
+    ],
+    "Material Request": [
+        {
+            "fieldname": "is_intercompany",
+            "label": "Is Intercompany",
+            "fieldtype": "Check",
+            "default": "0",
+            "insert_after": "company",
+            "description": "Check if this transaction is with a sister company",
+            "in_list_view": 1,
+            "in_standard_filter": 1
+        },
+        {
+            "fieldname": "intercompany_target_company",
+            "label": "Intercompany Target Company",
+            "fieldtype": "Link",
+            "options": "Company",
+            "insert_after": "is_intercompany",
+            "description": "Target company for inter-company transaction (editable only when Is Intercompany is checked)",
+            "in_list_view": 1,
+            "in_standard_filter": 1
+        },
+        {
+            "fieldname": "intercompany_linked_doc_doctype",
+            "label": "Linked Document Type",
+            "fieldtype": "Data",
+            "insert_after": "intercompany_target_company",
+            "read_only": 1,
+            "hidden": 1
+        },
+        {
+            "fieldname": "intercompany_linked_doc_name",
+            "label": "Linked Document",
+            "fieldtype": "Data",
+            "insert_after": "intercompany_linked_doc_doctype",
+            "read_only": 1,
+            "hidden": 1
+        },
+        {
+            "fieldname": "intercompany_linked_company",
+            "label": "Linked Company",
+            "fieldtype": "Link",
+            "options": "Company",
+            "insert_after": "intercompany_linked_doc_name",
+            "read_only": 1,
+            "hidden": 1
+        }
+    ],
+    "Request for Quotation": [
+        {
+            "fieldname": "is_intercompany",
+            "label": "Is Intercompany",
+            "fieldtype": "Check",
+            "default": "0",
+            "insert_after": "company",
+            "description": "Check if this transaction is with a sister company",
+            "in_list_view": 1,
+            "in_standard_filter": 1
+        },
+        {
+            "fieldname": "intercompany_target_company",
+            "label": "Intercompany Target Company",
+            "fieldtype": "Link",
+            "options": "Company",
+            "insert_after": "is_intercompany",
+            "description": "Target company for inter-company transaction (editable only when Is Intercompany is checked)",
+            "in_list_view": 1,
+            "in_standard_filter": 1
+        },
+        {
+            "fieldname": "intercompany_linked_doc_doctype",
+            "label": "Linked Document Type",
+            "fieldtype": "Data",
+            "insert_after": "intercompany_target_company",
+            "read_only": 1,
+            "hidden": 1
+        },
+        {
+            "fieldname": "intercompany_linked_doc_name",
+            "label": "Linked Document",
+            "fieldtype": "Data",
+            "insert_after": "intercompany_linked_doc_doctype",
+            "read_only": 1,
+            "hidden": 1
+        },
+        {
+            "fieldname": "intercompany_linked_company",
+            "label": "Linked Company",
+            "fieldtype": "Link",
+            "options": "Company",
+            "insert_after": "intercompany_linked_doc_name",
+            "read_only": 1,
+            "hidden": 1
+        }
+    ]
 }

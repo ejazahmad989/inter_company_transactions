@@ -15,20 +15,22 @@
    - In ERPNext, Tree DocTypes load nodes in tree mode. An orphaned custom field dirtied the model (`frm.is_dirty() = true`), which caused Frappe Desk to replace the tree action buttons ("Add Child", "Delete") with the persistent blue "Save" button.
 
 ### Solutions Implemented
-1. **Database Repair for Corrupted Expressions (`uninstall.py`, `intercompany_transaction_link.py`, `install.py`)**:
-   - Implemented automated database repair function `repair_all_depends_on_expressions()` across `tabDocField`, `tabCustom Field`, and `tabProperty Setter`.
-   - Directly replaces `__islocalanddoc` -> `__islocal && doc`, `__islocaland` -> `__islocal && `, `anddoc.` -> ` && doc.`, and repairs glued `or`/`and` operators.
-   - Runs automatically on `after_install`, `before_migrate`, `after_migrate`, `before_uninstall`, and `after_uninstall`.
-   - Enhanced client-side `sanitize_depends_on_expression` in `inter_company_common.js` to handle `__islocalanddoc` dynamically.
-2. **Comprehensive App Uninstall Hooks (`uninstall.py`)**:
-   - Added `inter_company_transactions/uninstall.py` with `before_uninstall()` and `after_uninstall()`.
-   - Deletes all Custom Fields (`is_intercompany`, `intercompany_target_company`, `ic_customer_group`, `ic_supplier_group`, `custom_company`, etc.) and Property Setters created by the app.
-   - Cleans up `tabCustom DocPerm` for ICT DocTypes.
-   - Clears Frappe cache so uninstalled sites return to 100% clean standard ERPNext state.
-3. **Tree View Restoration (Customer Group & Supplier Group)**:
-   - Removed `Customer Group` and `Supplier Group` custom fields from `custom_fields.json` and `install.py`.
-   - Added automatic removal of any existing `Customer Group-custom_company` and `Supplier Group-custom_company` in `fix_legacy_custom_fields()`.
-   - Restores clean Tree view without dirty "Save" button locks.
-4. **Verification**:
-   - Verified Python compilation (`compileall`) with zero errors across all modules.
-   - Verified container linter and compiler pass cleanly.
+1. **Migration Patch `v1_5_repair_item_depends_on_and_clean_trees` in `patches.txt`**:
+   - Added patch `inter_company_transactions.patches.v1_5_repair_item_depends_on_and_clean_trees` to `patches.txt`.
+   - Guaranteed to execute when running `bench migrate`, regardless of whether previous patches were already logged.
+   - Permanently repairs `__islocalanddoc` -> `__islocal && doc` in `tabDocField`, `tabCustom Field`, and `tabProperty Setter`.
+   - Removes all obsolete custom fields from Tree DocTypes (`Customer Group`, `Supplier Group`, `Item Group`) and Master DocTypes (`Customer`, `Supplier`, `Item`, `Warehouse`).
+   - Removes intrusive property setters that modified `naming_series` on Customer and Supplier.
+   - Reloads affected DocTypes (`Item`, `Customer`, `Supplier`, `Customer Group`, `Supplier Group`, `Item Group`) and clears cache.
+2. **Pruned Fixtures (`fixtures/custom_field.json` & `fixtures/property_setter.json`)**:
+   - Removed `Customer Group-custom_company`, `Supplier Group-custom_company`, `Customer-ic_customer_group`, `Supplier-ic_supplier_group`, `Item-is_intercompany_item`, `Item-ic_item_group`, and `Warehouse` custom fields from `fixtures/custom_field.json`.
+   - Removed `Customer/Supplier-naming_series` property setters from `fixtures/property_setter.json`.
+   - Removed master doctypes from both `custom_fields.json` files and `install.py`.
+3. **Comprehensive App Uninstall Hooks (`uninstall.py`)**:
+   - Registered `before_uninstall` and `after_uninstall` in `hooks.py`.
+   - Automatically repairs `tabDocField`, drops all app custom fields and property setters, reloads standard master doctypes, and flushes cache so uninstalled sites return to 100% clean standard ERPNext state.
+4. **Resilient Client-Side Protection (`inter_company_common.js`)**:
+   - Sanitizes and catches invalid depends_on expressions safely without throwing uncaught exceptions, keeping form toolbar buttons (Delete, Add, Actions) fully operational.
+5. **Standalone Console Recovery Script**:
+   - Provided a 5-line Python snippet that can be pasted directly into `bench --site <site> console` to instantly fix the live database even when the app is currently uninstalled.
+

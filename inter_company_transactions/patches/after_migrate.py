@@ -5,14 +5,13 @@ def after_migrate():
     """Execute after migration to restore data and verify setup"""
     print("Running post-migration tasks for Inter Company Transactions...")
 
-    # Sanitize custom fields and doctypes to prevent SyntaxError
+    # Sanitize custom fields, repair depends_on expressions, and clean tree doctypes
     try:
-        from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
-            fix_legacy_custom_fields,
-        )
-        fix_legacy_custom_fields(force=True)
+        from inter_company_transactions.patches.v1_5_repair_item_depends_on_and_clean_trees import execute as repair_patch
+        repair_patch()
     except Exception as e:
-        print(f"Error sanitizing custom fields: {e}")
+        print(f"Error running repair patch: {e}")
+
 
     # Recreate any missing doctypes
     recreate_missing_doctypes()

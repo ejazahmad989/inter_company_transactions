@@ -18,9 +18,13 @@
 		}
 
 		// Fix corrupted __islocalanddoc in standard Item / Customer / Supplier forms
-		expr = expr.replace(/__islocalanddoc/g, '__islocal && doc');
+		expr = expr.replace(/__islocalanddoc\b/g, '__islocal && doc');
+		expr = expr.replace(/__islocalanddoc\./g, '__islocal && doc.');
 		expr = expr.replace(/__islocaland/g, '__islocal && ');
+		expr = expr.replace(/__islocal\s*and\s*doc\b/g, '__islocal && doc');
 		expr = expr.replace(/\banddoc\./g, ' && doc.');
+		expr = expr.replace(/(\w+)\s*anddoc\./g, '$1 && doc.');
+
 
 		// Fix glued 'or' operators (e.g. 1or(, 0or(, )or(, or(, )or, 1or, 0or)
 		expr = expr.replace(/(\d)\s*or\s*(?=[(\w])/g, function(m, p1) { return p1 + ' || '; });

@@ -2177,12 +2177,35 @@ def fix_legacy_custom_fields(force=False):
                     except Exception:
                         pass
 
-        # 2. Remove intrusive custom fields on Tree DocTypes (Customer Group, Supplier Group)
+        # 2. Remove intrusive custom fields on Tree DocTypes and Master DocTypes
         if frappe.db.table_exists("Custom Field"):
             frappe.db.sql("""
                 DELETE FROM `tabCustom Field`
-                WHERE `dt` IN ('Customer Group', 'Supplier Group') AND `fieldname` = 'custom_company'
+                WHERE `dt` IN ('Customer Group', 'Supplier Group', 'Item Group') AND `fieldname` = 'custom_company'
             """)
+            obsolete_master_fields = [
+                ('Customer', 'ic_customer_group'),
+                ('Supplier', 'ic_supplier_group'),
+                ('Item', 'is_intercompany_item'),
+                ('Item', 'ic_item_group'),
+                ('Warehouse', 'is_intercompany_warehouse'),
+                ('Warehouse', 'ic_warehouse'),
+            ]
+            for m_dt, m_fn in obsolete_master_fields:
+                frappe.db.sql("""
+                    DELETE FROM `tabCustom Field`
+                    WHERE `dt` = %s AND `fieldname` = %s
+                """, (m_dt, m_fn))
+
+        if frappe.db.table_exists("Property Setter"):
+            try:
+                frappe.db.sql("""
+                    DELETE FROM `tabProperty Setter`
+                    WHERE `doc_type` IN ('Customer', 'Supplier') AND `field_name` = 'naming_series'
+                """)
+            except Exception:
+                pass
+
 
             if frappe.db.has_column("Custom Field", "default"):
                 frappe.db.sql("""
