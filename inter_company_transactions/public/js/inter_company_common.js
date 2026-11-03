@@ -17,6 +17,11 @@
 			expr = expr.substring(5).trim();
 		}
 
+		// Fix corrupted __islocalanddoc in standard Item / Customer / Supplier forms
+		expr = expr.replace(/__islocalanddoc/g, '__islocal && doc');
+		expr = expr.replace(/__islocaland/g, '__islocal && ');
+		expr = expr.replace(/\banddoc\./g, ' && doc.');
+
 		// Fix glued 'or' operators (e.g. 1or(, 0or(, )or(, or(, )or, 1or, 0or)
 		expr = expr.replace(/(\d)\s*or\s*(?=[(\w])/g, function(m, p1) { return p1 + ' || '; });
 		expr = expr.replace(/(\))\s*or\s*(?=[(\w])/g, function(m, p1) { return p1 + ' || '; });

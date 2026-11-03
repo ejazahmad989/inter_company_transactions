@@ -32,6 +32,9 @@ def sanitize_for_python(code):
         return "False"
 
     cleaned = cleaned.replace("===", "==").replace("!==", "!=")
+    cleaned = cleaned.replace("__islocalanddoc", "__islocal and doc")
+    cleaned = cleaned.replace("__islocaland", "__islocal and ")
+    cleaned = re.sub(r'\banddoc\.', ' and doc.', cleaned)
 
     # Fix glued 'or' and 'and' operators (e.g. 1or(, )or(, or(, 1and(, etc.)
     cleaned = re.sub(r'(\d)\s*or\s*(?=[(\w])', r'\1 or ', cleaned)

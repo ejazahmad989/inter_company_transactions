@@ -2135,25 +2135,54 @@ def fix_legacy_custom_fields(force=False):
         return
 
     try:
+        # 1. Permanently repair corrupted depends_on expressions across DocField, Custom Field, and Property Setter
+        for tbl in ["tabDocField", "tabCustom Field", "tabProperty Setter"]:
+            if not frappe.db.table_exists(tbl):
+                continue
+            cols = ["value"] if tbl == "tabProperty Setter" else ["depends_on", "mandatory_depends_on", "read_only_depends_on"]
+            for col in cols:
+                if frappe.db.has_column(tbl, col):
+                    try:
+                        frappe.db.sql(f"""
+                            UPDATE `{tbl}`
+                            SET `{col}` = REPLACE(`{col}`, '__islocalanddoc', '__islocal && doc')
+                            WHERE `{col}` LIKE '%__islocalanddoc%'
+                        """)
+                        frappe.db.sql(f"""
+                            UPDATE `{tbl}`
+                            SET `{col}` = REPLACE(`{col}`, '__islocaland', '__islocal && ')
+                            WHERE `{col}` LIKE '%__islocaland%'
+                        """)
+                        frappe.db.sql(f"""
+                            UPDATE `{tbl}`
+                            SET `{col}` = REPLACE(`{col}`, 'anddoc.', ' && doc.')
+                            WHERE `{col}` LIKE '%anddoc.%'
+                        """)
+                        frappe.db.sql(f"""
+                            UPDATE `{tbl}`
+                            SET `{col}` = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(`{col}`,
+                                '1or(', '1 || ('),
+                                '0or(', '0 || ('),
+                                ')or(', ') || ('),
+                                '1and(', '1 && ('),
+                                '0and(', '0 && (')
+                            WHERE `{col}` IS NOT NULL AND (
+                                `{col}` LIKE '%1or(%' OR
+                                `{col}` LIKE '%0or(%' OR
+                                `{col}` LIKE '%)or(%' OR
+                                `{col}` LIKE '%1and(%' OR
+                                `{col}` LIKE '%0and(%'
+                            )
+                        """)
+                    except Exception:
+                        pass
+
+        # 2. Remove intrusive custom fields on Tree DocTypes (Customer Group, Supplier Group)
         if frappe.db.table_exists("Custom Field"):
-            for col in ["depends_on", "mandatory_depends_on", "read_only_depends_on"]:
-                if frappe.db.has_column("Custom Field", col):
-                    frappe.db.sql(f"""
-                        UPDATE `tabCustom Field`
-                        SET `{col}` = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(`{col}`,
-                            '1or(', '1 or ('),
-                            '0or(', '0 or ('),
-                            ')or(', ') or ('),
-                            '1and(', '1 and ('),
-                            '0and(', '0 and (')
-                        WHERE `{col}` IS NOT NULL AND (
-                            `{col}` LIKE '%1or(%' OR
-                            `{col}` LIKE '%0or(%' OR
-                            `{col}` LIKE '%)or(%' OR
-                            `{col}` LIKE '%1and(%' OR
-                            `{col}` LIKE '%0and(%'
-                        )
-                    """)
+            frappe.db.sql("""
+                DELETE FROM `tabCustom Field`
+                WHERE `dt` IN ('Customer Group', 'Supplier Group') AND `fieldname` = 'custom_company'
+            """)
 
             if frappe.db.has_column("Custom Field", "default"):
                 frappe.db.sql("""

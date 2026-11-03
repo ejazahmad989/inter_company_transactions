@@ -522,26 +522,6 @@ def create_custom_fields():
                         "description": "Used for mapping suppliers between companies"
                     }
                 ],
-                "Customer Group": [
-                    {
-                        "fieldname": "custom_company",
-                        "label": "Custom Company",
-                        "fieldtype": "Link",
-                        "options": "Company",
-                        "insert_after": "parent_customer_group",
-                        "description": "Company this customer group belongs to"
-                    }
-                ],
-                "Supplier Group": [
-                    {
-                        "fieldname": "custom_company",
-                        "label": "Custom Company",
-                        "fieldtype": "Link",
-                        "options": "Company",
-                        "insert_after": "parent_supplier_group",
-                        "description": "Company this supplier group belongs to"
-                    }
-                ],
                 "Item": [
                     {
                         "fieldname": "is_intercompany_item",
@@ -646,6 +626,22 @@ def create_custom_fields():
                         f"Custom Field Creation Error: {e!s}\nField: {field['fieldname']}\nDocType: {doctype}",
                         "Inter Company Transaction Setup"
                     )
+
+        # Delete obsolete Customer Group and Supplier Group custom fields
+        try:
+            frappe.db.sql("""
+                DELETE FROM `tabCustom Field`
+                WHERE `dt` IN ('Customer Group', 'Supplier Group') AND `fieldname` = 'custom_company'
+            """)
+        except Exception:
+            pass
+
+        # Run fix_legacy_custom_fields to repair __islocalanddoc and any depends_on
+        try:
+            from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import fix_legacy_custom_fields
+            fix_legacy_custom_fields(force=True)
+        except Exception:
+            pass
 
         frappe.db.commit()
 

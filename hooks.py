@@ -44,6 +44,8 @@ fixtures = []
 after_install = "inter_company_transactions.install.after_install"
 before_migrate = "inter_company_transactions.patches.before_migrate.before_migrate"
 after_migrate = "inter_company_transactions.patches.after_migrate.after_migrate"
+before_uninstall = "inter_company_transactions.uninstall.before_uninstall"
+after_uninstall = "inter_company_transactions.uninstall.after_uninstall"
 
 
 # Document Events for Inter-Company Transactions

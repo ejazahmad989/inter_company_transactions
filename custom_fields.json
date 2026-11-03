@@ -1,24 +1,4 @@
 {
-  "Customer Group": [
-    {
-      "fieldname": "custom_company",
-      "label": "Custom Company",
-      "fieldtype": "Link",
-      "options": "Company",
-      "insert_after": "parent_customer_group",
-      "description": "Company this customer group belongs to"
-    }
-  ],
-  "Supplier Group": [
-    {
-      "fieldname": "custom_company",
-      "label": "Custom Company",
-      "fieldtype": "Link",
-      "options": "Company",
-      "insert_after": "parent_supplier_group",
-      "description": "Company this supplier group belongs to"
-    }
-  ],
   "Customer": [
     {
       "fieldname": "ic_customer_group",
