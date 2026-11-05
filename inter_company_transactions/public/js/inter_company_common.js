@@ -55,106 +55,60 @@
 		try {
 			if (!window.frappe) return;
 
+			function safe_eval_expression(code, doc, parent) {
+				if (!code) return true;
+				let clean = sanitize_depends_on_expression(code);
+				if (typeof clean === 'string' && clean.startsWith('eval:')) {
+					clean = clean.substring(5).trim();
+				}
+				let d = doc || (window.cur_frm && window.cur_frm.doc) || {};
+				let p = parent || (window.cur_frm && window.cur_frm.doc) || d;
+				try {
+					let fn = new Function('doc', 'parent', 'let out = ' + clean + '; return out;');
+					return !!fn(d, p);
+				} catch (e) {
+					return false;
+				}
+			}
+
 			// 1. Root patch for frappe.utils.eval (used by layout.js, grid_row.js, controls)
 			if (frappe.utils && frappe.utils.eval && !frappe.utils.eval._ict_sanitized) {
-				const orig_utils_eval = frappe.utils.eval;
 				frappe.utils.eval = function(code, context) {
 					if (!code || typeof code !== 'string') return true;
-					const sanitized = sanitize_depends_on_expression(code);
-					try {
-						return orig_utils_eval.call(this, sanitized, context);
-					} catch (err) {
-						try {
-							let clean = sanitized;
-							if (clean.startsWith('eval:')) clean = clean.substring(5);
-							let doc = (context && context.doc) || (window.cur_frm && window.cur_frm.doc) || {};
-							let parent = (context && context.parent) || doc;
-							let fn = new Function('doc', 'parent', 'let out = ' + clean + '; return out;');
-							return fn(doc, parent);
-						} catch (evalErr) {
-							console.warn('[ICT utils.eval] Safely caught invalid expression:', code, evalErr);
-							return false;
-						}
-					}
+					let doc = (context && context.doc) || (window.cur_frm && window.cur_frm.doc) || {};
+					let parent = (context && context.parent) || doc;
+					return safe_eval_expression(code, doc, parent);
 				};
 				frappe.utils.eval._ict_sanitized = true;
 			}
 
 			// 2. Patch frappe.ui.form.Layout.prototype.evaluate_depends_on_value (layout.js:773)
 			if (frappe.ui && frappe.ui.form && frappe.ui.form.Layout && frappe.ui.form.Layout.prototype.evaluate_depends_on_value && !frappe.ui.form.Layout.prototype.evaluate_depends_on_value._ict_sanitized) {
-				const orig_layout_eval = frappe.ui.form.Layout.prototype.evaluate_depends_on_value;
 				frappe.ui.form.Layout.prototype.evaluate_depends_on_value = function(expression, doc) {
 					if (!expression) return true;
-					const sanitized = sanitize_depends_on_expression(expression);
-					try {
-						return orig_layout_eval.call(this, sanitized, doc);
-					} catch (err) {
-						try {
-							let clean = sanitized;
-							if (clean.startsWith('eval:')) clean = clean.substring(5);
-							let parent = (this.frm && this.frm.doc) || doc || {};
-							let fn = new Function('doc', 'parent', 'let out = ' + clean + '; return out;');
-							return fn(doc || parent, parent);
-						} catch (evalErr) {
-							console.warn('[ICT Layout] Safely caught invalid expression:', expression, evalErr);
-							return false;
-						}
-					}
+					let parent = (this.frm && this.frm.doc) || doc || {};
+					let current_doc = doc || parent;
+					return safe_eval_expression(expression, current_doc, parent);
 				};
 				frappe.ui.form.Layout.prototype.evaluate_depends_on_value._ict_sanitized = true;
 			}
 
 			// 3. Patch frappe.ui.form.evaluate_depends_on_value
 			if (frappe.ui && frappe.ui.form && frappe.ui.form.evaluate_depends_on_value && !frappe.ui.form.evaluate_depends_on_value._ict_sanitized) {
-				const orig_eval = frappe.ui.form.evaluate_depends_on_value;
 				frappe.ui.form.evaluate_depends_on_value = function(expression, doc, parent) {
 					if (!expression) return true;
-					const sanitized = sanitize_depends_on_expression(expression);
-					try {
-						return orig_eval.call(this, sanitized, doc, parent);
-					} catch (err) {
-						try {
-							let code = sanitized;
-							if (code.startsWith('eval:')) {
-								code = code.substring(5);
-							}
-							let fn = new Function('doc', 'parent', 'let out = ' + code + '; return out;');
-							return fn(doc, parent);
-						} catch (evalErr) {
-							console.warn('[ICT] Safely caught invalid depends_on expression:', expression, evalErr);
-							return false;
-						}
-					}
+					return safe_eval_expression(expression, doc, parent);
 				};
 				frappe.ui.form.evaluate_depends_on_value._ict_sanitized = true;
 			}
 
 			// 4. Patch frappe.ui.form.GridRow.prototype.evaluate_depends_on_value (grid_row.js:823)
 			if (frappe.ui && frappe.ui.form && frappe.ui.form.GridRow && frappe.ui.form.GridRow.prototype.evaluate_depends_on_value && !frappe.ui.form.GridRow.prototype.evaluate_depends_on_value._ict_sanitized) {
-				const orig_grid_eval = frappe.ui.form.GridRow.prototype.evaluate_depends_on_value;
 				frappe.ui.form.GridRow.prototype.evaluate_depends_on_value = function(expression) {
 					if (!expression) return true;
-					const sanitized = sanitize_depends_on_expression(expression);
-					try {
-						return orig_grid_eval.call(this, sanitized);
-					} catch (err) {
-						try {
-							let doc = this.doc;
-							let parent = (this.grid && (this.grid.df.doc || (this.grid.frm && this.grid.frm.doc))) || null;
-							if (!parent && doc && doc.parent && window.locals && window.locals[doc.parenttype]) {
-								parent = window.locals[doc.parenttype][doc.parent];
-							}
-							let code = sanitized;
-							if (code.startsWith('eval:')) {
-								code = code.substring(5);
-							}
-							let fn = new Function('doc', 'parent', 'let out = ' + code + '; return out;');
-							return fn(doc, parent);
-						} catch (evalErr) {
-							console.warn('[ICT GridRow] Safely caught invalid depends_on expression:', expression, evalErr);
-							return false;
-						}
-					}
+					let doc = this.doc;
+					let parent = (this.grid && (this.grid.df.doc || (this.grid.frm && this.grid.frm.doc))) || null;
+					return safe_eval_expression(expression, doc, parent);
 				};
 				frappe.ui.form.GridRow.prototype.evaluate_depends_on_value._ict_sanitized = true;
 			}
@@ -162,6 +116,7 @@
 			// Protection should never fail silently or break caller
 		}
 	}
+
 
 	// Install immediately, on DOM ready, and on page-change / route change
 	patch_evaluate_depends_on();

@@ -15,22 +15,19 @@
    - In ERPNext, Tree DocTypes load nodes in tree mode. An orphaned custom field dirtied the model (`frm.is_dirty() = true`), which caused Frappe Desk to replace the tree action buttons ("Add Child", "Delete") with the persistent blue "Save" button.
 
 ### Solutions Implemented
-1. **Migration Patch `v1_5_repair_item_depends_on_and_clean_trees` in `patches.txt`**:
+1. **Migration Patch `v1_5_repair_item_depends_on_and_clean_trees` & `diagnose_and_heal.py`**:
    - Added patch `inter_company_transactions.patches.v1_5_repair_item_depends_on_and_clean_trees` to `patches.txt`.
-   - Guaranteed to execute when running `bench migrate`, regardless of whether previous patches were already logged.
-   - Permanently repairs `__islocalanddoc` -> `__islocal && doc` in `tabDocField`, `tabCustom Field`, and `tabProperty Setter`.
-   - Removes all obsolete custom fields from Tree DocTypes (`Customer Group`, `Supplier Group`, `Item Group`) and Master DocTypes (`Customer`, `Supplier`, `Item`, `Warehouse`).
-   - Removes intrusive property setters that modified `naming_series` on Customer and Supplier.
-   - Reloads affected DocTypes (`Item`, `Customer`, `Supplier`, `Customer Group`, `Supplier Group`, `Item Group`) and clears cache.
-2. **Pruned Fixtures (`fixtures/custom_field.json` & `fixtures/property_setter.json`)**:
-   - Removed `Customer Group-custom_company`, `Supplier Group-custom_company`, `Customer-ic_customer_group`, `Supplier-ic_supplier_group`, `Item-is_intercompany_item`, `Item-ic_item_group`, and `Warehouse` custom fields from `fixtures/custom_field.json`.
-   - Removed `Customer/Supplier-naming_series` property setters from `fixtures/property_setter.json`.
-   - Removed master doctypes from both `custom_fields.json` files and `install.py`.
+   - Wired to run automatically on `bench migrate`, `after_install`, and `before/after_uninstall`.
+   - Permanently repairs `__islocalanddoc` -> `__islocal && doc` in MariaDB text columns and in `.json` schema files on disk in `apps/` before reloading doctypes.
+   - Restores missing `+ Add Customer`, `+ Add Supplier`, and `Delete` buttons by wiping restrictive `tabCustom DocPerm` overrides and ensuring Manager roles have `create: 1` and `delete: 1`.
+   - Resolves the persistent "Save" button on Tree DocTypes (`Supplier Group`, `Customer Group`, `Item Group`) by purging orphaned custom fields and conflicting property setters.
+2. **Pruned Fixtures & Custom Fields (`fixtures/`, `custom_fields.json`, `install.py`)**:
+   - Removed all master doctypes and tree doctypes from fixtures and custom field definitions so only transaction doctypes have intercompany fields.
 3. **Comprehensive App Uninstall Hooks (`uninstall.py`)**:
-   - Registered `before_uninstall` and `after_uninstall` in `hooks.py`.
-   - Automatically repairs `tabDocField`, drops all app custom fields and property setters, reloads standard master doctypes, and flushes cache so uninstalled sites return to 100% clean standard ERPNext state.
-4. **Resilient Client-Side Protection (`inter_company_common.js`)**:
-   - Sanitizes and catches invalid depends_on expressions safely without throwing uncaught exceptions, keeping form toolbar buttons (Delete, Add, Actions) fully operational.
-5. **Standalone Console Recovery Script**:
-   - Provided a 5-line Python snippet that can be pasted directly into `bench --site <site> console` to instantly fix the live database even when the app is currently uninstalled.
+   - Hardened `before_uninstall` and `after_uninstall` to run `run_full_healing()`, drops all ICT fields and property setters, and cleans master permissions.
+4. **Resilient Non-Throwing Client-Side Protection (`inter_company_common.js`)**:
+   - Replaced `evaluate_depends_on_value` and `frappe.utils.eval` with a safe, non-throwing evaluation function that never invokes `frappe.throw`, guaranteeing form headers and action buttons always render.
+5. **Standalone Console & Runner Script (`repair_site.py`)**:
+   - Created `repair_site.py` for direct execution via `bench --site <site> run-script repair_site.py` or via `bench console` even when the app is uninstalled.
+
 

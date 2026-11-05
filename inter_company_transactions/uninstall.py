@@ -7,36 +7,24 @@ import frappe
 def before_uninstall():
     """
     Executes before the app is uninstalled:
-    1. Removes all Custom Fields added to standard ERPNext DocTypes (Customer, Supplier,
-       Customer Group, Supplier Group, Item, Warehouse, and transaction doctypes).
-    2. Removes any Property Setters created by the app.
-    3. Repairs any corrupted depends_on expressions in tabDocField (e.g. restoring
-       'doc.__islocal && doc.is_stock_item' if damaged).
-    4. Ensures the site database is left in a pristine, clean state so ERPNext master
-       forms (Customer, Supplier, Item, Customer Group, etc.) never experience dirty form
-       locks or JavaScript depends_on evaluation crashes after uninstall.
+    Runs full self-healing to repair expressions, restore Customer/Supplier/Item Add & Delete buttons,
+    wipe Tree custom fields, and leave the site in a pristine, standard ERPNext state.
     """
     print("Running before_uninstall for Inter Company Transactions...")
+    try:
+        from inter_company_transactions.diagnose_and_heal import run_full_healing
+        run_full_healing(verbose=True)
+    except Exception:
+        pass
 
-    # 1. Repair any corrupted depends_on in tabDocField, tabCustom Field, tabProperty Setter
-    repair_all_depends_on_expressions()
-
-    # 2. Delete all Custom Fields created by or belonging to this app
+    # Delete all Custom Fields created by or belonging to this app
     cleanup_custom_fields()
 
-    # 3. Delete any Property Setters created by the app
+    # Delete any Property Setters created by the app
     cleanup_property_setters()
 
-    # 4. Remove any ICT Custom DocPerms
+    # Remove any ICT Custom DocPerms
     cleanup_custom_docperms()
-
-    # 5. Reload standard DocTypes so in-memory schemas and Desk cache are pristine
-    for dt in ["Item", "Customer", "Supplier", "Customer Group", "Supplier Group", "Item Group"]:
-        try:
-            if frappe.db.exists("DocType", dt):
-                frappe.reload_doctype(dt, force=True)
-        except Exception:
-            pass
 
     frappe.db.commit()
     frappe.clear_cache()
@@ -46,19 +34,18 @@ def before_uninstall():
 def after_uninstall():
     """
     Executes after the app is uninstalled:
-    Final cache clearing and schema validation.
+    Final cache clearing, expression repair and schema validation.
     """
     print("Running after_uninstall for Inter Company Transactions...")
-    repair_all_depends_on_expressions()
-    for dt in ["Item", "Customer", "Supplier", "Customer Group", "Supplier Group", "Item Group"]:
-        try:
-            if frappe.db.exists("DocType", dt):
-                frappe.reload_doctype(dt, force=True)
-        except Exception:
-            pass
+    try:
+        from inter_company_transactions.diagnose_and_heal import run_full_healing
+        run_full_healing(verbose=True)
+    except Exception:
+        pass
     frappe.db.commit()
     frappe.clear_cache()
     print("Post-uninstall tasks completed. ERPNext site is clean.")
+
 
 
 
