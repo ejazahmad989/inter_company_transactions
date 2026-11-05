@@ -131,3 +131,29 @@ Before submitting to Frappe Marketplace:
 - [x] **Multi-Language Translations:** Standard CSV translation bundles included for Spanish (`es`), French (`fr`), and Arabic (`ar`).
 - [x] **Automated Tests:** Comprehensive unit test suite with 100% passing tests.
 - [x] **Documentation & Assets:** Full User Guide markdown, PDF user guide, and installation instructions included in repo.
+- [x] **Zero-Residual Uninstallation:** Certified `before_uninstall` and `after_uninstall` hooks that wipe all custom artifacts on uninstall.
+
+---
+
+## 7. Zero-Residual Uninstallation & Core Schema Isolation Guarantee
+
+For marketplace evaluators and prospective customers testing the application:
+
+1. **Master & Tree DocType Isolation**:
+   - The application **never** adds custom fields, property setters, or custom permissions to standard ERPNext master records (`Customer`, `Supplier`, `Item`, `Warehouse`) or tree structures (`Customer Group`, `Supplier Group`, `Item Group`).
+   - Only operational transaction vouchers (`Sales Order`, `Purchase Order`, `Sales Invoice`, `Purchase Invoice`, `Journal Entry`, `Payment Entry`, etc.) receive inter-company routing fields.
+
+2. **Clean Uninstallation Guarantee**:
+   - Running `bench --site <site> uninstall-app inter_company_transactions` executes certified cleanup hooks that:
+     - Delete all custom fields introduced by the app.
+     - Delete all property setters introduced by the app.
+     - Remove all custom docperms introduced by the app.
+     - Restore standard ERPNext metadata and clear all site and Redis caches.
+   - The customer's ERPNext instance is restored to a 100% vanilla state with zero leftover records or schema artifacts.
+
+3. **Built-in Quality Audit Tool**:
+   - Verify marketplace readiness and safety at any time:
+     ```bash
+     bench --site <site> execute inter_company_transactions.commands.verify_marketplace_readiness
+     ```
+

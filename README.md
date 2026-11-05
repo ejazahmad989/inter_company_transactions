@@ -143,12 +143,23 @@ bench --site [your-site-name] migrate
 ### 3. Test Automated Document Creation
 Create a Sales Order in Company A for the mapped intercompany customer. The system will automatically check `Is Intercompany` and set Company B as the target company. Upon submitting, a matching Purchase Order in Company B is instantly generated!
 
-### 4. Run Automated Unit Tests
+### 4. Run Automated Unit Tests & Marketplace Safety Audit
 ```bash
+# Run unit tests
 bench --site [your-site-name] run-tests --app inter_company_transactions
+
+# Run automated 6-point marketplace readiness & safety audit
+bench --site [your-site-name] execute inter_company_transactions.commands.verify_marketplace_readiness
+```
+
+### 5. Zero-Residual Clean Uninstall Guarantee
+When evaluating or removing the application, the app's registered hooks completely wipe all custom fields, property setters, and permissions, leaving standard ERPNext in a 100% vanilla state:
+```bash
+bench --site [your-site-name] uninstall-app inter_company_transactions
 ```
 
 ---
+
 
 ## 🌐 Multi-Language Support
 Out-of-the-box translation support included for:
