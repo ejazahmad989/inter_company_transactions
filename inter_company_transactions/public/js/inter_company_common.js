@@ -71,44 +71,48 @@
 				}
 			}
 
-			// 1. Root patch for frappe.utils.eval (used by layout.js, grid_row.js, controls)
-			if (frappe.utils && frappe.utils.eval && !frappe.utils.eval._ict_sanitized) {
-				frappe.utils.eval = function(code, context) {
-					if (!code || typeof code !== 'string') return true;
-					let doc = (context && context.doc) || (window.cur_frm && window.cur_frm.doc) || {};
-					let parent = (context && context.parent) || doc;
-					return safe_eval_expression(code, doc, parent);
-				};
-				frappe.utils.eval._ict_sanitized = true;
-			}
-
-			// 2. Patch frappe.ui.form.Layout.prototype.evaluate_depends_on_value (layout.js:773)
+			// 1. Wrap Layout.prototype.evaluate_depends_on_value safely
 			if (frappe.ui && frappe.ui.form && frappe.ui.form.Layout && frappe.ui.form.Layout.prototype.evaluate_depends_on_value && !frappe.ui.form.Layout.prototype.evaluate_depends_on_value._ict_sanitized) {
+				const orig_layout_eval = frappe.ui.form.Layout.prototype.evaluate_depends_on_value;
 				frappe.ui.form.Layout.prototype.evaluate_depends_on_value = function(expression, doc) {
 					if (!expression) return true;
-					let parent = (this.frm && this.frm.doc) || doc || {};
-					let current_doc = doc || parent;
-					return safe_eval_expression(expression, current_doc, parent);
+					try {
+						return orig_layout_eval.apply(this, arguments);
+					} catch (e) {
+						let parent = (this.frm && this.frm.doc) || doc || {};
+						let current_doc = doc || parent;
+						return safe_eval_expression(expression, current_doc, parent);
+					}
 				};
 				frappe.ui.form.Layout.prototype.evaluate_depends_on_value._ict_sanitized = true;
 			}
 
-			// 3. Patch frappe.ui.form.evaluate_depends_on_value
+			// 2. Wrap frappe.ui.form.evaluate_depends_on_value safely
 			if (frappe.ui && frappe.ui.form && frappe.ui.form.evaluate_depends_on_value && !frappe.ui.form.evaluate_depends_on_value._ict_sanitized) {
+				const orig_form_eval = frappe.ui.form.evaluate_depends_on_value;
 				frappe.ui.form.evaluate_depends_on_value = function(expression, doc, parent) {
 					if (!expression) return true;
-					return safe_eval_expression(expression, doc, parent);
+					try {
+						return orig_form_eval.apply(this, arguments);
+					} catch (e) {
+						return safe_eval_expression(expression, doc, parent);
+					}
 				};
 				frappe.ui.form.evaluate_depends_on_value._ict_sanitized = true;
 			}
 
-			// 4. Patch frappe.ui.form.GridRow.prototype.evaluate_depends_on_value (grid_row.js:823)
+			// 3. Wrap GridRow.prototype.evaluate_depends_on_value safely
 			if (frappe.ui && frappe.ui.form && frappe.ui.form.GridRow && frappe.ui.form.GridRow.prototype.evaluate_depends_on_value && !frappe.ui.form.GridRow.prototype.evaluate_depends_on_value._ict_sanitized) {
+				const orig_grid_eval = frappe.ui.form.GridRow.prototype.evaluate_depends_on_value;
 				frappe.ui.form.GridRow.prototype.evaluate_depends_on_value = function(expression) {
 					if (!expression) return true;
-					let doc = this.doc;
-					let parent = (this.grid && (this.grid.df.doc || (this.grid.frm && this.grid.frm.doc))) || null;
-					return safe_eval_expression(expression, doc, parent);
+					try {
+						return orig_grid_eval.apply(this, arguments);
+					} catch (e) {
+						let doc = this.doc;
+						let parent = (this.grid && (this.grid.df.doc || (this.grid.frm && this.grid.frm.doc))) || null;
+						return safe_eval_expression(expression, doc, parent);
+					}
 				};
 				frappe.ui.form.GridRow.prototype.evaluate_depends_on_value._ict_sanitized = true;
 			}
@@ -139,7 +143,8 @@
 		'Stock Entry',
 		'Journal Entry',
 		'Payment Entry',
-		'Request for Quotation'
+		'Request for Quotation',
+		'Landed Cost Voucher'
 	];
 
 	function sync_intercompany_state(frm) {
@@ -274,6 +279,23 @@
 							'blue'
 						);
 					}
+				} else if (frm.doc.docstatus === 0 && cint(frm.doc.is_intercompany) && frm.dashboard && frm.dashboard.set_headline_alert) {
+					if (frm.doc.doctype === 'Stock Entry') {
+						frm.dashboard.set_headline_alert(
+							__('Inter-Company Stock Transfer: Submit as Material Issue in {0}; a matching Material Receipt will be auto-created in {1}.', [
+								frm.doc.company || __('Source Company'),
+								frm.doc.intercompany_target_company || __('Target Sister Company')
+							]),
+							'blue'
+						);
+					} else if (frm.doc.doctype === 'Landed Cost Voucher') {
+						frm.dashboard.set_headline_alert(
+							__('Inter-Company Landed Cost Recharge: On submit, a balanced Journal Entry will be auto-created in {0}.', [
+								frm.doc.intercompany_target_company || __('Target Sister Company')
+							]),
+							'blue'
+						);
+					}
 				} else if (frm.doc.docstatus === 1 && cint(frm.doc.is_intercompany)) {
 					// Allow manual sync trigger for submitted documents ONLY IF is_intercompany is checked
 					frm.add_custom_button(
@@ -317,9 +339,18 @@
 					if (frm.doc.intercompany_target_company === frm.doc.company) {
 						frm.set_value('intercompany_target_company', '');
 					}
+					if (frm.doc.doctype === 'Stock Entry' && frm.doc.docstatus === 0 && !frm.doc.stock_entry_type) {
+						frm.set_value('stock_entry_type', 'Material Issue');
+					}
 					sync_intercompany_state(frm);
+					let msg = __('Intercompany mode enabled: Select target sister company in Intercompany Target Company.');
+					if (frm.doc.doctype === 'Stock Entry') {
+						msg = __('Intercompany Stock Transfer enabled (Material Issue -> Material Receipt in target sister company).');
+					} else if (frm.doc.doctype === 'Landed Cost Voucher') {
+						msg = __('Intercompany Landed Cost Recharge enabled (mirrors balanced Journal Entry in target sister company).');
+					}
 					frappe.show_alert({
-						message: __('Intercompany mode enabled: Select target sister company in Intercompany Target Company.'),
+						message: msg,
 						indicator: 'blue'
 					});
 				} else {

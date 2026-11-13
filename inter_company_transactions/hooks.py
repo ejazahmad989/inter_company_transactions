@@ -16,8 +16,7 @@ required_apps = ["erpnext"]
 # Assets includes
 app_include_css = "/assets/inter_company_transactions/css/inter_company_transactions.css"
 app_include_js = [
-    "/assets/inter_company_transactions/js/inter_company_common.js",
-    "/assets/inter_company_transactions/js/inter_company_transaction_map.js"
+    "/assets/inter_company_transactions/js/inter_company_common.js"
 ]
 
 # Session Hooks
@@ -117,6 +116,16 @@ doc_events = {
     },
     "Supplier Quotation": {
         "validate": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.auto_detect_intercompany_party",
+        "on_submit": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
+        "before_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_cancellation",
+        "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents"
+    },
+    "Request for Quotation": {
+        "on_submit": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
+        "before_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_cancellation",
+        "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents"
+    },
+    "Landed Cost Voucher": {
         "on_submit": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
         "before_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_cancellation",
         "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents"

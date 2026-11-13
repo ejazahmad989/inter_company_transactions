@@ -43,22 +43,24 @@ def ensure_user_notification_settings(user=None):
         pass
 
 def before_request():
-    """Ensure database is clean of legacy expressions and user has valid settings"""
+    """Ensure user has valid notification settings without triggering DDL or DB writes on steady-state requests"""
     try:
-        try:
-            from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
-                fix_legacy_custom_fields,
-            )
-            fix_legacy_custom_fields()
-        except Exception:
-            pass
-
         user = getattr(getattr(frappe, "session", None), "user", None)
-        if user and user not in ("Guest", "None"):
-            ensure_user_notification_settings(user)
-            ensure_user_ict_notification_settings(user)
+        if not user or user in ("Guest", "None"):
+            return
+
+        cache = frappe.cache() if hasattr(frappe, "cache") else None
+        cache_key = f"ict_notif_init:{user}"
+        if cache and cache.get_value(cache_key):
+            return
+
+        ensure_user_notification_settings(user)
+        ensure_user_ict_notification_settings(user)
+        if cache:
+            cache.set_value(cache_key, 1, expires_in_sec=3600)
     except Exception:
         pass
+
 
 def ensure_user_ict_notification_settings(user=None):
     """Ensure that the given user has an ICT Notification Setting document"""
@@ -74,6 +76,7 @@ def ensure_user_ict_notification_settings(user=None):
         get_ict_notification_settings(user)
     except Exception:
         pass
+
 
 def on_session_creation(login_manager):
     """Handle session creation"""

@@ -60,13 +60,32 @@ class InterCompanyEliminationRun(Document):
 				total_sales += flt(inv.grand_total)
 				total_ar += flt(inv.outstanding_amount)
 
-		self.total_revenue_eliminated = round(total_sales, 2)
-		self.total_cogs_eliminated = round(total_sales, 2)
-		self.total_receivables_eliminated = round(min(total_ar, total_ap) if total_ap else total_ar, 2)
-		self.total_payables_eliminated = self.total_receivables_eliminated
-
-		# Standard estimated unrealized profit allocation (defaulting to 15% average margin on unsold intercompany stock)
-		self.unrealized_inventory_profit = round(flt(self.total_revenue_eliminated) * 0.15, 2)
+		scope = (self.elimination_type or "All (Full Consolidation)").strip()
+		if scope == "Intercompany AR / AP Elimination":
+			self.total_revenue_eliminated = 0.0
+			self.total_cogs_eliminated = 0.0
+			self.total_receivables_eliminated = round(min(total_ar, total_ap) if total_ap else total_ar, 2)
+			self.total_payables_eliminated = self.total_receivables_eliminated
+			self.unrealized_inventory_profit = 0.0
+		elif scope == "Intercompany Revenue / COGS Elimination":
+			self.total_revenue_eliminated = round(total_sales, 2)
+			self.total_cogs_eliminated = round(total_sales, 2)
+			self.total_receivables_eliminated = 0.0
+			self.total_payables_eliminated = 0.0
+			self.unrealized_inventory_profit = 0.0
+		elif scope == "Unrealized Inventory Profit Elimination":
+			self.total_revenue_eliminated = 0.0
+			self.total_cogs_eliminated = 0.0
+			self.total_receivables_eliminated = 0.0
+			self.total_payables_eliminated = 0.0
+			self.unrealized_inventory_profit = round(flt(total_sales) * 0.15, 2)
+		else:
+			self.total_revenue_eliminated = round(total_sales, 2)
+			self.total_cogs_eliminated = round(total_sales, 2)
+			self.total_receivables_eliminated = round(min(total_ar, total_ap) if total_ap else total_ar, 2)
+			self.total_payables_eliminated = self.total_receivables_eliminated
+			# Standard estimated unrealized profit allocation (15% average margin on unsold intercompany stock)
+			self.unrealized_inventory_profit = round(flt(self.total_revenue_eliminated) * 0.15, 2)
 
 		self.status = "Calculated"
 		frappe.msgprint(_("Calculated elimination entries for consolidation period."), indicator="green")
@@ -79,7 +98,7 @@ class InterCompanyEliminationRun(Document):
 		company = self.consolidation_company
 		date = self.posting_date or nowdate()
 
-		if not self.total_revenue_eliminated and not self.total_receivables_eliminated:
+		if not self.total_revenue_eliminated and not self.total_receivables_eliminated and not self.unrealized_inventory_profit:
 			self.status = "Submitted"
 			return
 
@@ -89,45 +108,82 @@ class InterCompanyEliminationRun(Document):
 		je.posting_date = date
 		je.user_remark = f"Consolidation Elimination Entry for {self.title} ({self.from_date} to {self.to_date})"
 
-		accounts = frappe.get_all("Account", filters={"company": company, "is_group": 0}, pluck="name", limit=4)
-		if len(accounts) >= 2:
-			rev_acct = accounts[0]
-			cogs_acct = accounts[1]
-			ar_acct = accounts[2] if len(accounts) > 2 else accounts[0]
-			ap_acct = accounts[3] if len(accounts) > 3 else accounts[1]
+		rev_acct = (
+			frappe.db.get_value("Company", company, "default_income_account")
+			or frappe.db.get_value("Account", {"company": company, "root_type": "Income", "is_group": 0}, "name")
+		)
+		cogs_acct = (
+			frappe.db.get_value("Company", company, "default_expense_account")
+			or frappe.db.get_value("Account", {"company": company, "root_type": "Expense", "is_group": 0}, "name")
+		)
+		ar_acct = (
+			frappe.db.get_value("Company", company, "default_receivable_account")
+			or frappe.db.get_value("Account", {"company": company, "account_type": "Receivable", "is_group": 0}, "name")
+		)
+		ap_acct = (
+			frappe.db.get_value("Company", company, "default_payable_account")
+			or frappe.db.get_value("Account", {"company": company, "account_type": "Payable", "is_group": 0}, "name")
+		)
+		inv_acct = (
+			frappe.db.get_value("Company", company, "default_inventory_account")
+			or frappe.db.get_value("Account", {"company": company, "account_type": "Stock", "is_group": 0}, "name")
+			or ar_acct
+		)
 
-			# 1. Eliminate Revenue vs COGS
-			if self.total_revenue_eliminated > 0:
-				je.append("accounts", {
-					"account": rev_acct,
-					"debit_in_account_currency": flt(self.total_revenue_eliminated),
-					"credit_in_account_currency": 0
-				})
-				je.append("accounts", {
-					"account": cogs_acct,
-					"debit_in_account_currency": 0,
-					"credit_in_account_currency": flt(self.total_revenue_eliminated)
-				})
+		# 1. Eliminate Revenue vs COGS
+		if flt(self.total_revenue_eliminated) > 0 and rev_acct and cogs_acct:
+			je.append("accounts", {
+				"account": rev_acct,
+				"debit_in_account_currency": flt(self.total_revenue_eliminated),
+				"credit_in_account_currency": 0
+			})
+			je.append("accounts", {
+				"account": cogs_acct,
+				"debit_in_account_currency": 0,
+				"credit_in_account_currency": flt(self.total_revenue_eliminated)
+			})
 
-			# 2. Eliminate AR vs AP
-			if self.total_receivables_eliminated > 0:
-				je.append("accounts", {
-					"account": ap_acct,
-					"debit_in_account_currency": flt(self.total_receivables_eliminated),
-					"credit_in_account_currency": 0
-				})
-				je.append("accounts", {
-					"account": ar_acct,
-					"debit_in_account_currency": 0,
-					"credit_in_account_currency": flt(self.total_receivables_eliminated)
-				})
+		# 2. Eliminate AR vs AP
+		if flt(self.total_receivables_eliminated) > 0 and ap_acct and ar_acct:
+			je.append("accounts", {
+				"account": ap_acct,
+				"debit_in_account_currency": flt(self.total_receivables_eliminated),
+				"credit_in_account_currency": 0
+			})
+			je.append("accounts", {
+				"account": ar_acct,
+				"debit_in_account_currency": 0,
+				"credit_in_account_currency": flt(self.total_receivables_eliminated)
+			})
 
+		# 3. Eliminate Unrealized Margin in Ending Inventory (if requested standalone or all)
+		if flt(self.unrealized_inventory_profit) > 0 and cogs_acct and inv_acct:
+			je.append("accounts", {
+				"account": cogs_acct,
+				"debit_in_account_currency": flt(self.unrealized_inventory_profit),
+				"credit_in_account_currency": 0
+			})
+			je.append("accounts", {
+				"account": inv_acct,
+				"debit_in_account_currency": 0,
+				"credit_in_account_currency": flt(self.unrealized_inventory_profit)
+			})
+
+		if je.get("accounts"):
 			je.flags.ignore_permissions = True
-			je.insert()
+			je.flags.ignore_mandatory = True
+			je.insert(ignore_permissions=True)
 			try:
+				if hasattr(frappe.db, "savepoint"):
+					frappe.db.savepoint("ict_elim_submit")
 				je.submit()
-			except Exception:
-				pass
+			except Exception as e:
+				if hasattr(frappe.db, "rollback"):
+					try:
+						frappe.db.rollback(save_point="ict_elim_submit")
+					except Exception:
+						pass
+				frappe.log_error(f"Elimination JE {je.name} kept as draft: {e!s}", "Inter Company Elimination")
 			self.elimination_journal_entry = je.name
 
 		self.status = "Submitted"

@@ -215,12 +215,30 @@ def get_console_dashboard_data():
 	return data
 
 
+def _ensure_allowed_to_transact_with(party_name, party_doctype, allowed_company):
+	"""Ensure standard ERPNext allowed_to_transact_with child row is populated for v14/v15/v16 compatibility."""
+	if not (party_name and allowed_company and frappe.db.exists(party_doctype, party_name)):
+		return
+	try:
+		party_doc = frappe.get_doc(party_doctype, party_name)
+		if not party_doc.meta.get_field("allowed_to_transact_with"):
+			return
+		existing = [r.company for r in (party_doc.get("allowed_to_transact_with") or [])]
+		if allowed_company not in existing:
+			party_doc.append("allowed_to_transact_with", {"company": allowed_company})
+			party_doc.flags.ignore_permissions = True
+			party_doc.save(ignore_permissions=True)
+	except Exception:
+		pass
+
+
 @frappe.whitelist()
 def quick_setup_intercompany_pair(main_company, counterparty_company, preset="full", custom_rules=None):
 	"""
 	1-Click Setup Wizard:
-	Effortlessly connects two sister companies, configures internal customer/supplier,
-	intelligent clearing accounts, and activates selected transaction mirroring rules.
+	Effortlessly connects two sister companies, configures internal customer/supplier
+	(including ERPNext allowed_to_transact_with), compliant clearing accounts,
+	transit warehouses, and activates selected transaction mirroring rules.
 	"""
 	if not main_company or not counterparty_company:
 		frappe.throw(_("Both Main Company and Counterparty Company must be selected."))
@@ -228,7 +246,12 @@ def quick_setup_intercompany_pair(main_company, counterparty_company, preset="fu
 	if main_company == counterparty_company:
 		frappe.throw(_("Main Company and Counterparty Company cannot be the same entity."))
 
-	# 1. Find or create internal Customer in Main Company
+	from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+		get_or_create_intercompany_clearing_account,
+		get_or_create_intercompany_warehouse,
+	)
+
+	# 1. Find or create internal Customer representing counterparty_company (for Main Company to bill)
 	main_cust = frappe.db.get_value("Customer", {"represents_company": counterparty_company}, "name")
 	if not main_cust:
 		cust_name = f"{counterparty_company} (Internal)"
@@ -240,13 +263,16 @@ def quick_setup_intercompany_pair(main_company, counterparty_company, preset="fu
 			cust.territory = frappe.db.get_value("Territory", {"is_group": 0}, "name") or "All Territories"
 			cust.is_internal_customer = 1
 			cust.represents_company = counterparty_company
+			if cust.meta.get_field("allowed_to_transact_with"):
+				cust.append("allowed_to_transact_with", {"company": main_company})
 			cust.flags.ignore_permissions = True
 			cust.insert()
 			main_cust = cust.name
 		else:
 			main_cust = cust_name
+	_ensure_allowed_to_transact_with(main_cust, "Customer", main_company)
 
-	# 2. Find or create internal Supplier in Main Company
+	# 2. Find or create internal Supplier representing counterparty_company (for Main Company to purchase from)
 	main_supp = frappe.db.get_value("Supplier", {"represents_company": counterparty_company}, "name")
 	if not main_supp:
 		supp_name = f"{counterparty_company} (Internal)"
@@ -257,13 +283,16 @@ def quick_setup_intercompany_pair(main_company, counterparty_company, preset="fu
 			supp.supplier_group = frappe.db.get_value("Supplier Group", {"is_group": 0}, "name") or "All Supplier Groups"
 			supp.is_internal_supplier = 1
 			supp.represents_company = counterparty_company
+			if supp.meta.get_field("allowed_to_transact_with"):
+				supp.append("allowed_to_transact_with", {"company": main_company})
 			supp.flags.ignore_permissions = True
 			supp.insert()
 			main_supp = supp.name
 		else:
 			main_supp = supp_name
+	_ensure_allowed_to_transact_with(main_supp, "Supplier", main_company)
 
-	# 3. Find or create internal Customer in Counterparty Company
+	# 3. Find or create internal Customer representing main_company (for Counterparty Company to bill)
 	other_cust = frappe.db.get_value("Customer", {"represents_company": main_company}, "name")
 	if not other_cust:
 		other_cust_name = f"{main_company} (Internal)"
@@ -275,13 +304,16 @@ def quick_setup_intercompany_pair(main_company, counterparty_company, preset="fu
 			ocust.territory = frappe.db.get_value("Territory", {"is_group": 0}, "name") or "All Territories"
 			ocust.is_internal_customer = 1
 			ocust.represents_company = main_company
+			if ocust.meta.get_field("allowed_to_transact_with"):
+				ocust.append("allowed_to_transact_with", {"company": counterparty_company})
 			ocust.flags.ignore_permissions = True
 			ocust.insert()
 			other_cust = ocust.name
 		else:
 			other_cust = other_cust_name
+	_ensure_allowed_to_transact_with(other_cust, "Customer", counterparty_company)
 
-	# 4. Find or create internal Supplier in Counterparty Company
+	# 4. Find or create internal Supplier representing main_company (for Counterparty Company to purchase from)
 	other_supp = frappe.db.get_value("Supplier", {"represents_company": main_company}, "name")
 	if not other_supp:
 		other_supp_name = f"{main_company} (Internal)"
@@ -292,48 +324,20 @@ def quick_setup_intercompany_pair(main_company, counterparty_company, preset="fu
 			osupp.supplier_group = frappe.db.get_value("Supplier Group", {"is_group": 0}, "name") or "All Supplier Groups"
 			osupp.is_internal_supplier = 1
 			osupp.represents_company = main_company
+			if osupp.meta.get_field("allowed_to_transact_with"):
+				osupp.append("allowed_to_transact_with", {"company": counterparty_company})
 			osupp.flags.ignore_permissions = True
 			osupp.insert()
 			other_supp = osupp.name
 		else:
 			other_supp = other_supp_name
+	_ensure_allowed_to_transact_with(other_supp, "Supplier", counterparty_company)
 
-	# 5. Find default intercompany clearing accounts if available
-	main_clearing_account = frappe.db.get_value(
-		"Account",
-		{
-			"company": main_company,
-			"is_group": 0,
-			"account_name": ["like", "%Inter%Company%"]
-		},
-		"name"
-	) or frappe.db.get_value(
-		"Account",
-		{
-			"company": main_company,
-			"is_group": 0,
-			"account_type": ["in", ["Temporary", "Current Asset", "Current Liability"]]
-		},
-		"name"
-	)
-
-	other_clearing_account = frappe.db.get_value(
-		"Account",
-		{
-			"company": counterparty_company,
-			"is_group": 0,
-			"account_name": ["like", "%Inter%Company%"]
-		},
-		"name"
-	) or frappe.db.get_value(
-		"Account",
-		{
-			"company": counterparty_company,
-			"is_group": 0,
-			"account_type": ["in", ["Temporary", "Current Asset", "Current Liability"]]
-		},
-		"name"
-	)
+	# 5. Provision GAAP/IFRS compliant intercompany clearing accounts & transit warehouses
+	main_clearing_account = get_or_create_intercompany_clearing_account(main_company, counterparty_company)
+	other_clearing_account = get_or_create_intercompany_clearing_account(counterparty_company, main_company)
+	main_warehouse = get_or_create_intercompany_warehouse(main_company)
+	other_warehouse = get_or_create_intercompany_warehouse(counterparty_company)
 
 	# 6. Determine mapping rules to apply based on preset
 	trading_rules = [
@@ -347,16 +351,17 @@ def quick_setup_intercompany_pair(main_company, counterparty_company, preset="fu
 		("Supplier Quotation", "Quotation", "Both"),
 		("Material Request", "Sales Order", "Both"),
 		("Material Request", "Purchase Order", "Both"),
+		("Request for Quotation", "Supplier Quotation", "Both"),
 	]
 	financial_rules = [
 		("Journal Entry", "Journal Entry", "Both"),
-		("Payment Entry", "Payment Entry", "Both")
+		("Payment Entry", "Payment Entry", "Both"),
+		("Landed Cost Voucher", "Journal Entry", "Both"),
 	]
 	stock_rules = [
 		("Stock Entry", "Stock Entry", "Both")
 	]
 
-	selected_mappings = []
 	if preset == "trading":
 		selected_mappings = trading_rules
 	elif preset == "financial":
@@ -374,6 +379,14 @@ def quick_setup_intercompany_pair(main_company, counterparty_company, preset="fu
 		found = False
 		for row in (link_doc.linked_companies or []):
 			if row.company == counterparty_company:
+				if not row.main_company_account and main_clearing_account:
+					row.main_company_account = main_clearing_account
+				if not row.other_company_account and other_clearing_account:
+					row.other_company_account = other_clearing_account
+				if not getattr(row, "main_company_warehouse", None) and main_warehouse:
+					row.main_company_warehouse = main_warehouse
+				if not getattr(row, "other_company_warehouse", None) and other_warehouse:
+					row.other_company_warehouse = other_warehouse
 				found = True
 				break
 		if not found:
@@ -382,9 +395,11 @@ def quick_setup_intercompany_pair(main_company, counterparty_company, preset="fu
 				"main_company_customer": main_cust,
 				"main_company_supplier": main_supp,
 				"main_company_account": main_clearing_account,
+				"main_company_warehouse": main_warehouse,
 				"other_company_customer": other_cust,
 				"other_company_supplier": other_supp,
-				"other_company_account": other_clearing_account
+				"other_company_account": other_clearing_account,
+				"other_company_warehouse": other_warehouse,
 			})
 
 		existing_pairs = set()
@@ -413,9 +428,11 @@ def quick_setup_intercompany_pair(main_company, counterparty_company, preset="fu
 			"main_company_customer": main_cust,
 			"main_company_supplier": main_supp,
 			"main_company_account": main_clearing_account,
+			"main_company_warehouse": main_warehouse,
 			"other_company_customer": other_cust,
 			"other_company_supplier": other_supp,
-			"other_company_account": other_clearing_account
+			"other_company_account": other_clearing_account,
+			"other_company_warehouse": other_warehouse,
 		})
 
 		for src, tgt, direction in selected_mappings:

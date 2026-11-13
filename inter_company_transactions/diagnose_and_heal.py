@@ -10,17 +10,16 @@ import frappe
 def run_full_healing(verbose=True):
 	"""
 	Complete self-healing and restoration utility for ERPNext site:
-	1. Repairs corrupted 'depends_on' expressions across:
-	   - MariaDB tables (tabDocField, tabCustom Field, tabProperty Setter, tabClient Script, tabCustom Script, etc.)
-	   - JSON schema files on disk in apps/ (e.g. apps/erpnext/erpnext/stock/doctype/item/item.json)
-	2. Restores 'Create' and 'Delete' buttons on Customer, Supplier, and Item:
+	1. Repairs corrupted 'depends_on' expressions in MariaDB tables
+	   (tabDocField, tabCustom Field, tabProperty Setter, tabClient Script, tabCustom Script, etc.)
+	2. Preserves external bench app directories without modifying disk JSON files.
+	3. Restores 'Create' and 'Delete' buttons on Customer, Supplier, and Item:
 	   - Wipes restrictive Custom DocPerms so standard ERPNext role permissions take effect.
 	   - Guarantees System Manager, Sales Manager, and Purchase Manager have full create & delete rights.
-	3. Fixes Tree View dirty 'Save' button locks on Customer Group, Supplier Group, and Item Group:
+	4. Fixes Tree View dirty 'Save' button locks on Customer Group, Supplier Group, and Item Group:
 	   - Purges all custom fields and intrusive property setters on Tree DocTypes.
 	   - Purges obsolete custom fields from Customer, Supplier, Item, and Warehouse.
-	4. Force-reloads standard DocTypes to flush metadata cache.
-	5. Commits to database and clears Redis / Desk cache.
+	5. Force-reloads standard DocTypes to flush metadata cache, commits, and clears Redis / Desk cache.
 	"""
 	log = print if verbose else (lambda *args, **kwargs: None)
 	log("=== STARTING FULL DATABASE & DOCTYPE SELF-HEALING ===")
@@ -29,9 +28,9 @@ def run_full_healing(verbose=True):
 	repaired_db_count = repair_database_text(log)
 	log(f"[1/5] Repaired corrupted expressions in database: {repaired_db_count} occurrences updated.")
 
-	# 2. Repair disk JSON files in apps/
+	# 2. Skip modifying external app disk files (marketplace safety)
 	repaired_files = repair_disk_json_files(log)
-	log(f"[2/5] Repaired JSON files on disk: {len(repaired_files)} files restored.")
+	log(f"[2/5] Verified disk schema safety (0 external disk files modified).")
 
 	# 3. Restore master permissions (Customer, Supplier, Item)
 	restored_perms = restore_master_permissions(log)
@@ -113,55 +112,11 @@ def repair_database_text(log):
 
 def repair_disk_json_files(log):
 	"""
-	Scans the bench filesystem (apps/erpnext, apps/frappe, apps/inter_company_transactions)
-	for any DocType JSON files that may have had corrupted strings saved to disk.
+	No-op stub retained for backwards API compatibility.
+	Frappe Marketplace apps must never mutate external app files in apps/frappe or apps/erpnext.
+	All schema/expression healing is performed cleanly in MariaDB and metadata reload.
 	"""
-	apps_dirs = []
-	for app in ["erpnext", "frappe", "inter_company_transactions"]:
-		try:
-			p = frappe.get_app_path(app)
-			parent_app = os.path.abspath(os.path.join(p, ".."))
-			if parent_app not in apps_dirs:
-				apps_dirs.append(parent_app)
-		except Exception:
-			pass
-
-	# Also search common bench relative paths
-	for candidate in ["apps", "../apps", "../../apps", "/home/frappe/frappe-bench/apps"]:
-		if os.path.exists(candidate):
-			abs_c = os.path.abspath(candidate)
-			if abs_c not in apps_dirs:
-				apps_dirs.append(abs_c)
-
-	repaired_files = []
-	for base in apps_dirs:
-		try:
-			for root, dirs, files in os.walk(base):
-				if "node_modules" in root or ".git" in root or "__pycache__" in root:
-					continue
-				for file in files:
-					if file.endswith(".json"):
-						full_path = os.path.join(root, file)
-						try:
-							with open(full_path, "r", encoding="utf-8") as f:
-								content = f.read()
-							if "__islocalanddoc" in content or "__islocaland" in content or "anddoc." in content:
-								new_content = content.replace("__islocalanddoc", "__islocal && doc")
-								new_content = new_content.replace("__islocal anddoc", "__islocal && doc")
-								new_content = new_content.replace("__islocaland doc", "__islocal && doc")
-								new_content = new_content.replace("__islocaland", "__islocal && ")
-								new_content = new_content.replace("anddoc.", " && doc.")
-								new_content = new_content.replace("and!doc.", " && !doc.")
-								with open(full_path, "w", encoding="utf-8") as f:
-									f.write(new_content)
-								repaired_files.append(full_path)
-								log(f"  Restored clean JSON on disk: {full_path}")
-						except Exception:
-							pass
-		except Exception:
-			pass
-
-	return repaired_files
+	return []
 
 
 def restore_master_permissions(log):

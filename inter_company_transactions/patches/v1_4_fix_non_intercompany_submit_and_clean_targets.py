@@ -42,7 +42,7 @@ def execute():
 		"Sales Order", "Purchase Order", "Sales Invoice", "Purchase Invoice",
 		"Delivery Note", "Purchase Receipt", "Quotation", "Supplier Quotation",
 		"Material Request", "Stock Entry", "Journal Entry", "Payment Entry",
-		"Request for Quotation"
+		"Request for Quotation", "Landed Cost Voucher"
 	]
 
 	for dt in doctypes:

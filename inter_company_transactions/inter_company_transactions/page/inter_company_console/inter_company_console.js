@@ -379,9 +379,9 @@ function open_quick_setup_wizard() {
 									<span class="badge badge-primary">${__('Recommended')}</span>
 								</div>
 								<p class="text-muted mb-1" style="font-size: 12px;">
-									${__('Enables all trading rules (SO ↔ PO, DN ↔ PR, SI ↔ PI, Material Requests), financial vouchers (Journal Entries, Payments), and Stock Transfers.')}
+									${__('Enables all trading rules (SO ↔ PO, DN ↔ PR, SI ↔ PI, RFQ → SQ, Material Requests), financial vouchers (JE, PE, Landed Cost → JE), and Stock Transfers.')}
 								</p>
-								<small class="text-success font-weight-bold"><i class="fa fa-check mr-1"></i>8 Transaction Rules</small>
+								<small class="text-success font-weight-bold"><i class="fa fa-check mr-1"></i>15 Transaction Rules</small>
 							</div>
 						</div>
 						<div class="col-md-6">
@@ -391,21 +391,21 @@ function open_quick_setup_wizard() {
 									<span class="badge badge-light border">${__('Order-to-Cash')}</span>
 								</div>
 								<p class="text-muted mb-1" style="font-size: 12px;">
-									${__('Focuses exclusively on commercial sales: Sales Orders, Invoices, Delivery Notes, and Quotations.')}
+									${__('Focuses on commercial trading: Sales/Purchase Orders, Invoices, Delivery Notes, Quotations, RFQ, and Material Requests.')}
 								</p>
-								<small class="text-primary font-weight-bold"><i class="fa fa-check mr-1"></i>5 Trading Rules</small>
+								<small class="text-primary font-weight-bold"><i class="fa fa-check mr-1"></i>11 Trading Rules</small>
 							</div>
 						</div>
 						<div class="col-md-6">
 							<div class="ict-preset-card" data-preset="financial">
 								<div class="d-flex align-items-center justify-content-between mb-1">
 									<strong><i class="fa fa-university mr-1"></i>${__('Treasury & Financial Only')}</strong>
-									<span class="badge badge-light border">${__('GL & Payments')}</span>
+									<span class="badge badge-light border">${__('GL, Payments & LCV')}</span>
 								</div>
 								<p class="text-muted mb-1" style="font-size: 12px;">
-									${__('Mirrors reciprocal Journal Entries and Payment Entries between sister entity clearing accounts.')}
+									${__('Mirrors reciprocal Journal Entries, Payment Entries, and Landed Cost Vouchers between sister entity clearing accounts.')}
 								</p>
-								<small class="text-info font-weight-bold"><i class="fa fa-check mr-1"></i>2 Treasury Rules</small>
+								<small class="text-info font-weight-bold"><i class="fa fa-check mr-1"></i>3 Financial Rules</small>
 							</div>
 						</div>
 						<div class="col-md-6">
@@ -415,7 +415,7 @@ function open_quick_setup_wizard() {
 									<span class="badge badge-light border">${__('Supply Chain')}</span>
 								</div>
 								<p class="text-muted mb-1" style="font-size: 12px;">
-									${__('Internal warehouse relocations and intercompany shipments via Delivery Notes and Stock Entries.')}
+									${__('Internal warehouse relocations and intercompany shipments via Delivery Notes and Stock Entries (Material Issue → Receipt).')}
 								</p>
 								<small class="text-secondary font-weight-bold"><i class="fa fa-check mr-1"></i>2 Logistics Rules</small>
 							</div>
@@ -633,15 +633,16 @@ function show_tutorial_dialog() {
 									<li><strong>Sales Invoice &harr; Purchase Invoice:</strong> Mirrors billing with matching items, rates, taxes, and automatic elimination tags.</li>
 									<li><strong>Delivery Note &harr; Purchase Receipt:</strong> Incoming goods receipt generated directly upon shipment dispatch.</li>
 									<li><strong>Quotation &harr; Supplier Quotation:</strong> Intercompany sales estimate matched to supplier RFQ.</li>
+									<li><strong>Request for Quotation &rarr; Supplier Quotation:</strong> Generates sister-company quote response directly from RFQ.</li>
 									<li><strong>Material Request &rarr; Sales Order / Purchase Order:</strong> Stock requisition in Subsidiary B creates order in Parent A.</li>
-									<li><strong>Stock Entry &harr; Stock Entry:</strong> Material Issue in Company A creates Material Receipt in Company B.</li>
+									<li><strong>Stock Entry (Material Issue) &rarr; Stock Entry (Material Receipt):</strong> Material Issue in Company A automatically creates Material Receipt in Company B with valuation rate preserved.</li>
 									<li><strong>Journal Entry &harr; Journal Entry:</strong> Intercompany GL transfer voucher with auto-swapped debit/credit accounts.</li>
 									<li><strong>Payment Entry &harr; Payment Entry:</strong> Intercompany payment matched to receipt voucher.</li>
+									<li><strong>Landed Cost Voucher &rarr; Journal Entry:</strong> Automatically recharges landed cost taxes/charges into a balanced Journal Entry in the target sister company.</li>
 								</ul>
 
 								<h6 class="font-weight-bold text-danger mb-2"><i class="fa fa-times-circle mr-1"></i> What It CANNOT Do Directly & Why It Is a MUST:</h6>
 								<ul class="mb-0" style="font-size: 13px; padding-left: 20px;">
-									<li><strong>Landed Cost Voucher (LCV):</strong> <em>Why:</em> LCV is strictly an entity-internal inventory valuation tool to capitalize freight/customs into inventory value. It does not create external claims. <em>Must do instead:</em> The sister company providing logistics bills via a standard <code>Sales Invoice</code> &rarr; <code>Purchase Invoice</code>.</li>
 									<li><strong>Subcontracting Order:</strong> <em>Why:</em> Subcontracting in ERPNext v15 requires entity-internal BOM explosion and supplied item tracking. <em>Must do instead:</em> Create paired <code>Purchase Order</code> (Subcontracted) &rarr; <code>Sales Order</code> (Manufacturing).</li>
 									<li><strong>Fixed Asset Movements / Depreciation:</strong> <em>Why:</em> Fixed assets belong to statutory legal entity registers. <em>Must do instead:</em> Sell asset via <code>Sales Invoice</code> (Disposal) and receive in sister company via <code>Purchase Invoice</code>.</li>
 									<li><strong>Payroll Entry / Salary Slip:</strong> <em>Why:</em> Governed by legal entity tax and social security laws. <em>Must do instead:</em> Shared management costs are recharged via <code>Journal Entry</code> (Intercompany JV) or management fee <code>Sales Invoice</code>.</li>

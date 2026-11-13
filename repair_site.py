@@ -54,50 +54,8 @@ def main():
 					pass
 	print(f"[1/5] Database expressions repaired: {total_db} rows fixed.")
 
-	# 2. Repair disk JSON files in apps/ (e.g. apps/erpnext/erpnext/stock/doctype/item/item.json)
-	apps_dirs = []
-	for candidate in ["apps", "../apps", "../../apps", "/home/frappe/frappe-bench/apps"]:
-		if os.path.exists(candidate):
-			abs_c = os.path.abspath(candidate)
-			if abs_c not in apps_dirs:
-				apps_dirs.append(abs_c)
-	for app in ["erpnext", "frappe"]:
-		try:
-			p = frappe.get_app_path(app)
-			parent_app = os.path.abspath(os.path.join(p, ".."))
-			if parent_app not in apps_dirs:
-				apps_dirs.append(parent_app)
-		except Exception:
-			pass
-
-	repaired_files = 0
-	for base in apps_dirs:
-		try:
-			for root, dirs, files in os.walk(base):
-				if "node_modules" in root or ".git" in root or "__pycache__" in root:
-					continue
-				for file in files:
-					if file.endswith(".json"):
-						fp = os.path.join(root, file)
-						try:
-							with open(fp, "r", encoding="utf-8") as f:
-								c = f.read()
-							if "__islocalanddoc" in c or "__islocaland" in c or "anddoc." in c:
-								nc = c.replace("__islocalanddoc", "__islocal && doc")
-								nc = nc.replace("__islocal anddoc", "__islocal && doc")
-								nc = nc.replace("__islocaland doc", "__islocal && doc")
-								nc = nc.replace("__islocaland", "__islocal && ")
-								nc = nc.replace("anddoc.", " && doc.")
-								nc = nc.replace("and!doc.", " && !doc.")
-								with open(fp, "w", encoding="utf-8") as f:
-									f.write(nc)
-								repaired_files += 1
-								print(f"  Restored clean schema file on disk: {fp}")
-						except Exception:
-							pass
-		except Exception:
-			pass
-	print(f"[2/5] Disk schema files repaired: {repaired_files} files fixed.")
+	# 2. Skip external disk file mutations; schema reload handles clean disk definitions
+	print("[2/5] Disk schema check: external app directories left untouched.")
 
 	# 3. Restore 'Add' and 'Delete' permissions on Customer, Supplier, Item
 	master_doctypes = ["Customer", "Supplier", "Item", "Customer Group", "Supplier Group", "Item Group", "Warehouse"]

@@ -188,6 +188,61 @@ class IntercompanyTransactionLink(Document):
         }
 
 
+def _get_intercompany_settings():
+    """Safely load Inter Company Settings as a dict-like object with sensible defaults."""
+    defaults = {
+        "enabled": 1,
+        "execution_mode": "Synchronous",
+        "auto_submit_target_doc": 0,
+        "auto_create_missing_items": 1,
+        "tax_handling_strategy": "Mirror Net Rate Exactly",
+        "default_transfer_pricing_rule": "Source Document Rate",
+        "markup_percentage": 0.0,
+        "notify_on_sync_failure": 1,
+    }
+    try:
+        if hasattr(frappe, "db") and frappe.db and frappe.db.exists("DocType", "Inter Company Settings"):
+            settings = frappe.get_single("Inter Company Settings")
+            if settings:
+                return settings
+    except Exception:
+        pass
+    return frappe._dict(defaults)
+
+
+def _log_local_mirror_error(doc, target_company, target_doctype, error_message):
+    """Record local intercompany mirroring failures into Inter Company Error Log."""
+    try:
+        if not (hasattr(frappe, "db") and frappe.db and frappe.db.exists("DocType", "Inter Company Error Log")):
+            return
+        err_log = frappe.new_doc("Inter Company Error Log")
+        err_log.source_doctype = getattr(doc, "doctype", "")
+        err_log.source_name = getattr(doc, "name", "")
+        err_log.source_company = getattr(doc, "company", "")
+        err_log.target_company = target_company or getattr(doc, "intercompany_target_company", "")
+        err_log.target_doctype = target_doctype or ""
+        err_log.error_type = "Local Mirror"
+        err_log.status = "Failed"
+        err_log.error_message = str(error_message)[:1000]
+        err_log.traceback = frappe.get_traceback()
+        err_log.flags.ignore_permissions = True
+        err_log.insert(ignore_permissions=True)
+    except Exception:
+        pass
+
+
+def _execute_linked_documents(doc_doctype, doc_name):
+    """Background worker entrypoint for asynchronous intercompany mirroring."""
+    try:
+        if not frappe.db.exists(doc_doctype, doc_name):
+            return
+        doc = frappe.get_doc(doc_doctype, doc_name)
+        frappe.flags.ict_in_background = True
+        create_linked_documents(doc, None)
+    finally:
+        frappe.flags.ict_in_background = False
+
+
 def create_linked_documents(doc, method=None):
     """Create corresponding documents in all linked companies (Local & Remote Federated)"""
     if not hasattr(doc, "doctype") or not doc.get("company"):
@@ -200,6 +255,31 @@ def create_linked_documents(doc, method=None):
     # Never process a document that was itself generated as an intercompany counterpart
     if doc.get("intercompany_linked_doc_doctype") or doc.get("intercompany_linked_doc_name"):
         return
+
+    settings = _get_intercompany_settings()
+    if not cint(settings.get("enabled", 1)):
+        return
+
+    if (
+        settings.get("execution_mode") == "Asynchronous (Background Job)"
+        and not getattr(frappe.flags, "in_test", False)
+        and not getattr(frappe.flags, "ict_in_background", False)
+    ):
+        try:
+            frappe.enqueue(
+                "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link._execute_linked_documents",
+                doc_doctype=doc.doctype,
+                doc_name=doc.name,
+                queue="default",
+                now=False,
+            )
+            frappe.msgprint(
+                _("Queued inter-company mirroring for {0} {1} in background.").format(doc.doctype, doc.name),
+                alert=True,
+            )
+            return
+        except Exception:
+            pass
 
     # Check for direct target company remote push
     target_company_hint = (doc.get("intercompany_target_company") or "").strip()
@@ -223,10 +303,9 @@ def create_linked_documents(doc, method=None):
     created_targets = set()
 
     for _i, mapping in enumerate(mappings):
+        target_comp = mapping.get("company")
+        target_dt = mapping.get("target_doctype")
         try:
-            target_comp = mapping.get("company")
-            target_dt = mapping.get("target_doctype")
-
             # 1. Absolute rule: Target company cannot be source company
             if not target_comp or target_comp == doc.company:
                 continue
@@ -276,7 +355,7 @@ def create_linked_documents(doc, method=None):
             validate_required_parties(doc, mapping)
             validate_intercompany_items(doc, mapping)
 
-            linked_doc = create_corresponding_document(doc, mapping, direction)
+            linked_doc = create_corresponding_document(doc, mapping, direction, settings=settings)
 
             if linked_doc:
                 # Ensure correct target company
@@ -286,6 +365,19 @@ def create_linked_documents(doc, method=None):
                 linked_doc.intercompany_linked_company = doc.company
                 linked_doc.intercompany_target_company = doc.company
 
+                # Apply tax handling strategy cleanly
+                if (
+                    linked_doc.doctype in ("Sales Order", "Purchase Order", "Sales Invoice", "Purchase Invoice")
+                    and settings.get("tax_handling_strategy") == "Apply Target Company Tax Templates"
+                ):
+                    try:
+                        if hasattr(linked_doc, "set_taxes"):
+                            linked_doc.set_taxes()
+                        if hasattr(linked_doc, "calculate_taxes_and_totals"):
+                            linked_doc.calculate_taxes_and_totals()
+                    except Exception:
+                        pass
+
                 linked_doc.flags.ignore_permissions = True
                 linked_doc.flags.ignore_mandatory = True
                 linked_doc.insert(ignore_permissions=True, ignore_mandatory=True)
@@ -293,15 +385,41 @@ def create_linked_documents(doc, method=None):
                 created_targets.add(dedup_key)
                 create_document_reference(doc, linked_doc)
 
-                frappe.msgprint(_("Created draft {0} {1} in company {2}").format(
-                    linked_doc.doctype, linked_doc.name, linked_doc.company
+                should_auto_submit = bool(cint(settings.get("auto_submit_target_doc"))) or not bool(
+                    cint(mapping["mapping"].get("auto_create_draft", 1))
+                )
+                status_label = "draft"
+                if should_auto_submit and hasattr(linked_doc, "submit") and linked_doc.docstatus == 0:
+                    try:
+                        if hasattr(frappe.db, "savepoint"):
+                            frappe.db.savepoint("ict_auto_submit")
+                        linked_doc.flags.ignore_permissions = True
+                        linked_doc.submit()
+                        status_label = "submitted"
+                    except Exception as sub_err:
+                        if hasattr(frappe.db, "rollback"):
+                            try:
+                                frappe.db.rollback(save_point="ict_auto_submit")
+                            except Exception:
+                                pass
+                        frappe.log_error(
+                            f"Auto-submit kept {linked_doc.doctype} {linked_doc.name} as draft: {sub_err!s}",
+                            "Inter Company Auto Submit"
+                        )
+
+                frappe.msgprint(_("Created {0} {1} {2} in company {3}").format(
+                    status_label, linked_doc.doctype, linked_doc.name, linked_doc.company
                 ))
 
         except Exception as e:
             frappe.log_error(f"Error in intercompany creation for {doc.doctype} {doc.name}: {e!s}\n{frappe.get_traceback()}", "Inter Company Transaction Error")
-            frappe.msgprint(_("Notice for linked company {0}: {1}").format(
-                mapping.get('company', ''), str(e)
-            ))
+            _log_local_mirror_error(doc, target_comp, target_dt, e)
+            indicator = "red" if cint(settings.get("notify_on_sync_failure", 1)) else "orange"
+            frappe.msgprint(
+                _("Notice for linked company {0}: {1}").format(target_comp or "", str(e)),
+                indicator=indicator,
+                alert=bool(cint(settings.get("notify_on_sync_failure", 1))),
+            )
 
 
 def get_linked_counterpart_documents(doc):
@@ -805,6 +923,8 @@ def validate_required_parties(doc, mapping):
                 frappe.throw(_("Other Company Customer is required for linked company {0}").format(linked_company.company))
 
     elif target_doctype in ["Journal Entry", "Payment Entry"]:
+        if doc.doctype == "Landed Cost Voucher" and target_doctype == "Journal Entry":
+            return
         if not linked_company.main_company_customer:
             frappe.throw(_("Main Company Customer is required for {0}").format(linked_company.company))
         if not linked_company.other_company_supplier:
@@ -818,6 +938,9 @@ def validate_intercompany_items(doc, mapping):
     either exists in the catalog or has an explicit SKU cross-mapping.
     If an item cannot be resolved, raises a descriptive error to alert the user.
     """
+    if getattr(doc, "doctype", "") == "Landed Cost Voucher":
+        return
+
     if not hasattr(doc, "items") or not doc.get("items"):
         return
 
@@ -1117,7 +1240,123 @@ def ensure_item_exists(item_code, item_name=None, description=None, uom="Nos", i
         return item_code
 
 
-def resolve_intercompany_target_item(source_item, target_company, mapping=None, rate_factor=1.0):
+def _get_item_valuation_rate(item_code, company=None):
+    """Fetch item valuation rate safely from Bin (company-filtered) or Item master."""
+    if not item_code or not (hasattr(frappe, "db") and frappe.db):
+        return 0.0
+    try:
+        if company and frappe.db.exists("DocType", "Bin"):
+            bin_rate = frappe.db.get_value("Bin", {"item_code": item_code}, "valuation_rate")
+            if flt(bin_rate) > 0:
+                return flt(bin_rate)
+        item_rate = frappe.db.get_value("Item", item_code, "valuation_rate")
+        if flt(item_rate) > 0:
+            return flt(item_rate)
+    except Exception:
+        pass
+    return 0.0
+
+
+def calculate_transfer_rate(
+    item_doc,
+    base_rate,
+    target_company=None,
+    settings=None,
+    source_company=None,
+    transaction_date=None,
+):
+    """
+    Compute the arm's-length intercompany transfer rate using:
+    1. Active Transfer Pricing Policy (matching target_company, source_company, item_code/item_group, date range)
+    2. Global Inter Company Settings (default_transfer_pricing_rule + markup_percentage)
+    3. Fallback to base_rate
+    """
+    rate = flt(base_rate or 0.0)
+    item_code = item_doc.get("item_code") if isinstance(item_doc, dict) else getattr(item_doc, "item_code", None)
+    item_group = item_doc.get("item_group") if isinstance(item_doc, dict) else getattr(item_doc, "item_group", None)
+    if not item_group and item_code and hasattr(frappe, "db") and frappe.db:
+        try:
+            item_group = frappe.db.get_value("Item", item_code, "item_group")
+        except Exception:
+            item_group = None
+
+    tx_date = getdate(transaction_date or nowdate())
+
+    # 1. Check active Transfer Pricing Policy records if target_company is supplied
+    if target_company and hasattr(frappe, "db") and frappe.db and frappe.db.exists("DocType", "Transfer Pricing Policy"):
+        try:
+            active_field = "is_active" if frappe.db.has_column("Transfer Pricing Policy", "is_active") else "enabled"
+            policies = frappe.get_all(
+                "Transfer Pricing Policy",
+                filters={active_field: 1, "to_company": target_company},
+                fields=[
+                    "name", "from_company", "to_company", "item_code", "item_group",
+                    "methodology", "markup_percentage", "fixed_rate",
+                    "effective_from", "effective_to",
+                ],
+                ignore_permissions=True,
+            )
+            best_policy = None
+            best_score = -1
+            for pol in policies:
+                if source_company and pol.get("from_company") and pol.get("from_company") != source_company:
+                    continue
+                if pol.get("item_code") and pol.get("item_code") != item_code:
+                    continue
+                if pol.get("item_group") and pol.get("item_group") != item_group:
+                    continue
+                eff_from = pol.get("effective_from") or pol.get("valid_from")
+                eff_to = pol.get("effective_to") or pol.get("valid_to")
+                if eff_from and tx_date < getdate(eff_from):
+                    continue
+                if eff_to and tx_date > getdate(eff_to):
+                    continue
+
+                score = (4 if pol.get("item_code") else 0) + (2 if pol.get("item_group") else 0) + (1 if pol.get("from_company") else 0)
+                if score > best_score:
+                    best_score = score
+                    best_policy = pol
+
+            if best_policy:
+                method = (best_policy.get("methodology") or best_policy.get("pricing_method") or "").strip()
+                markup = flt(best_policy.get("markup_percentage") or 0.0)
+                if method == "Fixed Transfer Rate":
+                    return flt(best_policy.get("fixed_rate") or rate)
+                elif method == "Cost-Plus Markup %":
+                    cost_base = _get_item_valuation_rate(item_code, source_company) or rate
+                    return flt(cost_base * (1.0 + (markup / 100.0)), 4)
+                elif method == "Resale Price Method":
+                    return flt(rate * (1.0 - (markup / 100.0)), 4)
+                elif method == "Comparable Uncontrolled Price (CUP)":
+                    return flt(rate, 4)
+        except Exception:
+            pass
+
+    # 2. Check Inter Company Settings default rule
+    if settings is not None:
+        rule = (settings.get("default_transfer_pricing_rule") if isinstance(settings, dict) else getattr(settings, "default_transfer_pricing_rule", None)) or "Source Document Rate"
+        markup = flt(settings.get("markup_percentage") if isinstance(settings, dict) else getattr(settings, "markup_percentage", 0.0))
+        if rule == "Source Document Rate":
+            return flt(rate)
+        elif rule == "Cost / Valuation Rate":
+            val_rate = _get_item_valuation_rate(item_code, source_company)
+            return flt(val_rate if val_rate > 0 else rate)
+        elif rule == "Cost + Markup %":
+            cost_base = _get_item_valuation_rate(item_code, source_company) or rate
+            return flt(cost_base * (1.0 + (markup / 100.0)), 4)
+
+    return flt(rate)
+
+
+def resolve_intercompany_target_item(
+    source_item,
+    target_company,
+    mapping=None,
+    rate_factor=1.0,
+    settings=None,
+    source_company=None,
+    transaction_date=None,
+):
     """
     Resolves item code, quantity, rate, and UOM for intercompany target document.
     Translates source SKU (e.g. 'PEN' in Company A) to target SKU (e.g. 'PEN-001' in Company B)
@@ -1171,9 +1410,19 @@ def resolve_intercompany_target_item(source_item, target_company, mapping=None, 
     if target_code:
         ensure_item_exists(target_code, item_name=target_name, description=target_desc, uom=source_uom)
 
+    # Apply transfer pricing rules/settings cleanly before FX + UOM conversion
+    effective_source_rate = calculate_transfer_rate(
+        source_item,
+        source_rate,
+        target_company=target_company,
+        settings=settings,
+        source_company=source_company,
+        transaction_date=transaction_date,
+    )
+
     # Calculate converted qty and rate
     target_qty = source_qty * (conversion_factor if conversion_factor != 0 else 1.0)
-    unit_rate = (source_rate * flt(rate_factor)) / (conversion_factor if conversion_factor != 0 else 1.0)
+    unit_rate = (effective_source_rate * flt(rate_factor)) / (conversion_factor if conversion_factor != 0 else 1.0)
 
     # Fetch actual item_name and stock_uom from Item record if available
     item_info = frappe.db.get_value("Item", target_code, ["item_name", "stock_uom", "description"], as_dict=True) if target_code else None
@@ -1195,39 +1444,41 @@ def resolve_intercompany_target_item(source_item, target_company, mapping=None, 
     }
 
 
-def create_corresponding_document(source_doc, mapping_info, direction):
+def create_corresponding_document(source_doc, mapping_info, direction, settings=None):
     """Route document creation by target DocType"""
     mapping = mapping_info["mapping"]
     linked_company = mapping_info["linked_company"]
     target_doctype = mapping_info.get("target_doctype")
 
     if target_doctype == "Sales Invoice":
-        return create_sales_invoice(source_doc, mapping, linked_company, direction)
+        return create_sales_invoice(source_doc, mapping, linked_company, direction, settings=settings)
     elif target_doctype == "Purchase Invoice":
-        return create_purchase_invoice(source_doc, mapping, linked_company, direction)
+        return create_purchase_invoice(source_doc, mapping, linked_company, direction, settings=settings)
     elif target_doctype == "Sales Order":
-        return create_sales_order(source_doc, mapping, linked_company, direction)
+        return create_sales_order(source_doc, mapping, linked_company, direction, settings=settings)
     elif target_doctype == "Purchase Order":
-        return create_purchase_order(source_doc, mapping, linked_company, direction)
+        return create_purchase_order(source_doc, mapping, linked_company, direction, settings=settings)
     elif target_doctype == "Delivery Note":
-        return create_delivery_note(source_doc, mapping, linked_company, direction)
+        return create_delivery_note(source_doc, mapping, linked_company, direction, settings=settings)
     elif target_doctype == "Purchase Receipt":
-        return create_purchase_receipt(source_doc, mapping, linked_company, direction)
+        return create_purchase_receipt(source_doc, mapping, linked_company, direction, settings=settings)
     elif target_doctype == "Stock Entry":
-        return create_stock_entry(source_doc, mapping, linked_company, direction)
+        return create_stock_entry(source_doc, mapping, linked_company, direction, settings=settings)
     elif target_doctype == "Journal Entry":
+        if getattr(source_doc, "doctype", "") == "Landed Cost Voucher":
+            return create_journal_entry_from_lcv(source_doc, mapping, linked_company, direction)
         return create_journal_entry(source_doc, mapping, linked_company, direction)
     elif target_doctype == "Payment Entry":
         return create_payment_entry(source_doc, mapping, linked_company, direction)
     elif target_doctype == "Quotation":
-        return create_quotation(source_doc, mapping, linked_company, direction)
+        return create_quotation(source_doc, mapping, linked_company, direction, settings=settings)
     elif target_doctype == "Supplier Quotation":
-        return create_supplier_quotation(source_doc, mapping, linked_company, direction)
+        return create_supplier_quotation(source_doc, mapping, linked_company, direction, settings=settings)
 
     return None
 
 
-def create_sales_invoice(source_doc, mapping, linked_company, direction):
+def create_sales_invoice(source_doc, mapping, linked_company, direction, settings=None):
     """Create Sales Invoice from Purchase Invoice or other source"""
     si = frappe.new_doc("Sales Invoice")
 
@@ -1266,7 +1517,15 @@ def create_sales_invoice(source_doc, mapping, linked_company, direction):
     default_cost_center = get_default_cost_center(si.company)
 
     for item in getattr(source_doc, "items", []):
-        target_item = resolve_intercompany_target_item(item, si.company, mapping=mapping, rate_factor=rate_factor)
+        target_item = resolve_intercompany_target_item(
+            item,
+            si.company,
+            mapping=mapping,
+            rate_factor=rate_factor,
+            settings=settings,
+            source_company=source_doc.company,
+            transaction_date=si.posting_date,
+        )
         item_row = {
             "item_code": target_item["item_code"],
             "item_name": target_item["item_name"],
@@ -1304,7 +1563,7 @@ def create_sales_invoice(source_doc, mapping, linked_company, direction):
     return si
 
 
-def create_purchase_invoice(source_doc, mapping, linked_company, direction):
+def create_purchase_invoice(source_doc, mapping, linked_company, direction, settings=None):
     """Create Purchase Invoice from Sales Invoice or other source"""
     pi = frappe.new_doc("Purchase Invoice")
 
@@ -1343,7 +1602,15 @@ def create_purchase_invoice(source_doc, mapping, linked_company, direction):
     default_cost_center = get_default_cost_center(pi.company)
 
     for item in getattr(source_doc, "items", []):
-        target_item = resolve_intercompany_target_item(item, pi.company, mapping=mapping, rate_factor=rate_factor)
+        target_item = resolve_intercompany_target_item(
+            item,
+            pi.company,
+            mapping=mapping,
+            rate_factor=rate_factor,
+            settings=settings,
+            source_company=source_doc.company,
+            transaction_date=pi.posting_date,
+        )
         item_row = {
             "item_code": target_item["item_code"],
             "item_name": target_item["item_name"],
@@ -1381,8 +1648,8 @@ def create_purchase_invoice(source_doc, mapping, linked_company, direction):
     return pi
 
 
-def create_purchase_order(sales_order, mapping, linked_company, direction):
-    """Create Purchase Order from Sales Order"""
+def create_purchase_order(sales_order, mapping, linked_company, direction, settings=None):
+    """Create Purchase Order from Sales Order or Material Request"""
     po = frappe.new_doc("Purchase Order")
 
     if direction == "other_to_main":
@@ -1395,8 +1662,8 @@ def create_purchase_order(sales_order, mapping, linked_company, direction):
     if not po.supplier:
         frappe.throw(_("Supplier not found for company {0}").format(po.company))
 
-    po.transaction_date = sales_order.transaction_date
-    po.schedule_date = getattr(sales_order, "delivery_date", None) or nowdate()
+    po.transaction_date = getattr(sales_order, "transaction_date", None) or nowdate()
+    po.schedule_date = getattr(sales_order, "delivery_date", None) or getattr(sales_order, "schedule_date", None) or nowdate()
     po.intercompany_target_company = sales_order.company
 
     # Accurate multi-currency and exchange rate resolution
@@ -1411,7 +1678,15 @@ def create_purchase_order(sales_order, mapping, linked_company, direction):
         warehouse = frappe.db.get_value("Warehouse", {"company": po.company, "is_group": 0}, "name")
 
     for item in sales_order.items:
-        target_item = resolve_intercompany_target_item(item, po.company, mapping=mapping, rate_factor=rate_factor)
+        target_item = resolve_intercompany_target_item(
+            item,
+            po.company,
+            mapping=mapping,
+            rate_factor=rate_factor,
+            settings=settings,
+            source_company=sales_order.company,
+            transaction_date=po.transaction_date,
+        )
         po.append("items", {
             "item_code": target_item["item_code"],
             "item_name": target_item["item_name"],
@@ -1420,7 +1695,7 @@ def create_purchase_order(sales_order, mapping, linked_company, direction):
             "uom": target_item["uom"],
             "rate": target_item["rate"],
             "warehouse": warehouse,
-            "schedule_date": getattr(item, "delivery_date", None) or po.schedule_date,
+            "schedule_date": getattr(item, "delivery_date", None) or getattr(item, "schedule_date", None) or po.schedule_date,
         })
 
     po.flags.ignore_permissions = True
@@ -1440,8 +1715,8 @@ def create_purchase_order(sales_order, mapping, linked_company, direction):
     return po
 
 
-def create_sales_order(purchase_order, mapping, linked_company, direction):
-    """Create Sales Order from Purchase Order"""
+def create_sales_order(purchase_order, mapping, linked_company, direction, settings=None):
+    """Create Sales Order from Purchase Order or Material Request"""
     so = frappe.new_doc("Sales Order")
 
     if direction == "other_to_main":
@@ -1454,7 +1729,7 @@ def create_sales_order(purchase_order, mapping, linked_company, direction):
     if not so.customer:
         frappe.throw(_("Customer not found for company {0}").format(so.company))
 
-    so.transaction_date = purchase_order.transaction_date
+    so.transaction_date = getattr(purchase_order, "transaction_date", None) or nowdate()
     so.delivery_date = getattr(purchase_order, "schedule_date", None) or nowdate()
     so.intercompany_target_company = purchase_order.company
 
@@ -1470,7 +1745,15 @@ def create_sales_order(purchase_order, mapping, linked_company, direction):
         warehouse = frappe.db.get_value("Warehouse", {"company": so.company, "is_group": 0}, "name")
 
     for item in purchase_order.items:
-        target_item = resolve_intercompany_target_item(item, so.company, mapping=mapping, rate_factor=rate_factor)
+        target_item = resolve_intercompany_target_item(
+            item,
+            so.company,
+            mapping=mapping,
+            rate_factor=rate_factor,
+            settings=settings,
+            source_company=purchase_order.company,
+            transaction_date=so.transaction_date,
+        )
         so.append("items", {
             "item_code": target_item["item_code"],
             "item_name": target_item["item_name"],
@@ -1499,7 +1782,7 @@ def create_sales_order(purchase_order, mapping, linked_company, direction):
     return so
 
 
-def create_delivery_note(purchase_receipt, mapping, linked_company, direction):
+def create_delivery_note(purchase_receipt, mapping, linked_company, direction, settings=None):
     """Create Delivery Note from Purchase Receipt"""
     dn = frappe.new_doc("Delivery Note")
 
@@ -1529,7 +1812,15 @@ def create_delivery_note(purchase_receipt, mapping, linked_company, direction):
         target_warehouse = frappe.db.get_value("Warehouse", {"company": dn.company, "is_group": 0}, "name")
 
     for item in purchase_receipt.items:
-        target_item = resolve_intercompany_target_item(item, dn.company, mapping=mapping, rate_factor=rate_factor)
+        target_item = resolve_intercompany_target_item(
+            item,
+            dn.company,
+            mapping=mapping,
+            rate_factor=rate_factor,
+            settings=settings,
+            source_company=purchase_receipt.company,
+            transaction_date=dn.posting_date,
+        )
         dn.append("items", {
             "item_code": target_item["item_code"],
             "item_name": target_item["item_name"],
@@ -1564,7 +1855,7 @@ def create_delivery_note(purchase_receipt, mapping, linked_company, direction):
     return dn
 
 
-def create_purchase_receipt(delivery_note, mapping, linked_company, direction):
+def create_purchase_receipt(delivery_note, mapping, linked_company, direction, settings=None):
     """Create Purchase Receipt from Delivery Note"""
     pr = frappe.new_doc("Purchase Receipt")
 
@@ -1594,7 +1885,15 @@ def create_purchase_receipt(delivery_note, mapping, linked_company, direction):
         target_warehouse = frappe.db.get_value("Warehouse", {"company": pr.company, "is_group": 0}, "name")
 
     for item in delivery_note.items:
-        target_item = resolve_intercompany_target_item(item, pr.company, mapping=mapping, rate_factor=rate_factor)
+        target_item = resolve_intercompany_target_item(
+            item,
+            pr.company,
+            mapping=mapping,
+            rate_factor=rate_factor,
+            settings=settings,
+            source_company=delivery_note.company,
+            transaction_date=pr.posting_date,
+        )
         pr.append("items", {
             "item_code": target_item["item_code"],
             "item_name": target_item["item_name"],
@@ -1629,7 +1928,7 @@ def create_purchase_receipt(delivery_note, mapping, linked_company, direction):
     return pr
 
 
-def create_quotation(supplier_quotation, mapping, linked_company, direction):
+def create_quotation(supplier_quotation, mapping, linked_company, direction, settings=None):
     """Create Quotation from Supplier Quotation"""
     q = frappe.new_doc("Quotation")
     if direction == "other_to_main":
@@ -1650,7 +1949,15 @@ def create_quotation(supplier_quotation, mapping, linked_company, direction):
     q.conversion_rate = conversion_rate
 
     for item in supplier_quotation.items:
-        target_item = resolve_intercompany_target_item(item, q.company, mapping=mapping, rate_factor=rate_factor)
+        target_item = resolve_intercompany_target_item(
+            item,
+            q.company,
+            mapping=mapping,
+            rate_factor=rate_factor,
+            settings=settings,
+            source_company=supplier_quotation.company,
+            transaction_date=q.transaction_date,
+        )
         q.append("items", {
             "item_code": target_item["item_code"],
             "item_name": target_item["item_name"],
@@ -1675,8 +1982,8 @@ def create_quotation(supplier_quotation, mapping, linked_company, direction):
     return q
 
 
-def create_supplier_quotation(quotation, mapping, linked_company, direction):
-    """Create Supplier Quotation from Quotation"""
+def create_supplier_quotation(quotation, mapping, linked_company, direction, settings=None):
+    """Create Supplier Quotation from Quotation or Request for Quotation"""
     sq = frappe.new_doc("Supplier Quotation")
     if direction == "other_to_main":
         sq.company = mapping.main_company
@@ -1695,7 +2002,15 @@ def create_supplier_quotation(quotation, mapping, linked_company, direction):
     sq.conversion_rate = conversion_rate
 
     for item in quotation.items:
-        target_item = resolve_intercompany_target_item(item, sq.company, mapping=mapping, rate_factor=rate_factor)
+        target_item = resolve_intercompany_target_item(
+            item,
+            sq.company,
+            mapping=mapping,
+            rate_factor=rate_factor,
+            settings=settings,
+            source_company=quotation.company,
+            transaction_date=sq.transaction_date,
+        )
         sq.append("items", {
             "item_code": target_item["item_code"],
             "item_name": target_item["item_name"],
@@ -1721,25 +2036,27 @@ def create_supplier_quotation(quotation, mapping, linked_company, direction):
 
 
 def get_intercompany_warehouse(company):
-    """Get inter-company / transit warehouse for a company"""
-    warehouse = frappe.db.get_value(
-        "Warehouse",
-        {
-            "company": company,
-            "is_intercompany_warehouse": 1,
-            "is_group": 0
-        },
-        "name"
-    )
+    """Get inter-company / transit warehouse for a company (v14/v15/v16 schema safe)."""
+    warehouse = None
+    if hasattr(frappe, "db") and frappe.db and frappe.db.has_column("Warehouse", "is_intercompany_warehouse"):
+        warehouse = frappe.db.get_value(
+            "Warehouse",
+            {
+                "company": company,
+                "is_intercompany_warehouse": 1,
+                "is_group": 0,
+            },
+            "name",
+        )
     if not warehouse:
         warehouse = frappe.db.get_value(
             "Warehouse",
             {
                 "company": company,
                 "warehouse_name": ["like", "%inter%company%"],
-                "is_group": 0
+                "is_group": 0,
             },
-            "name"
+            "name",
         )
     if not warehouse:
         warehouse = frappe.db.get_value(
@@ -1747,13 +2064,71 @@ def get_intercompany_warehouse(company):
             {
                 "company": company,
                 "warehouse_name": ["like", "%transit%"],
-                "is_group": 0
+                "is_group": 0,
             },
-            "name"
+            "name",
         )
     if not warehouse:
         warehouse = get_default_warehouse(company)
     return warehouse
+
+
+def get_or_create_intercompany_warehouse(company):
+    """
+    Finds an existing receiving/transit warehouse for the company,
+    or provisions a clean leaf 'Intercompany Transit Warehouse' under All Warehouses
+    so Stock Entry (Material Receipt) never fails with missing target warehouse.
+    """
+    if not company:
+        return None
+
+    # 1. Existing intercompany/transit warehouse (exact preference)
+    existing = None
+    if hasattr(frappe, "db") and frappe.db and frappe.db.has_column("Warehouse", "is_intercompany_warehouse"):
+        existing = frappe.db.get_value(
+            "Warehouse",
+            {"company": company, "is_intercompany_warehouse": 1, "is_group": 0},
+            "name",
+        )
+    if not existing:
+        existing = frappe.db.get_value(
+            "Warehouse",
+            {"company": company, "warehouse_name": ["like", "%inter%company%"], "is_group": 0},
+            "name",
+        )
+    if not existing:
+        existing = frappe.db.get_value(
+            "Warehouse",
+            {"company": company, "warehouse_name": ["like", "%transit%"], "is_group": 0},
+            "name",
+        )
+    if existing:
+        return existing
+
+    # 2. Try creating a dedicated leaf transit warehouse under company's parent warehouse group
+    try:
+        parent_wh = frappe.db.get_value(
+            "Warehouse",
+            {"company": company, "is_group": 1, "warehouse_name": ["like", "%All Warehouses%"]},
+            "name",
+        ) or frappe.db.get_value("Warehouse", {"company": company, "is_group": 1}, "name")
+
+        wh_payload = {
+            "doctype": "Warehouse",
+            "warehouse_name": "Intercompany Transit Warehouse",
+            "company": company,
+            "is_group": 0,
+        }
+        if parent_wh:
+            wh_payload["parent_warehouse"] = parent_wh
+
+        wh = frappe.get_doc(wh_payload)
+        wh.flags.ignore_permissions = True
+        wh.flags.ignore_mandatory = True
+        wh.insert()
+        return wh.name
+    except Exception:
+        return get_default_warehouse(company)
 
 
 def sanitize_intercompany_stock_entry(doc, method=None):
@@ -1774,10 +2149,10 @@ def sanitize_intercompany_stock_entry(doc, method=None):
                     d.s_warehouse = None
 
 
-def create_stock_entry(source_stock_entry, mapping, linked_company, direction):
+def create_stock_entry(source_stock_entry, mapping, linked_company, direction, settings=None):
     """
     Creates a paired Stock Entry in target company for inter-company stock transfer.
-    Bridges between the two companies using intercompany/transit warehouses.
+    Supports Company 1 Material Issue -> Company 2 Material Receipt cleanly.
     """
     se = frappe.new_doc("Stock Entry")
 
@@ -1797,6 +2172,9 @@ def create_stock_entry(source_stock_entry, mapping, linked_company, direction):
     se.posting_date = getattr(source_stock_entry, "posting_date", None) or nowdate()
     se.posting_time = getattr(source_stock_entry, "posting_time", None)
     se.set_posting_time = getattr(source_stock_entry, "set_posting_time", 0)
+    se.remarks = getattr(source_stock_entry, "remarks", None) or (
+        f"Intercompany Material Receipt from {source_stock_entry.doctype} {source_stock_entry.name} ({source_stock_entry.company})"
+    )
 
     # Resolve currency conversion if source and target company default currencies differ
     source_company_currency = frappe.db.get_value("Company", source_stock_entry.company, "default_currency")
@@ -1806,27 +2184,55 @@ def create_stock_entry(source_stock_entry, mapping, linked_company, direction):
     if not target_warehouse:
         target_warehouse = get_intercompany_warehouse(target_warehouse_company)
     if not target_warehouse:
+        target_warehouse = get_or_create_intercompany_warehouse(target_warehouse_company)
+    if not target_warehouse:
         target_warehouse = frappe.db.get_value("Warehouse", {"company": target_warehouse_company, "is_group": 0}, "name")
 
     # In ERPNext, a Stock Entry in target company MUST NOT have from_warehouse set to another company!
     se.from_warehouse = None
     se.to_warehouse = target_warehouse
 
-    for item in source_stock_entry.items:
-        target_item = resolve_intercompany_target_item(item, se.company, mapping=mapping, rate_factor=fx_rate)
-        base_rate = getattr(item, "basic_rate", 0) or getattr(item, "valuation_rate", 0) or 0
-        rate = flt(base_rate) * flt(fx_rate)
-        final_rate = target_item["rate"] if target_item["rate"] else rate
-        se.append("items", {
+    for item in (source_stock_entry.get("items") or []):
+        item_code = getattr(item, "item_code", None) or (item.get("item_code") if isinstance(item, dict) else None)
+        base_rate = flt(
+            getattr(item, "basic_rate", 0)
+            or getattr(item, "valuation_rate", 0)
+            or getattr(item, "rate", 0)
+        )
+        if base_rate <= 0 and item_code:
+            base_rate = flt(frappe.db.get_value("Item", item_code, "valuation_rate") or 0)
+
+        item_for_mapping = {
+            "item_code": item_code,
+            "item_name": getattr(item, "item_name", None) or item_code,
+            "description": getattr(item, "description", None) or item_code,
+            "qty": flt(getattr(item, "qty", 1)),
+            "rate": base_rate,
+            "uom": getattr(item, "uom", None) or "Nos",
+        }
+        target_item = resolve_intercompany_target_item(
+            item_for_mapping,
+            se.company,
+            mapping=mapping,
+            rate_factor=fx_rate,
+            settings=settings,
+            source_company=source_stock_entry.company,
+            transaction_date=se.posting_date,
+        )
+        final_rate = flt(target_item["rate"])
+        se_row = {
             "item_code": target_item["item_code"],
             "qty": target_item["qty"],
             "uom": target_item["uom"],
             "s_warehouse": None,
             "t_warehouse": target_warehouse,
             "basic_rate": final_rate,
-            "basic_amount": final_rate * target_item["qty"],
+            "basic_amount": flt(final_rate * target_item["qty"]),
             "conversion_factor": target_item["conversion_factor"],
-        })
+        }
+        if final_rate <= 0:
+            se_row["allow_zero_valuation_rate"] = 1
+        se.append("items", se_row)
 
     se.intercompany_linked_doc_doctype = source_stock_entry.doctype
     se.intercompany_linked_doc_name = source_stock_entry.name
@@ -1845,7 +2251,7 @@ def create_stock_entry(source_stock_entry, mapping, linked_company, direction):
 
     # Re-enforce clean warehouse state after set_missing_values
     se.from_warehouse = None
-    for d in se.items:
+    for d in (se.get("items") or []):
         d.s_warehouse = None
         if not d.t_warehouse:
             d.t_warehouse = target_warehouse
@@ -1854,8 +2260,132 @@ def create_stock_entry(source_stock_entry, mapping, linked_company, direction):
     return se
 
 
+def create_journal_entry_from_lcv(source_lcv, mapping, linked_company, direction):
+    """
+    Creates a balanced Intercompany Recharge Journal Entry in the sister company
+    from a Landed Cost Voucher (freight/duty/handling allocation recharge).
+    """
+    je = frappe.new_doc("Journal Entry")
+
+    if direction == "other_to_main":
+        je.company = mapping.main_company
+        supplier = getattr(linked_company, "main_company_supplier", None)
+        clearing_account = getattr(linked_company, "main_company_account", None)
+    else:
+        je.company = linked_company.company
+        supplier = getattr(linked_company, "other_company_supplier", None)
+        clearing_account = getattr(linked_company, "other_company_account", None)
+
+    if not clearing_account:
+        clearing_account = get_or_create_intercompany_clearing_account(je.company, source_lcv.company)
+
+    total_amt = flt(getattr(source_lcv, "total_taxes_and_charges", 0))
+    if total_amt <= 0:
+        for tax in (source_lcv.get("taxes") or []):
+            total_amt += flt(tax.get("base_amount") if isinstance(tax, dict) else getattr(tax, "base_amount", 0)) or flt(
+                tax.get("amount") if isinstance(tax, dict) else getattr(tax, "amount", 0)
+            )
+
+    if total_amt <= 0:
+        frappe.throw(
+            _("Landed Cost Voucher {0} has zero total taxes and charges to recharge.").format(source_lcv.name)
+        )
+
+    je.posting_date = getattr(source_lcv, "posting_date", None) or nowdate()
+    je.voucher_type = (
+        "Inter Company Journal Entry"
+        if frappe.db.exists("Journal Entry Type", "Inter Company Journal Entry")
+        else "Journal Entry"
+    )
+
+    tax_descs = []
+    for tax in (source_lcv.get("taxes") or []):
+        desc = tax.get("description") if isinstance(tax, dict) else getattr(tax, "description", None)
+        if desc:
+            tax_descs.append(str(desc))
+    tax_summary = f" ({', '.join(tax_descs[:3])})" if tax_descs else ""
+    je.user_remark = f"Landed Cost Recharge from {source_lcv.doctype} {source_lcv.name} ({source_lcv.company}){tax_summary}"
+
+    source_ccy = frappe.db.get_value("Company", source_lcv.company, "default_currency")
+    target_ccy = frappe.db.get_value("Company", je.company, "default_currency")
+    fx_rate = get_intercompany_exchange_rate(source_ccy, target_ccy, je.posting_date)
+    if source_ccy and target_ccy and source_ccy != target_ccy:
+        je.multi_currency = 1
+
+    converted_amt = flt(total_amt * flt(fx_rate), 2)
+    if converted_amt <= 0:
+        converted_amt = flt(total_amt, 2)
+
+    default_cost_center = get_default_cost_center(je.company)
+
+    # Debit Expense/Landed Cost Account in sister company
+    debit_account = frappe.db.get_value("Company", je.company, "default_expense_account")
+    if not debit_account:
+        debit_account = (
+            frappe.db.get_value(
+                "Account",
+                {"company": je.company, "root_type": "Expense", "is_group": 0, "account_name": ["like", "%Freight%"]},
+                "name",
+            )
+            or frappe.db.get_value(
+                "Account",
+                {"company": je.company, "root_type": "Expense", "is_group": 0, "account_name": ["like", "%Landed%"]},
+                "name",
+            )
+            or frappe.db.get_value(
+                "Account",
+                {"company": je.company, "root_type": "Expense", "is_group": 0},
+                "name",
+            )
+            or clearing_account
+        )
+
+    # Credit Payable (to Sister Supplier) or Intercompany Clearing Account
+    payable_account = frappe.db.get_value("Company", je.company, "default_payable_account")
+    if supplier and payable_account:
+        credit_row = {
+            "account": payable_account,
+            "party_type": "Supplier",
+            "party": supplier,
+            "debit_in_account_currency": 0,
+            "credit_in_account_currency": converted_amt,
+            "cost_center": default_cost_center,
+        }
+    else:
+        credit_row = {
+            "account": clearing_account or debit_account,
+            "debit_in_account_currency": 0,
+            "credit_in_account_currency": converted_amt,
+            "cost_center": default_cost_center,
+        }
+
+    je.append("accounts", {
+        "account": debit_account,
+        "debit_in_account_currency": converted_amt,
+        "credit_in_account_currency": 0,
+        "cost_center": default_cost_center,
+    })
+    je.append("accounts", credit_row)
+
+    je.intercompany_linked_doc_doctype = source_lcv.doctype
+    je.intercompany_linked_doc_name = source_lcv.name
+    je.intercompany_linked_company = source_lcv.company
+    je.intercompany_target_company = source_lcv.company
+
+    je.flags.ignore_permissions = True
+    je.flags.ignore_mandatory = True
+    je.flags.ignore_account_permission = True
+    je.flags.ignore_validate = True
+    je.flags.ignore_links = True
+    je.docstatus = 0
+    return je
+
+
 def create_journal_entry(source_je, mapping, linked_company, direction):
-    """Create corresponding Journal Entry"""
+    """Create corresponding Journal Entry (including Landed Cost Voucher recharge JEs)"""
+    if getattr(source_je, "doctype", "") == "Landed Cost Voucher":
+        return create_journal_entry_from_lcv(source_je, mapping, linked_company, direction)
+
     je = frappe.new_doc("Journal Entry")
 
     if direction == "other_to_main":
@@ -2049,10 +2579,13 @@ def create_payment_entry(source_pe, mapping, linked_company, direction):
 
 
 def create_document_reference(source_doc, target_doc):
-    """Create inter-company document reference"""
+    """Create inter-company document reference using savepoint safety."""
     try:
         if source_doc.company == target_doc.company:
             return
+
+        if hasattr(frappe.db, "savepoint"):
+            frappe.db.savepoint("ict_doc_ref")
 
         existing_ref = frappe.db.exists(
             "Inter Company Document Reference",
@@ -2076,9 +2609,12 @@ def create_document_reference(source_doc, target_doc):
             })
             ref_doc.flags.ignore_permissions = True
             ref_doc.insert(ignore_permissions=True)
-            frappe.db.commit()
     except Exception as e:
-        frappe.db.rollback()
+        if hasattr(frappe.db, "rollback"):
+            try:
+                frappe.db.rollback(save_point="ict_doc_ref")
+            except Exception:
+                pass
         frappe.log_error(f"Error creating document reference: {e!s}", "Inter Company Transaction Error")
 
 
@@ -2232,7 +2768,7 @@ def fix_legacy_custom_fields(force=False):
                 "Sales Order", "Purchase Order", "Sales Invoice", "Purchase Invoice",
                 "Delivery Note", "Purchase Receipt", "Quotation", "Supplier Quotation",
                 "Material Request", "Stock Entry", "Journal Entry", "Payment Entry",
-                "Request for Quotation"
+                "Request for Quotation", "Landed Cost Voucher"
             ]
             for dt in tx_doctypes:
                 try:

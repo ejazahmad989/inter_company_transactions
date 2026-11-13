@@ -76,7 +76,7 @@ def cleanup_custom_fields():
             WHERE `module` = 'Inter Company Transactions'
         """)
 
-        # Delete by fieldname on affected DocTypes to ensure no orphan fields remain
+        # Delete by fieldname across all sites to ensure no orphan fields remain
         placeholders = ", ".join(["%s"] * len(ict_fields))
         frappe.db.sql(f"""
             DELETE FROM `tabCustom Field`

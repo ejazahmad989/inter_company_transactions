@@ -64,10 +64,10 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 	def test_item_mapping_doctype_exists(self):
 		"""Verify Intercompany Item Mapping doctype metadata exists"""
 		meta = frappe.get_meta("Intercompany Item Mapping")
-		self.assertTrue(meta.has_field("source_company"))
-		self.assertTrue(meta.has_field("target_company"))
 		self.assertTrue(meta.has_field("source_item_code"))
+		self.assertTrue(meta.has_field("target_company"))
 		self.assertTrue(meta.has_field("target_item_code"))
+		self.assertTrue(meta.has_field("conversion_factor"))
 
 	def test_error_log_doctype_exists(self):
 		"""Verify Inter Company Error Log doctype metadata exists"""
@@ -75,7 +75,8 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 		self.assertTrue(meta.has_field("source_doctype"))
 		self.assertTrue(meta.has_field("source_name"))
 		self.assertTrue(meta.has_field("error_message"))
-		self.assertTrue(meta.has_field("resolved"))
+		self.assertTrue(meta.has_field("status"))
+		self.assertTrue(meta.has_field("resolved_by"))
 
 	def test_populate_default_transaction_types(self):
 		"""Verify default transaction types population logic"""
@@ -94,24 +95,20 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 
 	def test_netting_settlement_calculation(self):
 		"""Verify multilateral netting algorithm balances debts and credits"""
-		from inter_company_transactions.inter_company_transactions.doctype.inter_company_netting_cycle.inter_company_netting_cycle import (
-			InterCompanyNettingCycle,
-		)
-		cycle = frappe.new_doc("InterCompany Netting Cycle")
+		cycle = frappe.new_doc("Inter Company Netting Cycle")
 		cycle.cycle_name = "Q1 Test Settlement"
-		cycle.netting_currency = "USD"
-		# Set up 3 companies with known balances
+		# Set up 3 companies with known balances:
 		# Company A: owes B 100, owes C 50 -> Net -150
 		# Company B: owed 100 from A, owes C 20 -> Net +80
 		# Company C: owed 50 from A, owed 20 from B -> Net +70
 		# Netting should reduce 3 transactions into just 2 minimal settlements
-		cycle.append("companies", {"company": "Company A", "initial_balance": -150})
-		cycle.append("companies", {"company": "Company B", "initial_balance": 80})
-		cycle.append("companies", {"company": "Company C", "initial_balance": 70})
+		cycle.append("participating_companies", {"company": "Company A", "net_balance": -150})
+		cycle.append("participating_companies", {"company": "Company B", "net_balance": 80})
+		cycle.append("participating_companies", {"company": "Company C", "net_balance": 70})
 
 		cycle.calculate_netting()
 		self.assertGreater(len(cycle.net_settlements), 0)
-		total_settled = sum(flt(s.settlement_amount) for s in cycle.net_settlements)
+		total_settled = sum(flt(s.amount) for s in cycle.net_settlements)
 		self.assertEqual(total_settled, 150.0)
 
 	def test_dispute_variance_calculation(self):
@@ -311,6 +308,8 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 
 	def test_validate_intercompany_items_auto_create_disabled(self):
 		"""Verify validation throws error when item is unmapped and auto-create is disabled"""
+		from unittest.mock import patch
+
 		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
 			validate_intercompany_items,
 		)
@@ -322,11 +321,11 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 			"company": "Company B",
 			"mapping": frappe._dict({"item_mappings": []}),
 		}
-		# When auto-create is disabled and item doesn't exist, validate_intercompany_items raises error
-		with self.assertRaises(Exception):
-			# Mock auto_create_missing_items setting as disabled
-			frappe.flags.in_test = True
-			validate_intercompany_items(doc, mapping)
+		mock_settings = frappe._dict({"auto_create_missing_items": 0})
+		with patch.object(frappe, "get_single", return_value=mock_settings):
+			with patch.object(frappe.db, "exists", side_effect=lambda dt, name=None: dt == "DocType" and name == "Inter Company Settings"):
+				with self.assertRaises(Exception):
+					validate_intercompany_items(doc, mapping)
 
 	def test_clearing_account_helper_exists(self):
 		"""Verify get_or_create_intercompany_clearing_account handles none/empty safely"""
@@ -365,7 +364,175 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 		for m in mappings:
 			self.assertNotEqual(m["company"], "GMP FOODS")
 
+	def test_stock_entry_material_issue_to_receipt_with_zero_rate(self):
+		"""Verify Stock Entry Material Issue mirrors to Material Receipt cleanly even without is_intercompany_warehouse column"""
+		from unittest.mock import patch
 
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			create_stock_entry,
+		)
 
+		source_se = frappe._dict({
+			"doctype": "Stock Entry",
+			"name": "MAT-STE-2026-0001",
+			"company": "Company A",
+			"stock_entry_type": "Material Issue",
+			"posting_date": "2026-10-13",
+			"items": [
+				frappe._dict({
+					"item_code": "ITEM-ZERO",
+					"item_name": "Zero Rate Item",
+					"qty": 5,
+					"uom": "Nos",
+					"basic_rate": 0,
+					"valuation_rate": 0,
+				}),
+				frappe._dict({
+					"item_code": "ITEM-VAL",
+					"item_name": "Valued Item",
+					"qty": 2,
+					"uom": "Nos",
+					"basic_rate": 75.0,
+				}),
+			],
+		})
+		mapping = frappe._dict({"main_company": "Company A", "item_mappings": []})
+		linked_company = frappe._dict({
+			"company": "Company B",
+			"other_company_warehouse": "Transit B - CB",
+		})
 
+		fake_se = frappe.new_doc("Stock Entry")
+		fake_se.items = []
+		fake_se.flags = frappe._dict()
+		fake_se.set_missing_values = lambda **kw: None
 
+		def mock_get_value(dt, filters=None, fieldname=None, **kwargs):
+			if dt == "Company" and fieldname == "default_currency":
+				return "USD"
+			if dt == "Item" and fieldname == "valuation_rate":
+				return 0
+			return None
+
+		with patch.object(frappe, "new_doc", return_value=fake_se), patch.object(
+			frappe.db, "has_column", return_value=False
+		), patch.object(
+			frappe.db, "get_value", side_effect=mock_get_value
+		):
+			res = create_stock_entry(source_se, mapping, linked_company, "main_to_other")
+			self.assertEqual(res.stock_entry_type, "Material Receipt")
+			self.assertEqual(res.purpose, "Material Receipt")
+			self.assertEqual(res.company, "Company B")
+			self.assertIsNone(res.from_warehouse)
+			self.assertEqual(res.to_warehouse, "Transit B - CB")
+			self.assertEqual(len(res.items), 2)
+			self.assertEqual(res.items[0].allow_zero_valuation_rate, 1)
+			self.assertEqual(res.items[1].basic_rate, 75.0)
+
+	def test_landed_cost_voucher_to_journal_entry(self):
+		"""Verify Landed Cost Voucher recharges into a balanced Journal Entry in target company"""
+		from unittest.mock import patch
+
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			create_journal_entry_from_lcv,
+		)
+
+		source_lcv = frappe._dict({
+			"doctype": "Landed Cost Voucher",
+			"name": "MAT-LCV-2026-0001",
+			"company": "Company A",
+			"posting_date": "2026-10-13",
+			"total_taxes_and_charges": 450.0,
+			"taxes": [frappe._dict({"description": "Ocean Freight", "amount": 450.0})],
+		})
+		mapping = frappe._dict({"main_company": "Company A"})
+		linked_company = frappe._dict({
+			"company": "Company B",
+			"other_company_supplier": "Company A (Internal)",
+			"other_company_account": "IC Clearing B - CB",
+		})
+
+		fake_je = frappe._dict({"accounts": []})
+		fake_je.doctype = "Journal Entry"
+		fake_je.append = lambda tbl, row: fake_je["accounts"].append(frappe._dict(row))
+		fake_je.flags = frappe._dict()
+
+		def mock_get_value(doctype, filters=None, fieldname=None, **kwargs):
+			if doctype == "Company" and fieldname == "default_currency":
+				return "USD"
+			if doctype == "Company" and fieldname == "default_expense_account":
+				return "Freight Expense - CB"
+			if doctype == "Company" and fieldname == "default_payable_account":
+				return "Creditors - CB"
+			if doctype == "Company" and fieldname == "cost_center":
+				return "Main - CB"
+			return None
+
+		with patch.object(frappe, "new_doc", return_value=fake_je), patch.object(
+			frappe.db, "exists", return_value=True
+		), patch.object(frappe.db, "get_value", side_effect=mock_get_value):
+			res = create_journal_entry_from_lcv(source_lcv, mapping, linked_company, "main_to_other")
+			self.assertEqual(res.company, "Company B")
+			total_debit = sum(flt(a.debit_in_account_currency) for a in res.accounts)
+			total_credit = sum(flt(a.credit_in_account_currency) for a in res.accounts)
+			self.assertEqual(total_debit, 450.0)
+			self.assertEqual(total_credit, 450.0)
+			self.assertIn("MAT-LCV-2026-0001", res.user_remark)
+
+	def test_transfer_pricing_policy_markup(self):
+		"""Verify Transfer Pricing Policy Cost-Plus Markup % and Settings Cost + Markup % calculation"""
+		from unittest.mock import patch
+
+		mock_policy = frappe._dict({
+			"name": "TPP-2026-00001",
+			"from_company": "Company A",
+			"to_company": "Company B",
+			"item_code": "WIDGET-01",
+			"methodology": "Cost-Plus Markup %",
+			"markup_percentage": 15.0,
+			"effective_from": "2020-01-01",
+			"effective_to": "2099-12-31",
+		})
+		item_doc = {"item_code": "WIDGET-01", "item_group": "Products"}
+
+		with patch.object(frappe.db, "exists", return_value=True), patch.object(
+			frappe.db, "has_column", return_value=True
+		), patch.object(frappe, "get_all", return_value=[mock_policy]), patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link._get_item_valuation_rate",
+			return_value=200.0,
+		):
+			rate = calculate_transfer_rate(
+				item_doc, 200.0, "Company B", None, source_company="Company A", transaction_date="2026-10-13"
+			)
+			self.assertEqual(rate, 230.0)
+
+		with patch.object(frappe.db, "exists", return_value=False), patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link._get_item_valuation_rate",
+			return_value=100.0,
+		):
+			settings = {"default_transfer_pricing_rule": "Cost + Markup %", "markup_percentage": 20.0}
+			rate2 = calculate_transfer_rate(item_doc, 100.0, "Company B", settings, source_company="Company A")
+			self.assertEqual(rate2, 120.0)
+
+	def test_remote_sync_counterparty_resolution_no_custom_field(self):
+		"""Verify remote sync uses standard ERPNext internal party fields and never queries is_inter_company"""
+		from unittest.mock import patch
+
+		from inter_company_transactions.sync import resolve_counterparty_for_remote_source
+
+		queried_filters = []
+
+		def mock_get_value(dt, filters=None, fieldname=None, **kwargs):
+			if isinstance(filters, dict):
+				queried_filters.append((dt, dict(filters)))
+				if filters.get("represents_company") == "Remote Co A" and filters.get("is_internal_customer") == 1:
+					return "Remote Co A (Internal)"
+			return None
+
+		with patch.object(frappe.db, "has_column", return_value=True), patch.object(
+			frappe.db, "get_value", side_effect=mock_get_value
+		):
+			party = resolve_counterparty_for_remote_source("Remote Co A", "Sales Invoice", "Local Co B")
+			self.assertEqual(party, "Remote Co A (Internal)")
+			for _dt, flt_dict in queried_filters:
+				self.assertNotIn("is_inter_company", flt_dict)

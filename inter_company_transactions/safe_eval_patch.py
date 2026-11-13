@@ -120,10 +120,3 @@ def apply_safe_eval_patch():
         frappe.utils.safe_eval = patched_safe_eval
 
     _patch_applied = True
-
-
-# Apply patch automatically on module import
-try:
-    apply_safe_eval_patch()
-except Exception:
-    pass

@@ -6,10 +6,8 @@ def boot_session(bootinfo):
     try:
         try:
             from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
-                fix_legacy_custom_fields,
                 get_intercompany_party_map,
             )
-            fix_legacy_custom_fields(force=True)
             bootinfo.intercompany_party_map = get_intercompany_party_map()
         except Exception:
             pass

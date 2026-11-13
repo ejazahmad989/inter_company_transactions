@@ -2,7 +2,7 @@
   "doctype": "DocType",
   "name": "SMS Template",
   "module": "Inter Company Transactions",
-  "custom": 1,
+  "custom": 0,
   "custom_field": 0,
   "fields": [
     {

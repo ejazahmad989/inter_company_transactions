@@ -66,17 +66,31 @@ class InterCompanyDispute(Document):
 			dn.insert()
 			res_doc_name = dn.name
 
-		elif res_action == "Journal Adjustment" and self.variance_amount > 0:
+		elif res_action in ("Journal Adjustment", "Stock Adjustment") and self.variance_amount > 0:
+			from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+				get_or_create_intercompany_clearing_account,
+			)
 			je = frappe.new_doc("Journal Entry")
 			je.company = self.source_company
 			je.posting_date = nowdate()
-			je.user_remark = f"Dispute Adjustment for {self.name} ({self.dispute_title}): Variance of {self.variance_amount}"
-			accounts = frappe.get_all("Account", filters={"company": self.source_company, "is_group": 0}, pluck="name", limit=2)
-			if len(accounts) >= 2:
-				je.append("accounts", {"account": accounts[0], "debit_in_account_currency": self.variance_amount, "credit_in_account_currency": 0})
-				je.append("accounts", {"account": accounts[1], "debit_in_account_currency": 0, "credit_in_account_currency": self.variance_amount})
+			je.user_remark = f"{res_action} for Dispute {self.name} ({self.dispute_title}): Variance of {self.variance_amount}"
+			clearing_acct = get_or_create_intercompany_clearing_account(self.source_company, self.target_company)
+			expense_acct = (
+				frappe.db.get_value("Company", self.source_company, "default_expense_account")
+				or frappe.db.get_value("Account", {"company": self.source_company, "root_type": "Expense", "is_group": 0}, "name")
+			)
+			if not expense_acct or expense_acct == clearing_acct:
+				expense_acct = frappe.db.get_value(
+					"Account",
+					{"company": self.source_company, "is_group": 0, "name": ["!=", clearing_acct or ""]},
+					"name",
+				)
+			if clearing_acct and expense_acct:
+				je.append("accounts", {"account": expense_acct, "debit_in_account_currency": self.variance_amount, "credit_in_account_currency": 0})
+				je.append("accounts", {"account": clearing_acct, "debit_in_account_currency": 0, "credit_in_account_currency": self.variance_amount})
 				je.flags.ignore_permissions = True
-				je.insert()
+				je.flags.ignore_mandatory = True
+				je.insert(ignore_permissions=True)
 				res_doc_name = je.name
 
 		self.resolution_document = res_doc_name or _("Variance Accepted (No entry required)")

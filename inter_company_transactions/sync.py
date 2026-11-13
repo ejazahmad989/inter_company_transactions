@@ -40,8 +40,9 @@ def get_app_version_and_capabilities():
 			"Sales Invoice", "Purchase Invoice",
 			"Delivery Note", "Purchase Receipt",
 			"Quotation", "Supplier Quotation",
+			"Material Request", "Request for Quotation",
 			"Payment Entry", "Journal Entry",
-			"Stock Entry"
+			"Stock Entry", "Landed Cost Voucher"
 		]
 	}
 
@@ -93,10 +94,14 @@ def prepare_remote_payload(doc, target_company):
 		"target_company": target_company,
 		"posting_date": str(doc.get("posting_date") or doc.get("transaction_date") or nowdate()),
 		"transaction_date": str(doc.get("transaction_date") or doc.get("posting_date") or nowdate()),
+		"schedule_date": str(doc.get("schedule_date") or doc.get("delivery_date") or ""),
 		"currency": doc.get("currency"),
 		"conversion_rate": flt(doc.get("conversion_rate") or 1.0),
 		"grand_total": flt(doc.get("grand_total") or doc.get("total") or 0.0),
 		"total_qty": flt(doc.get("total_qty") or 0.0),
+		"total_taxes_and_charges": flt(doc.get("total_taxes_and_charges") or 0.0),
+		"stock_entry_type": doc.get("stock_entry_type"),
+		"purpose": doc.get("purpose"),
 		"remarks": doc.get("remarks") or f"Intercompany synchronized from {doc.company} ({doc.doctype} {doc.name})",
 		"items": [],
 		"accounts": [],
@@ -104,18 +109,23 @@ def prepare_remote_payload(doc, target_company):
 	}
 
 	# Serialize Items
-	if hasattr(doc, "items") and doc.items:
-		for row in doc.items:
+	if doc.get("items"):
+		for row in (doc.get("items") or []):
 			payload["items"].append({
 				"item_code": row.get("item_code"),
 				"item_name": row.get("item_name"),
 				"description": row.get("description"),
 				"qty": flt(row.get("qty") or 0.0),
-				"rate": flt(row.get("rate") or 0.0),
-				"amount": flt(row.get("amount") or 0.0),
+				"rate": flt(row.get("rate") or row.get("basic_rate") or row.get("valuation_rate") or 0.0),
+				"basic_rate": flt(row.get("basic_rate") or row.get("valuation_rate") or row.get("rate") or 0.0),
+				"valuation_rate": flt(row.get("valuation_rate") or 0.0),
+				"amount": flt(row.get("amount") or row.get("basic_amount") or 0.0),
 				"uom": row.get("uom"),
 				"stock_uom": row.get("stock_uom"),
-				"conversion_factor": flt(row.get("conversion_factor") or 1.0)
+				"conversion_factor": flt(row.get("conversion_factor") or 1.0),
+				"schedule_date": str(row.get("schedule_date") or ""),
+				"s_warehouse": row.get("s_warehouse"),
+				"t_warehouse": row.get("t_warehouse"),
 			})
 
 	# Serialize Accounts (for Journal Entry or Payment Entry)
@@ -128,6 +138,16 @@ def prepare_remote_payload(doc, target_company):
 				"debit_in_account_currency": flt(row.get("debit_in_account_currency") or row.get("debit") or 0.0),
 				"credit_in_account_currency": flt(row.get("credit_in_account_currency") or row.get("credit") or 0.0),
 				"account_currency": row.get("account_currency")
+			})
+
+	# Serialize Taxes / Landed Cost charges
+	if hasattr(doc, "taxes") and doc.taxes:
+		for row in doc.taxes:
+			payload["taxes"].append({
+				"expense_account": row.get("expense_account") or row.get("account_head"),
+				"description": row.get("description"),
+				"amount": flt(row.get("amount") or row.get("tax_amount") or 0.0),
+				"base_amount": flt(row.get("base_amount") or row.get("base_tax_amount") or row.get("amount") or 0.0),
 			})
 
 	# Payment Entry specifics
@@ -283,11 +303,28 @@ def log_remote_sync_failure(doc, target_company, site_url, payload_json, error_m
 		return
 
 	try:
+		target_map = {
+			"Sales Order": "Purchase Order",
+			"Purchase Order": "Sales Order",
+			"Sales Invoice": "Purchase Invoice",
+			"Purchase Invoice": "Sales Invoice",
+			"Delivery Note": "Purchase Receipt",
+			"Purchase Receipt": "Delivery Note",
+			"Quotation": "Supplier Quotation",
+			"Supplier Quotation": "Quotation",
+			"Material Request": "Purchase Order",
+			"Request for Quotation": "Supplier Quotation",
+			"Payment Entry": "Payment Entry",
+			"Journal Entry": "Journal Entry",
+			"Stock Entry": "Stock Entry",
+			"Landed Cost Voucher": "Journal Entry",
+		}
 		err_log = frappe.new_doc("Inter Company Error Log")
 		err_log.source_doctype = doc.doctype
-		err_log.source_document = doc.name
+		err_log.source_name = doc.name
 		err_log.source_company = doc.company
 		err_log.target_company = target_company
+		err_log.target_doctype = target_map.get(doc.doctype, doc.doctype)
 		err_log.error_type = "Remote Sync"
 		err_log.error_message = f"Failed to push to {site_url}: {error_message}"
 		err_log.traceback = frappe.get_traceback()
@@ -313,6 +350,8 @@ def receive_remote_transaction(payload=None):
 	if isinstance(raw_data, (bytes, bytearray)):
 		raw_data = raw_data.decode("utf-8")
 
+	raw_text_for_hmac = raw_data if isinstance(raw_data, str) else None
+
 	if isinstance(raw_data, str):
 		try:
 			data = json.loads(raw_data)
@@ -323,13 +362,16 @@ def receive_remote_transaction(payload=None):
 	else:
 		frappe.throw(_("No payload provided."))
 
-	# Optional HMAC signature verification
+	# Optional HMAC signature verification on raw HTTP payload bytes first
 	incoming_sig = frappe.get_request_header("X-Intercompany-Signature") if hasattr(frappe, "get_request_header") else None
 	settings = frappe.get_cached_doc("Inter Company Settings")
 	if incoming_sig and settings.get("remote_sites"):
-		# Verify if any remote site has matching HMAC secret
 		verified = False
-		raw_bytes = json.dumps(data, default=str).encode("utf-8")
+		raw_bytes = (
+			raw_text_for_hmac.encode("utf-8")
+			if raw_text_for_hmac is not None
+			else json.dumps(data, default=str).encode("utf-8")
+		)
 		for site in settings.remote_sites:
 			if site.hmac_secret:
 				expected = hmac.new(site.hmac_secret.encode("utf-8"), raw_bytes, hashlib.sha256).hexdigest()
@@ -382,9 +424,12 @@ def receive_remote_transaction(payload=None):
 		"Purchase Receipt": "Delivery Note",
 		"Quotation": "Supplier Quotation",
 		"Supplier Quotation": "Quotation",
+		"Material Request": "Purchase Order",
+		"Request for Quotation": "Supplier Quotation",
 		"Payment Entry": "Payment Entry",
 		"Journal Entry": "Journal Entry",
-		"Stock Entry": "Stock Entry"
+		"Stock Entry": "Stock Entry",
+		"Landed Cost Voucher": "Journal Entry"
 	}
 
 	target_doctype = target_doctype_map.get(source_doctype)
@@ -395,11 +440,13 @@ def receive_remote_transaction(payload=None):
 	target_doc = frappe.new_doc(target_doctype)
 	target_doc.company = target_company
 
-	# Set posting date
+	# Set posting / transaction / schedule dates
 	if hasattr(target_doc, "posting_date"):
 		target_doc.posting_date = data.get("posting_date") or nowdate()
 	if hasattr(target_doc, "transaction_date"):
 		target_doc.transaction_date = data.get("transaction_date") or nowdate()
+	if hasattr(target_doc, "schedule_date") and not getattr(target_doc, "schedule_date", None):
+		target_doc.schedule_date = data.get("schedule_date") or data.get("transaction_date") or nowdate()
 
 	# Resolve Party (Customer or Supplier)
 	party_name = resolve_counterparty_for_remote_source(source_company, target_doctype, target_company)
@@ -408,8 +455,38 @@ def receive_remote_transaction(payload=None):
 	elif target_doctype in ["Sales Order", "Sales Invoice", "Delivery Note", "Quotation"]:
 		target_doc.customer = party_name
 
-	# Map Line Items
-	if hasattr(target_doc, "items") and data.get("items"):
+	# Map Stock Entry (Company 1 Material Issue -> Company 2 Material Receipt)
+	if target_doctype == "Stock Entry":
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			get_intercompany_warehouse,
+			get_or_create_intercompany_warehouse,
+		)
+		target_doc.stock_entry_type = "Material Receipt"
+		target_doc.purpose = "Material Receipt"
+		target_warehouse = get_intercompany_warehouse(target_company) or get_or_create_intercompany_warehouse(target_company)
+		target_doc.from_warehouse = None
+		target_doc.to_warehouse = target_warehouse
+		target_doc.remarks = data.get("remarks") or f"Intercompany Material Receipt synchronized from {source_company} ({source_doctype} {source_name})"
+
+		for row in data.get("items", []):
+			resolved_item_code = resolve_item_code_for_remote(row.get("item_code"), target_company)
+			basic_rate = flt(row.get("basic_rate") or row.get("valuation_rate") or row.get("rate") or 0.0)
+			se_row = {
+				"item_code": resolved_item_code,
+				"qty": flt(row.get("qty") or 1.0),
+				"uom": row.get("uom") or "Nos",
+				"conversion_factor": flt(row.get("conversion_factor") or 1.0),
+				"s_warehouse": None,
+				"t_warehouse": target_warehouse,
+				"basic_rate": basic_rate,
+				"basic_amount": flt(basic_rate * flt(row.get("qty") or 1.0)),
+			}
+			if basic_rate <= 0:
+				se_row["allow_zero_valuation_rate"] = 1
+			target_doc.append("items", se_row)
+
+	# Map Standard Order / Invoice / Receipt Line Items
+	elif hasattr(target_doc, "items") and data.get("items"):
 		for row in data["items"]:
 			resolved_item_code = resolve_item_code_for_remote(row.get("item_code"), target_company)
 			item_row = {
@@ -418,24 +495,56 @@ def receive_remote_transaction(payload=None):
 				"rate": flt(row.get("rate")),
 				"uom": row.get("uom")
 			}
+			if row.get("schedule_date"):
+				item_row["schedule_date"] = row.get("schedule_date")
 			# Warehouse resolution
 			if hasattr(target_doc, "set_warehouse") and target_doc.set_warehouse:
 				item_row["warehouse"] = target_doc.set_warehouse
 			target_doc.append("items", item_row)
 
-	# Journal Entry specifics
+	# Journal Entry specifics (including remote Landed Cost Voucher -> Journal Entry)
 	if target_doctype == "Journal Entry":
 		target_doc.voucher_type = "Inter Company Journal Entry" if frappe.db.exists("Journal Entry Type", "Inter Company Journal Entry") else "Journal Entry"
 		target_doc.user_remark = data.get("remarks")
-		# Post mirrored entries
-		for acc_row in data.get("accounts", []):
-			# Map account or use default clearing account
-			clearing_account = get_or_create_intercompany_clearing_account(target_company)
-			target_doc.append("accounts", {
-				"account": clearing_account,
-				"debit_in_account_currency": flt(acc_row.get("credit_in_account_currency")),
-				"credit_in_account_currency": flt(acc_row.get("debit_in_account_currency"))
-			})
+		clearing_account = get_or_create_intercompany_clearing_account(target_company)
+		if source_doctype == "Landed Cost Voucher":
+			total_amt = flt(data.get("total_taxes_and_charges") or 0.0)
+			if total_amt <= 0:
+				total_amt = sum(flt(t.get("base_amount") or t.get("amount") or 0.0) for t in (data.get("taxes") or []))
+			if total_amt > 0:
+				expense_acct = (
+					frappe.db.get_value("Company", target_company, "default_expense_account")
+					or frappe.db.get_value("Account", {"company": target_company, "root_type": "Expense", "is_group": 0}, "name")
+					or clearing_account
+				)
+				payable_acct = frappe.db.get_value("Company", target_company, "default_payable_account")
+				target_doc.append("accounts", {
+					"account": expense_acct,
+					"debit_in_account_currency": flt(total_amt, 2),
+					"credit_in_account_currency": 0,
+				})
+				if party_name and payable_acct:
+					target_doc.append("accounts", {
+						"account": payable_acct,
+						"party_type": "Supplier",
+						"party": party_name,
+						"debit_in_account_currency": 0,
+						"credit_in_account_currency": flt(total_amt, 2),
+					})
+				else:
+					target_doc.append("accounts", {
+						"account": clearing_account or expense_acct,
+						"debit_in_account_currency": 0,
+						"credit_in_account_currency": flt(total_amt, 2),
+					})
+		else:
+			# Post mirrored entries
+			for acc_row in data.get("accounts", []):
+				target_doc.append("accounts", {
+					"account": clearing_account,
+					"debit_in_account_currency": flt(acc_row.get("credit_in_account_currency")),
+					"credit_in_account_currency": flt(acc_row.get("debit_in_account_currency"))
+				})
 
 	# Payment Entry specifics
 	if target_doctype == "Payment Entry":
@@ -454,6 +563,13 @@ def receive_remote_transaction(payload=None):
 
 	target_doc.flags.ignore_permissions = True
 	target_doc.flags.ignore_mandatory = True
+
+	try:
+		if hasattr(target_doc, "set_missing_values"):
+			target_doc.set_missing_values(for_validate=True)
+	except Exception:
+		pass
+
 	target_doc.insert(ignore_permissions=True, ignore_mandatory=True)
 
 	# Record Inbound Document Reference
@@ -465,6 +581,18 @@ def receive_remote_transaction(payload=None):
 		remote_site_url=data.get("source_site_url"),
 		idempotency_key=idempotency_key
 	)
+
+	if cint(settings.get("auto_submit_target_doc")) and hasattr(target_doc, "submit") and target_doc.docstatus == 0:
+		try:
+			if hasattr(frappe.db, "savepoint"):
+				frappe.db.savepoint("ict_remote_submit")
+			target_doc.submit()
+		except Exception:
+			if hasattr(frappe.db, "rollback"):
+				try:
+					frappe.db.rollback(save_point="ict_remote_submit")
+				except Exception:
+					pass
 
 	frappe.db.commit()
 
@@ -478,46 +606,86 @@ def receive_remote_transaction(payload=None):
 
 
 def resolve_counterparty_for_remote_source(source_company, target_doctype, target_company):
-	"""Resolves or auto-provisions customer/supplier for the remote sister entity."""
+	"""
+	Resolves or auto-provisions internal Customer/Supplier for the remote sister entity
+	using standard ERPNext fields (`is_internal_customer`/`is_internal_supplier`,
+	`represents_company`, and `allowed_to_transact_with`).
+	Compatible with ERPNext v14, v15, and v16.
+	"""
 	is_supplier = target_doctype in ["Purchase Order", "Purchase Invoice", "Purchase Receipt", "Supplier Quotation"]
 	party_doctype = "Supplier" if is_supplier else "Customer"
+	internal_flag = "is_internal_supplier" if is_supplier else "is_internal_customer"
 
-	# Check if party with source_company name exists
+	# 1. Search by standard ERPNext represents_company + internal flag
+	try:
+		filters = {"represents_company": source_company}
+		if frappe.db.has_column(party_doctype, internal_flag):
+			filters[internal_flag] = 1
+		existing = frappe.db.get_value(party_doctype, filters, "name")
+		if existing:
+			return existing
+
+		# Also check represents_company alone
+		existing_rep = frappe.db.get_value(party_doctype, {"represents_company": source_company}, "name")
+		if existing_rep:
+			return existing_rep
+	except Exception:
+		pass
+
+	# 2. Check if party with source_company exact name exists
 	if frappe.db.exists(party_doctype, source_company):
 		return source_company
 
-	# Search by custom intercompany field
-	existing = frappe.db.get_value(
-		party_doctype,
-		{"is_inter_company": 1, "represents_company": source_company},
-		"name"
-	)
-	if existing:
-		return existing
+	internal_named = f"{source_company} (Internal)"
+	if frappe.db.exists(party_doctype, internal_named):
+		return internal_named
 
-	# Fall back to first available customer/supplier or create
-	first_party = frappe.db.get_value(party_doctype, {}, "name")
-	if first_party:
-		return first_party
-
-	# Create new party representing the sister company
+	# 3. Auto-provision standard ERPNext internal party representing the remote company
 	try:
 		new_party = frappe.new_doc(party_doctype)
 		if is_supplier:
 			new_party.supplier_name = source_company
-			new_party.supplier_group = "Inter Company" if frappe.db.exists("Supplier Group", "Inter Company") else "All Supplier Groups"
+			new_party.supplier_type = "Company"
+			new_party.supplier_group = (
+				frappe.db.get_value("Supplier Group", {"is_group": 0}, "name")
+				or "All Supplier Groups"
+			)
+			if frappe.db.has_column("Supplier", "is_internal_supplier"):
+				new_party.is_internal_supplier = 1
 		else:
 			new_party.customer_name = source_company
-			new_party.customer_group = "Inter Company" if frappe.db.exists("Customer Group", "Inter Company") else "All Customer Groups"
-			new_party.territory = "All Territories"
-		new_party.is_inter_company = 1
+			new_party.customer_type = "Company"
+			new_party.customer_group = (
+				frappe.db.get_value("Customer Group", {"is_group": 0}, "name")
+				or "All Customer Groups"
+			)
+			new_party.territory = (
+				frappe.db.get_value("Territory", {"is_group": 0}, "name")
+				or "All Territories"
+			)
+			if frappe.db.has_column("Customer", "is_internal_customer"):
+				new_party.is_internal_customer = 1
+
 		new_party.represents_company = source_company
+
+		# Populate allowed_to_transact_with child table when target_company exists in DB
+		if (
+			target_company
+			and frappe.db.exists("Company", target_company)
+			and hasattr(new_party, "append")
+			and new_party.meta.get_field("allowed_to_transact_with")
+		):
+			new_party.append("allowed_to_transact_with", {"company": target_company})
+
 		new_party.flags.ignore_permissions = True
+		new_party.flags.ignore_mandatory = True
 		new_party.insert(ignore_permissions=True)
 		frappe.db.commit()
 		return new_party.name
 	except Exception:
-		return source_company
+		# 4. Safe fallback only if party creation fails
+		first_party = frappe.db.get_value(party_doctype, {}, "name")
+		return first_party or source_company
 
 
 def resolve_item_code_for_remote(source_item_code, target_company):
@@ -571,10 +739,34 @@ def cancel_remote_transaction(payload=None):
 	if not raw_data:
 		raw_data = frappe.request.get_data(as_text=True) if hasattr(frappe, "request") and frappe.request else None
 
+	if isinstance(raw_data, (bytes, bytearray)):
+		raw_data = raw_data.decode("utf-8")
+
+	raw_text_for_hmac = raw_data if isinstance(raw_data, str) else None
+
 	if isinstance(raw_data, str):
 		data = json.loads(raw_data)
 	else:
 		data = raw_data or {}
+
+	incoming_sig = frappe.get_request_header("X-Intercompany-Signature") if hasattr(frappe, "get_request_header") else None
+	settings = frappe.get_cached_doc("Inter Company Settings")
+	if incoming_sig and settings.get("remote_sites"):
+		raw_bytes = (
+			raw_text_for_hmac.encode("utf-8")
+			if raw_text_for_hmac is not None
+			else json.dumps(data, default=str).encode("utf-8")
+		)
+		verified = any(
+			hmac.compare_digest(
+				incoming_sig,
+				hmac.new(site.hmac_secret.encode("utf-8"), raw_bytes, hashlib.sha256).hexdigest(),
+			)
+			for site in settings.remote_sites
+			if site.hmac_secret
+		)
+		if not verified:
+			frappe.logger().warning("HMAC signature mismatch on cancel_remote_transaction")
 
 	source_doctype = data.get("source_doctype")
 	source_name = data.get("source_name")

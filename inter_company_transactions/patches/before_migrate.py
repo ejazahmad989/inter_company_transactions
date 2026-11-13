@@ -14,18 +14,20 @@ def before_migrate():
     except Exception as e:
         print(f"Notice during pre-migration custom fields check: {e}")
 
-    # Ensure all doctypes are properly flagged as custom
-    ensure_custom_doctypes()
+    # Ensure all module doctypes are standard (custom = 0) so bench migrate updates schemas
+    ensure_standard_doctypes()
 
     print("Pre-migration tasks completed successfully!")
+
 
 def execute():
     """Alias for before_migrate to ensure compatibility"""
     before_migrate()
 
-def ensure_custom_doctypes():
-    """Ensure all our doctypes are marked as custom"""
-    custom_doctypes = [
+
+def ensure_standard_doctypes():
+    """Ensure all app DocTypes are flagged standard (custom = 0)"""
+    app_doctypes = [
         "Intercompany Transaction Link",
         "Intercompany Linked Company",
         "Intercompany Transaction Type",
@@ -45,9 +47,9 @@ def ensure_custom_doctypes():
         "Role Replication"
     ]
 
-    for doctype_name in custom_doctypes:
+    for doctype_name in app_doctypes:
         try:
             if frappe.db.exists("DocType", doctype_name):
-                frappe.db.set_value("DocType", doctype_name, "custom", 1)
+                frappe.db.set_value("DocType", doctype_name, "custom", 0)
         except Exception as e:
-            print(f"Notice marking {doctype_name} as custom: {e}")
+            print(f"Notice marking {doctype_name} as standard: {e}")

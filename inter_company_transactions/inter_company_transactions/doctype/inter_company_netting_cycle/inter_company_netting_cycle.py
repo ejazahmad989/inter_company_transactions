@@ -121,18 +121,33 @@ class InterCompanyNettingCycle(Document):
 				"net_balance": 0.0
 			}
 
-		for inv in (self.invoices or []):
-			amt = flt(inv.settled_amount or inv.outstanding_amount)
-			if inv.invoice_type == "Sales Invoice":
-				if inv.company in company_stats:
-					company_stats[inv.company]["gross_receivables"] += amt
-				if inv.partner_company in company_stats:
-					company_stats[inv.partner_company]["gross_payables"] += amt
-			elif inv.invoice_type == "Purchase Invoice":
-				if inv.company in company_stats:
-					company_stats[inv.company]["gross_payables"] += amt
-				if inv.partner_company in company_stats:
-					company_stats[inv.partner_company]["gross_receivables"] += amt
+		has_invoices = bool(self.invoices)
+		if has_invoices:
+			for inv in (self.invoices or []):
+				amt = flt(inv.settled_amount or inv.outstanding_amount)
+				if inv.invoice_type == "Sales Invoice":
+					if inv.company in company_stats:
+						company_stats[inv.company]["gross_receivables"] += amt
+					if inv.partner_company in company_stats:
+						company_stats[inv.partner_company]["gross_payables"] += amt
+				elif inv.invoice_type == "Purchase Invoice":
+					if inv.company in company_stats:
+						company_stats[inv.company]["gross_payables"] += amt
+					if inv.partner_company in company_stats:
+						company_stats[inv.partner_company]["gross_receivables"] += amt
+		else:
+			# Allow manual participating_companies net_balance / gross inputs directly
+			for row in self.participating_companies:
+				net_val = flt(getattr(row, "net_balance", 0))
+				gross_rec = flt(getattr(row, "gross_receivables", 0))
+				gross_pay = flt(getattr(row, "gross_payables", 0))
+				if gross_rec > 0 or gross_pay > 0:
+					company_stats[row.company]["gross_receivables"] = gross_rec
+					company_stats[row.company]["gross_payables"] = gross_pay
+				elif net_val > 0:
+					company_stats[row.company]["gross_receivables"] = net_val
+				elif net_val < 0:
+					company_stats[row.company]["gross_payables"] = abs(net_val)
 
 		total_payables = 0.0
 		total_receivables = 0.0
@@ -199,8 +214,12 @@ class InterCompanyNettingCycle(Document):
 	def on_submit(self):
 		"""
 		On Submission:
-		Creates the clearing Journal Entries or Payment Entries between the net settlement entities.
+		Creates the clearing Journal Entries between the net settlement entities.
 		"""
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			get_or_create_intercompany_clearing_account,
+		)
+
 		self.calculate_netting()
 		date = self.settlement_date or nowdate()
 
@@ -219,20 +238,26 @@ class InterCompanyNettingCycle(Document):
 			je.posting_date = date
 			je.user_remark = f"Multilateral Netting Settlement for Cycle {self.name}: Paid to {receiver}"
 
-			# Find clearing accounts
-			clearing_account_payer = frappe.get_value(
-				"Intercompany Linked Company",
-				{"parent": frappe.get_value("Intercompany Transaction Link", {"main_company": payer}, "name"), "company": receiver},
-				"main_company_account"
-			) or frappe.get_value("Company", payer, "default_cash_account") or frappe.get_value("Company", payer, "default_bank_account")
+			# Find clearing account and payable/liability account cleanly
+			parent_link = frappe.get_value("Intercompany Transaction Link", {"main_company": payer}, "name")
+			clearing_account_payer = (
+				frappe.get_value(
+					"Intercompany Linked Company",
+					{"parent": parent_link, "company": receiver},
+					"main_company_account",
+				)
+				if parent_link
+				else None
+			)
+			if not clearing_account_payer:
+				clearing_account_payer = get_or_create_intercompany_clearing_account(payer, receiver)
 
-			clearing_account_receiver = frappe.get_value("Company", payer, "default_payable_account")
-
-			if not clearing_account_payer or not clearing_account_receiver:
-				# Fallback to standard debit/credit accounts
-				accounts = frappe.get_all("Account", filters={"company": payer, "is_group": 0}, pluck="name", limit=2)
-				clearing_account_payer = accounts[0] if accounts else None
-				clearing_account_receiver = accounts[1] if len(accounts) > 1 else accounts[0]
+			clearing_account_receiver = (
+				frappe.get_value("Company", payer, "default_payable_account")
+				or frappe.get_value("Account", {"company": payer, "account_type": "Payable", "is_group": 0}, "name")
+				or frappe.get_value("Company", payer, "default_cash_account")
+				or frappe.get_value("Company", payer, "default_bank_account")
+			)
 
 			if clearing_account_payer and clearing_account_receiver:
 				je.append("accounts", {
@@ -246,13 +271,22 @@ class InterCompanyNettingCycle(Document):
 					"credit_in_account_currency": amt
 				})
 				je.flags.ignore_permissions = True
-				je.insert()
+				je.flags.ignore_mandatory = True
+				je.insert(ignore_permissions=True)
 				try:
+					if hasattr(frappe.db, "savepoint"):
+						frappe.db.savepoint("ict_netting_submit")
 					je.submit()
-				except Exception:
-					pass
+					settlement.status = "Settled"
+				except Exception as e:
+					if hasattr(frappe.db, "rollback"):
+						try:
+							frappe.db.rollback(save_point="ict_netting_submit")
+						except Exception:
+							pass
+					frappe.log_error(f"Netting settlement JE {je.name} kept as draft: {e!s}", "Inter Company Netting")
+					settlement.status = "Pending"
 				settlement.settlement_entry = je.name
-				settlement.status = "Settled"
 
 		self.status = "Settled"
 		frappe.msgprint(_("Multilateral Netting Cycle {0} submitted. Settlement entries generated.").format(self.name), indicator="green")

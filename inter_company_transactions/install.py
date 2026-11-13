@@ -88,7 +88,7 @@ def create_doctypes():
             "name": "Intercompany Linked Company",
             "module": "Inter Company Transactions",
             "istable": 1,
-            "custom": 1,
+            "custom": 0,
             "fields": [
                 {
                     "fieldname": "company",
@@ -165,7 +165,7 @@ def create_doctypes():
             "name": "Intercompany Transaction Type",
             "module": "Inter Company Transactions",
             "istable": 1,
-            "custom": 1,
+            "custom": 0,
             "fields": [
                 {
                     "fieldname": "source_type",
@@ -199,7 +199,7 @@ def create_doctypes():
             "doctype": "DocType",
             "name": "Intercompany Transaction Link",
             "module": "Inter Company Transactions",
-            "custom": 1,
+            "custom": 0,
             "allow_import": 0,
             "title_field": "sister_company",
             "show_title_field_in_link": 1,
@@ -265,7 +265,7 @@ def create_doctypes():
             "doctype": "DocType",
             "name": "Inter Company Document Reference",
             "module": "Inter Company Transactions",
-            "custom": 1,
+            "custom": 0,
             "allow_import": 0,
             "fields": [
                 {
@@ -456,7 +456,7 @@ def create_custom_fields():
                 "Sales Order", "Purchase Order", "Journal Entry", "Payment Entry",
                 "Sales Invoice", "Purchase Invoice", "Delivery Note", "Purchase Receipt",
                 "Stock Entry", "Quotation", "Supplier Quotation", "Material Request",
-                "Request for Quotation"
+                "Request for Quotation", "Landed Cost Voucher"
             ]
 
             def _get_fallback_tx_fields():
@@ -481,7 +481,8 @@ def create_custom_fields():
                         "mandatory_depends_on": "is_intercompany",
                         "in_list_view": 1,
                         "in_standard_filter": 1,
-                        "fetch_if_empty": 0
+                        "fetch_if_empty": 0,
+                        "ignore_user_permissions": 1
                     },
                     {
                         "fieldname": "intercompany_linked_doc_doctype",
@@ -545,7 +546,8 @@ def create_custom_fields():
                             "in_list_view": field.get("in_list_view", 0),
                             "columns": field.get("columns", 0),
                             "in_standard_filter": field.get("in_standard_filter", 0),
-                            "fetch_if_empty": field.get("fetch_if_empty", 0)
+                            "fetch_if_empty": field.get("fetch_if_empty", 0),
+                            "ignore_user_permissions": field.get("ignore_user_permissions", 1 if field["fieldname"] in ("intercompany_target_company", "intercompany_linked_company") else 0)
                         })
                         custom_field.flags.ignore_permissions = True
                         custom_field.insert()
@@ -556,7 +558,7 @@ def create_custom_fields():
                             "label", "fieldtype", "options", "default", "description",
                             "read_only", "hidden", "depends_on", "mandatory_depends_on",
                             "read_only_depends_on", "in_list_view", "columns",
-                            "in_standard_filter", "fetch_if_empty"
+                            "in_standard_filter", "fetch_if_empty", "ignore_user_permissions"
                         ]
                         cf_doc = frappe.get_doc("Custom Field", existing_cf)
                         updated = False
@@ -790,16 +792,3 @@ def create_page_and_workspace():
     except Exception as e:
         print(f"Error creating page or workspace: {e!s}")
 
-def before_uninstall():
-    """Clean up before app uninstall"""
-    print("Cleaning up Inter Company Transactions app...")
-
-    custom_fields = frappe.get_all("Custom Field",
-        filters={"module": "Inter Company Transactions"},
-        fields=["name"]
-    )
-
-    for field in custom_fields:
-        frappe.delete_doc("Custom Field", field.name, ignore_permissions=True)
-
-    print("Inter Company Transactions app cleanup completed!")

@@ -37,11 +37,9 @@ frappe.ui.form.on('Intercompany Transaction Link', {
 				});
 			}, __('Navigate'));
 
-			// Button to view item SKU mappings between configured companies
+			// Button to jump to item SKU mappings table
 			frm.add_custom_button(__('Item SKU Mappings'), function() {
-				frappe.set_route('List', 'Intercompany Item Mapping', {
-					source_company: frm.doc.main_company
-				});
+				frm.scroll_to_field('item_mappings');
 			}, __('Navigate'));
 
 			// Button to populate default transaction pairs
@@ -179,9 +177,11 @@ function preload_standard_transaction_types(frm) {
 		{ source_type: "Supplier Quotation", target_type: "Quotation", direction: "Both" },
 		{ source_type: "Material Request", target_type: "Sales Order", direction: "Both" },
 		{ source_type: "Material Request", target_type: "Purchase Order", direction: "Both" },
+		{ source_type: "Request for Quotation", target_type: "Supplier Quotation", direction: "Both" },
 		{ source_type: "Stock Entry", target_type: "Stock Entry", direction: "Both" },
 		{ source_type: "Journal Entry", target_type: "Journal Entry", direction: "Both" },
-		{ source_type: "Payment Entry", target_type: "Payment Entry", direction: "Both" }
+		{ source_type: "Payment Entry", target_type: "Payment Entry", direction: "Both" },
+		{ source_type: "Landed Cost Voucher", target_type: "Journal Entry", direction: "Both" }
 	];
 
 	let existing = new Set((frm.doc.transaction_types || []).map(r => `${r.source_type}->${r.target_type}`));
@@ -223,10 +223,12 @@ function render_transaction_types_guide(frm) {
 				<div><strong>Invoicing:</strong> Sales Invoice &harr; Purchase Invoice</div>
 				<div><strong>Fulfillment:</strong> Delivery Note &harr; Purchase Receipt</div>
 				<div><strong>Pre-Sales:</strong> Quotation &harr; Supplier Quotation</div>
+				<div><strong>Procurement:</strong> Request for Quotation &rarr; Supplier Quotation</div>
 				<div><strong>Requisition:</strong> Material Request &rarr; SO / PO</div>
-				<div><strong>Inventory:</strong> Stock Entry &harr; Stock Entry</div>
+				<div><strong>Inventory:</strong> Stock Entry (Issue) &rarr; Stock Entry (Receipt)</div>
 				<div><strong>General Ledger:</strong> Journal Entry &harr; Journal Entry</div>
 				<div><strong>Cash & Bank:</strong> Payment Entry &harr; Payment Entry</div>
+				<div><strong>Landed Cost:</strong> Landed Cost Voucher &rarr; Journal Entry</div>
 			</div>
 		</div>
 	`;
@@ -249,7 +251,7 @@ function validate_transaction_link_setup(frm) {
 		return;
 	}
 
-	if (!frm.doc.companies || frm.doc.companies.length === 0) {
+	if (!frm.doc.linked_companies || frm.doc.linked_companies.length === 0) {
 		frappe.msgprint({
 			title: __('Validation'),
 			indicator: 'orange',
@@ -259,7 +261,7 @@ function validate_transaction_link_setup(frm) {
 	}
 
 	let issues = [];
-	frm.doc.companies.forEach((row, idx) => {
+	frm.doc.linked_companies.forEach((row, idx) => {
 		if (!row.company) {
 			issues.push(__('Row #{0}: Company is empty', [idx + 1]));
 		}
