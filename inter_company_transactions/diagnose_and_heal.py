@@ -77,12 +77,15 @@ def repair_database_text(log):
 		("anddoc.", " && doc."),
 		("and!doc.", " && !doc."),
 		("and !doc.", " && !doc."),
+		("and!in_list(", " && !in_list("),
 		("1or(", "1 || ("),
 		("0or(", "0 || ("),
 		(")or(", ") || ("),
 		("1and(", "1 && ("),
 		("0and(", "0 && (")
 	]
+
+	import re
 
 	for tbl, cols in tables:
 		if not frappe.db.table_exists(tbl):
@@ -105,6 +108,25 @@ def repair_database_text(log):
 						log(f"  Fixed {rows} rows in {tbl}.{col} for '{old_val}' -> '{new_val}'")
 				except Exception as e:
 					log(f"  Notice updating {tbl}.{col}: {e}")
+
+			# Also fix arbitrary glued identifier+and!/or! (e.g. doc.reference_typeand!in_list)
+			try:
+				if frappe.db.has_column(tbl, "name"):
+					glued_rows = frappe.db.sql(
+						f"SELECT name, `{col}` AS val FROM `{tbl}` WHERE `{col}` LIKE %s OR `{col}` LIKE %s",
+						("%and!%", "%or!%"),
+						as_dict=True,
+					)
+					for gr in (glued_rows or []):
+						orig = gr.get("val") or ""
+						fixed = re.sub(r"([a-zA-Z0-9_\)])and!(?!=)", r"\1 && !", orig)
+						fixed = re.sub(r"([a-zA-Z0-9_\)])or!(?!=)", r"\1 || !", fixed)
+						if fixed != orig:
+							frappe.db.sql(f"UPDATE `{tbl}` SET `{col}` = %s WHERE name = %s", (fixed, gr.get("name")))
+							total_updates += 1
+							log(f"  Fixed glued operator in {tbl}.{col} ({gr.get('name')})")
+			except Exception as e:
+				log(f"  Notice fixing glued operator in {tbl}.{col}: {e}")
 
 	frappe.db.commit()
 	return total_updates
@@ -236,7 +258,7 @@ def cleanup_trees_and_masters(log):
 
 def reload_and_flush(log):
 	"""Reload doctypes to refresh in-memory schema and flush cache"""
-	doctypes_to_reload = ["Item", "Customer", "Supplier", "Customer Group", "Supplier Group", "Item Group"]
+	doctypes_to_reload = ["Item", "Customer", "Supplier", "Customer Group", "Supplier Group", "Item Group", "Journal Entry", "Journal Entry Account"]
 	for dt in doctypes_to_reload:
 		try:
 			if frappe.db.exists("DocType", dt):

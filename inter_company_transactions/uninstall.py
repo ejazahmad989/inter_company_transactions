@@ -212,6 +212,11 @@ def repair_all_depends_on_expressions():
                     SET `{col}` = REPLACE(`{col}`, 'and !doc.', ' && !doc.')
                     WHERE `{col}` LIKE '%and !doc.%'
                 """)
+                frappe.db.sql(f"""
+                    UPDATE `{tbl}`
+                    SET `{col}` = REPLACE(`{col}`, 'and!in_list(', ' && !in_list(')
+                    WHERE `{col}` LIKE '%and!in_list(%'
+                """)
 
 
                 # 4. Fix glued or / and operators

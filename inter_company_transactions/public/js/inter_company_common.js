@@ -26,14 +26,16 @@
 		expr = expr.replace(/(\w+)\s*anddoc\./g, '$1 && doc.');
 
 
-		// Fix glued 'or' operators (e.g. 1or(, 0or(, )or(, or(, )or, 1or, 0or)
+		// Fix glued 'or' operators (e.g. 1or(, 0or(, )or(, or(, )or, 1or, 0or, fieldor!)
+		expr = expr.replace(/([a-zA-Z0-9_\)])or!(?!=)/g, '$1 || !');
 		expr = expr.replace(/(\d)\s*or\s*(?=[(\w])/g, function(m, p1) { return p1 + ' || '; });
 		expr = expr.replace(/(\))\s*or\s*(?=[(\w])/g, function(m, p1) { return p1 + ' || '; });
 		expr = expr.replace(/\bor\s*\(/g, '|| (');
 		expr = expr.replace(/\s+or\s+/g, ' || ');
 		expr = expr.replace(/\bor\b/g, ' || ');
 
-		// Fix glued 'and' operators (e.g. 1and(, 0and(, )and(, and(, etc.)
+		// Fix glued 'and' operators (e.g. 1and(, 0and(, )and(, and(, doc.reference_typeand!in_list)
+		expr = expr.replace(/([a-zA-Z0-9_\)])and!(?!=)/g, '$1 && !');
 		expr = expr.replace(/(\d)\s*and\s*(?=[(\w])/g, function(m, p1) { return p1 + ' && '; });
 		expr = expr.replace(/(\))\s*and\s*(?=[(\w])/g, function(m, p1) { return p1 + ' && '; });
 		expr = expr.replace(/\band\s*\(/g, '&& (');
@@ -64,11 +66,26 @@
 				let d = doc || (window.cur_frm && window.cur_frm.doc) || {};
 				let p = parent || (window.cur_frm && window.cur_frm.doc) || d;
 				try {
-					let fn = new Function('doc', 'parent', 'let out = ' + clean + '; return out;');
-					return !!fn(d, p);
+					let in_list = function(list, val) { return Array.isArray(list) ? list.includes(val) : false; };
+					let fn = new Function('doc', 'parent', 'in_list', 'let out = ' + clean + '; return out;');
+					return !!fn(d, p, in_list);
 				} catch (e) {
 					return false;
 				}
+			}
+
+			// 0. Wrap frappe.utils.eval directly (called at utils.js:1084 before logging console error)
+			if (frappe.utils && typeof frappe.utils.eval === 'function' && !frappe.utils.eval._ict_sanitized) {
+				const orig_utils_eval = frappe.utils.eval;
+				frappe.utils.eval = function(code, context) {
+					if (typeof code === 'string') {
+						let clean = sanitize_depends_on_expression(code);
+						if (clean.startsWith('eval:')) clean = clean.substring(5).trim();
+						return orig_utils_eval.call(this, clean, context);
+					}
+					return orig_utils_eval.apply(this, arguments);
+				};
+				frappe.utils.eval._ict_sanitized = true;
 			}
 
 			// 1. Wrap Layout.prototype.evaluate_depends_on_value safely
@@ -76,12 +93,13 @@
 				const orig_layout_eval = frappe.ui.form.Layout.prototype.evaluate_depends_on_value;
 				frappe.ui.form.Layout.prototype.evaluate_depends_on_value = function(expression, doc) {
 					if (!expression) return true;
+					const clean_expr = sanitize_depends_on_expression(expression);
 					try {
-						return orig_layout_eval.apply(this, arguments);
+						return orig_layout_eval.call(this, clean_expr, doc);
 					} catch (e) {
 						let parent = (this.frm && this.frm.doc) || doc || {};
 						let current_doc = doc || parent;
-						return safe_eval_expression(expression, current_doc, parent);
+						return safe_eval_expression(clean_expr, current_doc, parent);
 					}
 				};
 				frappe.ui.form.Layout.prototype.evaluate_depends_on_value._ict_sanitized = true;
@@ -92,10 +110,11 @@
 				const orig_form_eval = frappe.ui.form.evaluate_depends_on_value;
 				frappe.ui.form.evaluate_depends_on_value = function(expression, doc, parent) {
 					if (!expression) return true;
+					const clean_expr = sanitize_depends_on_expression(expression);
 					try {
-						return orig_form_eval.apply(this, arguments);
+						return orig_form_eval.call(this, clean_expr, doc, parent);
 					} catch (e) {
-						return safe_eval_expression(expression, doc, parent);
+						return safe_eval_expression(clean_expr, doc, parent);
 					}
 				};
 				frappe.ui.form.evaluate_depends_on_value._ict_sanitized = true;
@@ -106,12 +125,13 @@
 				const orig_grid_eval = frappe.ui.form.GridRow.prototype.evaluate_depends_on_value;
 				frappe.ui.form.GridRow.prototype.evaluate_depends_on_value = function(expression) {
 					if (!expression) return true;
+					const clean_expr = sanitize_depends_on_expression(expression);
 					try {
-						return orig_grid_eval.apply(this, arguments);
+						return orig_grid_eval.call(this, clean_expr);
 					} catch (e) {
 						let doc = this.doc;
 						let parent = (this.grid && (this.grid.df.doc || (this.grid.frm && this.grid.frm.doc))) || null;
-						return safe_eval_expression(expression, doc, parent);
+						return safe_eval_expression(clean_expr, doc, parent);
 					}
 				};
 				frappe.ui.form.GridRow.prototype.evaluate_depends_on_value._ict_sanitized = true;

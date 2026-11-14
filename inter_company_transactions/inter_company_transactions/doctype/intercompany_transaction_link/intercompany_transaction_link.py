@@ -1396,7 +1396,8 @@ def scan_linked_company_defaults(main_company, other_company):
 def intercompany_party_query(doctype, txt, searchfield, start, page_len, filters):
     """
     Filters Customer or Supplier link dropdowns inside Intercompany Linked Company
-    to active internal parties linked to the (company, represents_company) pair.
+    to active parties belonging to / allowed in the selected company (`Main Company` or row `Company`).
+    Prioritizes internal parties linked to the counterparty company without hiding standard parties.
     """
     if doctype not in ("Customer", "Supplier"):
         return []
@@ -1404,39 +1405,85 @@ def intercompany_party_query(doctype, txt, searchfield, start, page_len, filters
     filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
     owner_company = (filters.get("company") or "").strip()
     rep_company = (filters.get("represents_company") or "").strip()
-    flag_col = "is_internal_customer" if doctype == "Customer" else "is_internal_supplier"
     name_col = "customer_name" if doctype == "Customer" else "supplier_name"
 
-    conditions = ["(p.disabled IS NULL OR p.disabled = 0)", f"p.`{flag_col}` = 1"]
+    conditions = ["(p.disabled IS NULL OR p.disabled = 0)"]
     params = {
         "txt": f"%{txt or ''}%",
         "start": cint(start),
         "page_len": cint(page_len) or 20,
         "dt": doctype,
+        "owner_company": owner_company,
+        "rep_company": rep_company,
+        "rep_like": f"%{rep_company}%" if rep_company else "",
     }
 
-    if rep_company:
-        conditions.append("p.represents_company = %(rep_company)s")
-        params["rep_company"] = rep_company
+    has_company_col = bool(
+        hasattr(frappe, "db") and frappe.db and frappe.db.has_column(doctype, "company")
+    )
+    has_party_account = bool(
+        hasattr(frappe, "db") and frappe.db and frappe.db.table_exists("Party Account")
+    )
+    has_att = bool(
+        hasattr(frappe, "db") and frappe.db and frappe.db.table_exists("Allowed To Transact With")
+    )
 
     if owner_company:
-        conditions.append(
-            "(EXISTS (SELECT 1 FROM `tabAllowed To Transact With` att "
-            "WHERE att.parent = p.name AND att.parenttype = %(dt)s AND att.company = %(owner_company)s) "
-            "OR NOT EXISTS (SELECT 1 FROM `tabAllowed To Transact With` att2 "
-            "WHERE att2.parent = p.name AND att2.parenttype = %(dt)s))"
-        )
-        params["owner_company"] = owner_company
+        # Exclude internal parties that represent the owner company itself
+        conditions.append("(p.represents_company IS NULL OR p.represents_company = '' OR p.represents_company != %(owner_company)s)")
+
+        ownership_clauses = []
+        if has_company_col:
+            ownership_clauses.append("p.company = %(owner_company)s")
+        if has_att:
+            ownership_clauses.append(
+                "EXISTS (SELECT 1 FROM `tabAllowed To Transact With` att "
+                "WHERE att.parent = p.name AND att.parenttype = %(dt)s AND att.company = %(owner_company)s)"
+            )
+        if has_party_account:
+            ownership_clauses.append(
+                "EXISTS (SELECT 1 FROM `tabParty Account` pa "
+                "WHERE pa.parent = p.name AND pa.parenttype = %(dt)s AND pa.company = %(owner_company)s)"
+            )
+
+        # Also allow unrestricted global parties (neither restricted to another company via Allowed To Transact With nor custom-tagged to another company)
+        unrestricted_checks = []
+        if has_company_col:
+            unrestricted_checks.append("(p.company IS NULL OR p.company = '')")
+        if has_att:
+            unrestricted_checks.append(
+                "NOT EXISTS (SELECT 1 FROM `tabAllowed To Transact With` att_other "
+                "WHERE att_other.parent = p.name AND att_other.parenttype = %(dt)s)"
+            )
+        if unrestricted_checks:
+            ownership_clauses.append("(" + " AND ".join(unrestricted_checks) + ")")
+
+        if ownership_clauses:
+            conditions.append("(" + " OR ".join(ownership_clauses) + ")")
 
     conditions.append(f"(p.name LIKE %(txt)s OR p.`{name_col}` LIKE %(txt)s)")
     where_clause = " AND ".join(conditions)
+
+    order_parts = []
+    if rep_company:
+        order_parts.append("(p.represents_company = %(rep_company)s) DESC")
+        order_parts.append(f"(p.name LIKE %(rep_like)s OR p.`{name_col}` LIKE %(rep_like)s) DESC")
+    if owner_company and has_company_col:
+        order_parts.append("(p.company = %(owner_company)s) DESC")
+    if owner_company and has_party_account:
+        order_parts.append(
+            "EXISTS (SELECT 1 FROM `tabParty Account` pa2 "
+            "WHERE pa2.parent = p.name AND pa2.parenttype = %(dt)s AND pa2.company = %(owner_company)s) DESC"
+        )
+    order_parts.extend(["p.modified DESC", "p.name ASC"])
+    order_clause = ", ".join(order_parts)
 
     return frappe.db.sql(
         f"""
         SELECT p.name, p.`{name_col}`, p.represents_company
         FROM `tab{doctype}` p
         WHERE {where_clause}
-        ORDER BY p.modified DESC, p.name ASC
+        ORDER BY {order_clause}
         LIMIT %(start)s, %(page_len)s
         """,
         params,
@@ -1448,7 +1495,7 @@ def intercompany_party_query(doctype, txt, searchfield, start, page_len, filters
 def intercompany_account_query(doctype, txt, searchfield, start, page_len, filters):
     """
     Filters Account dropdowns inside Intercompany Linked Company strictly to
-    leaf Bank/Cash accounts belonging to the selected company, prioritizing TMP clearing accounts.
+    active non-group accounts belonging to the selected company, prioritizing TMP / Bank accounts.
     """
     if doctype != "Account":
         return []
@@ -1459,7 +1506,6 @@ def intercompany_account_query(doctype, txt, searchfield, start, page_len, filte
     conditions = [
         "a.is_group = 0",
         "(a.disabled IS NULL OR a.disabled = 0)",
-        "a.account_type IN ('Bank', 'Cash')",
     ]
     params = {
         "txt": f"%{txt or ''}%",
@@ -1481,6 +1527,7 @@ def intercompany_account_query(doctype, txt, searchfield, start, page_len, filte
         ORDER BY
             (a.account_name LIKE 'TMP%%') DESC,
             (a.account_name LIKE '%%Intercompany%%') DESC,
+            (a.account_type IN ('Bank', 'Cash')) DESC,
             a.name ASC
         LIMIT %(start)s, %(page_len)s
         """,

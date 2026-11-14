@@ -1006,3 +1006,45 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 			self.assertIn(("Inter Company Document Reference", "ICDR-0001"), deleted)
 			self.assertIn(("Inter Company Error Log", "ICEL-0001"), deleted)
 
+	def test_glued_depends_on_repair_and_inclusive_company_queries(self):
+		"""Verify reference_typeand!in_list sanitizes cleanly and party/account queries do not hide valid company records"""
+		from unittest.mock import patch
+
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			intercompany_account_query,
+			intercompany_party_query,
+		)
+		from inter_company_transactions.safe_eval_patch import sanitize_for_python
+
+		cleaned = sanitize_for_python(
+			"eval:doc.reference_typeand!in_list(doc.reference_type, ['Expense Claim', 'Asset'])"
+		)
+		self.assertEqual(
+			cleaned,
+			"doc.reference_type and not in_list(doc.reference_type, ['Expense Claim', 'Asset'])",
+		)
+
+		captured_queries = []
+
+		def mock_sql(sql, params=None, **kwargs):
+			captured_queries.append(sql)
+			return [("Sample Result",)]
+
+		with patch.object(frappe.db, "has_column", return_value=True), patch.object(
+			frappe.db, "table_exists", return_value=True
+		), patch.object(frappe.db, "sql", side_effect=mock_sql):
+			party_rows = intercompany_party_query(
+				"Supplier", "", "name", 0, 20, {"company": "John Company", "represents_company": "MAIN"}
+			)
+			self.assertEqual(party_rows, [("Sample Result",)])
+			# Must NOT hard-filter is_internal_supplier = 1 so standard suppliers also appear
+			self.assertNotIn("is_internal_supplier` = 1", captured_queries[-1])
+
+			acct_rows = intercompany_account_query(
+				"Account", "", "name", 0, 20, {"company": "MAIN"}
+			)
+			self.assertEqual(acct_rows, [("Sample Result",)])
+			# Must show ALL active leaf accounts of the selected company (not only Bank/Cash)
+			self.assertNotIn("a.account_type IN ('Bank', 'Cash') AND", captured_queries[-1])
+
+
