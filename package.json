@@ -2,11 +2,13 @@
   "name": "inter-company-transactions",
   "version": "1.0.0",
   "private": true,
-  "description": "Inter Company Transactions backend app for Frappe ERPNext",
+  "description": "Frappe ERPNext app — edited in AI Studio, run locally with bench",
   "scripts": {
-    "dev": "node -e \"const http=require('http'); http.createServer((req,res)=>{res.writeHead(200,{'Content-Type':'text/html'});res.end('<!DOCTYPE html><html><head><title>Inter Company Transactions</title><style>body{font-family:sans-serif;padding:40px;background:#f8f9fa;color:#333}pre{background:#eee;padding:12px;border-radius:4px}</style></head><body><h2>Inter Company Transactions (Frappe / ERPNext App)</h2><p>Backend Frappe app codebase active.</p></body></html>');}).listen(3000, '0.0.0.0', ()=>{console.log('Healthcheck server listening on port 3000');});\"",
-    "build": "mkdir -p dist",
-    "lint": "node -e \"console.log('Frappe Python backend verified'); process.exit(0);\"",
+    "dev": "node -e \"require('http').createServer((q,s)=>{s.writeHead(200);s.end('Frappe app source. Run with bench locally.');}).listen(3000)\"",
+    "build": "echo skip",
     "start": "npm run dev"
+  },
+  "devDependencies": {
+    "typescript": "5.4.5"
   }
 }
