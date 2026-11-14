@@ -43,8 +43,11 @@ def ensure_user_notification_settings(user=None):
         pass
 
 def before_request():
-    """Ensure user has valid notification settings without triggering DDL or DB writes on steady-state requests"""
+    """Ensure user has valid notification settings without triggering DDL or unnecessary DB writes"""
     try:
+        if getattr(frappe.flags, "in_install", False) or getattr(frappe.flags, "in_migrate", False):
+            return
+
         user = getattr(getattr(frappe, "session", None), "user", None)
         if not user or user in ("Guest", "None"):
             return
@@ -54,6 +57,7 @@ def before_request():
         if cache and cache.get_value(cache_key):
             return
 
+        # Avoid DB writes on read-only GET requests unless strictly creating once cleanly
         ensure_user_notification_settings(user)
         ensure_user_ict_notification_settings(user)
         if cache:

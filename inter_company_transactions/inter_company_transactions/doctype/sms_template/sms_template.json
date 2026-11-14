@@ -3,7 +3,6 @@
   "name": "SMS Template",
   "module": "Inter Company Transactions",
   "custom": 0,
-  "custom_field": 0,
   "fields": [
     {
       "fieldname": "template_name",
@@ -33,7 +32,7 @@
       "delete": 1
     }
   ],
-  "is_single": 0,
+  "issingle": 0,
   "editable_grid": 1,
   "track_changes": 1,
   "track_views": 0,

@@ -105,6 +105,7 @@ class IntercompanyTransactionLink(Document):
     @frappe.whitelist()
     def populate_default_transaction_types(self):
         """Populate standard supported intercompany transaction types"""
+        self.check_permission("write")
         default_pairs = [
             ("Sales Order", "Purchase Order", "Both"),
             ("Purchase Order", "Sales Order", "Both"),
@@ -153,6 +154,7 @@ class IntercompanyTransactionLink(Document):
         for both Main Company and all Linked Companies.
         Automatically links them to main_company_account and other_company_account.
         """
+        self.check_permission("write")
         created_count = 0
         linked_count = 0
 
@@ -661,7 +663,8 @@ def validate_intercompany_cancellation(doc, method=None):
 
         blocking = check_active_downstream_transactions(c_doctype, c_name, c_company)
         if blocking:
-            blocking_bullets = "".join([f"<li><b>{b}</b></li>" for b in blocking])
+            esc = frappe.utils.escape_html
+            blocking_bullets = "".join([f"<li><b>{esc(b)}</b></li>" for b in blocking])
             frappe.throw(
                 _(
                     "<div style='font-size: 13px; line-height: 1.6;'>"
@@ -674,7 +677,14 @@ def validate_intercompany_cancellation(doc, method=None):
                     "or remove the above payment/downstream transactions first, then cancel <b>{3}</b>, "
                     "after which this document can be cancelled."
                     "</div>"
-                ).format(doc.doctype, doc.name, c_doctype, c_name, c_company, blocking_bullets),
+                ).format(
+                    esc(doc.doctype),
+                    esc(doc.name),
+                    esc(c_doctype),
+                    esc(c_name),
+                    esc(c_company),
+                    blocking_bullets,
+                ),
                 title=_("Active Transactions Exist in Linked Company")
             )
 
@@ -2737,12 +2747,14 @@ def fix_legacy_custom_fields(force=False):
             try:
                 frappe.db.sql("""
                     DELETE FROM `tabProperty Setter`
-                    WHERE `doc_type` IN ('Customer', 'Supplier') AND `field_name` = 'naming_series'
+                    WHERE `module` = 'Inter Company Transactions'
+                      AND `doc_type` IN ('Customer', 'Supplier')
+                      AND `field_name` = 'naming_series'
                 """)
             except Exception:
                 pass
 
-
+        if frappe.db.table_exists("Custom Field"):
             if frappe.db.has_column("Custom Field", "default"):
                 frappe.db.sql("""
                     UPDATE `tabCustom Field`
@@ -2763,52 +2775,142 @@ def fix_legacy_custom_fields(force=False):
                     WHERE `fieldname` = 'intercompany_target_company'
                 """)
 
-            # Directly enforce DEFAULT 0 on MariaDB transaction tables and clean stale draft values
-            tx_doctypes = [
-                "Sales Order", "Purchase Order", "Sales Invoice", "Purchase Invoice",
-                "Delivery Note", "Purchase Receipt", "Quotation", "Supplier Quotation",
-                "Material Request", "Stock Entry", "Journal Entry", "Payment Entry",
-                "Request for Quotation", "Landed Cost Voucher"
-            ]
-            for dt in tx_doctypes:
-                try:
-                    if frappe.db.table_exists(dt) and frappe.db.has_column(dt, "is_intercompany"):
-                        frappe.db.sql(f"ALTER TABLE `tab{dt}` ALTER COLUMN `is_intercompany` SET DEFAULT 0")
-                except Exception:
-                    pass
-
-                try:
-                    if frappe.db.table_exists(dt) and frappe.db.has_column(dt, "is_intercompany") and frappe.db.has_column(dt, "intercompany_target_company"):
-                        frappe.db.sql(f"""
-                            UPDATE `tab{dt}`
-                            SET `intercompany_target_company` = NULL
-                            WHERE `docstatus` = 0 AND (`is_intercompany` = 0 OR `is_intercompany` IS NULL)
-                              AND `intercompany_target_company` IS NOT NULL AND `intercompany_target_company` != ''
-                        """)
-                except Exception:
-                    pass
+        # Directly enforce DEFAULT 0 on MariaDB transaction tables and clean stale draft values
+        tx_doctypes = [
+            "Sales Order", "Purchase Order", "Sales Invoice", "Purchase Invoice",
+            "Delivery Note", "Purchase Receipt", "Quotation", "Supplier Quotation",
+            "Material Request", "Stock Entry", "Journal Entry", "Payment Entry",
+            "Request for Quotation", "Landed Cost Voucher"
+        ]
+        for dt in tx_doctypes:
+            try:
+                if frappe.db.table_exists(dt) and frappe.db.has_column(dt, "is_intercompany"):
+                    frappe.db.sql(f"ALTER TABLE `tab{dt}` ALTER COLUMN `is_intercompany` SET DEFAULT 0")
+            except Exception:
+                pass
 
             try:
-                if frappe.db.table_exists("Journal Entry Account") and frappe.db.has_column("Journal Entry Account", "intercompany_target_company"):
-                    frappe.db.sql("""
-                        UPDATE `tabJournal Entry Account` jeea
-                        JOIN `tabJournal Entry` je ON je.name = jeea.parent
-                        SET jeea.`intercompany_target_company` = NULL
-                        WHERE je.`docstatus` = 0 AND (je.`is_intercompany` = 0 OR je.`is_intercompany` IS NULL)
-                          AND jeea.`intercompany_target_company` IS NOT NULL AND jeea.`intercompany_target_company` != ''
+                if frappe.db.table_exists(dt) and frappe.db.has_column(dt, "is_intercompany") and frappe.db.has_column(dt, "intercompany_target_company"):
+                    frappe.db.sql(f"""
+                        UPDATE `tab{dt}`
+                        SET `intercompany_target_company` = NULL
+                        WHERE `docstatus` = 0 AND (`is_intercompany` = 0 OR `is_intercompany` IS NULL)
+                          AND `intercompany_target_company` IS NOT NULL AND `intercompany_target_company` != ''
                     """)
             except Exception:
                 pass
+
+        try:
+            if frappe.db.table_exists("Journal Entry Account") and frappe.db.has_column("Journal Entry Account", "intercompany_target_company"):
+                frappe.db.sql("""
+                    UPDATE `tabJournal Entry Account` jeea
+                    JOIN `tabJournal Entry` je ON je.name = jeea.parent
+                    SET jeea.`intercompany_target_company` = NULL
+                    WHERE je.`docstatus` = 0 AND (je.`is_intercompany` = 0 OR je.`is_intercompany` IS NULL)
+                      AND jeea.`intercompany_target_company` IS NOT NULL AND jeea.`intercompany_target_company` != ''
+                """)
+        except Exception:
+            pass
         frappe.db.commit()
     except Exception:
         pass
 
 
+_SUPPORTED_INTERCOMPANY_DOCTYPES = {
+    "Sales Order", "Purchase Order", "Sales Invoice", "Purchase Invoice",
+    "Delivery Note", "Purchase Receipt", "Stock Entry", "Journal Entry",
+    "Payment Entry", "Quotation", "Supplier Quotation", "Material Request",
+    "Request for Quotation", "Landed Cost Voucher",
+}
+
+
+@frappe.whitelist()
+def trigger_manual_intercompany_sync(doctype, name):
+    """Manually trigger intercompany mirroring for a submitted transaction document."""
+    if doctype not in _SUPPORTED_INTERCOMPANY_DOCTYPES:
+        frappe.throw(_("DocType {0} is not configured for inter-company mirroring.").format(doctype))
+
+    if not frappe.db.exists(doctype, name):
+        frappe.throw(_("{0} {1} was not found.").format(doctype, name))
+
+    frappe.has_permission(doctype, "write", name, throw=True)
+    doc = frappe.get_doc(doctype, name)
+
+    if doc.docstatus != 1:
+        return {"success": False, "message": _("Only submitted documents can be mirrored.")}
+
+    if not cint(doc.get("is_intercompany")):
+        return {"success": False, "message": _("Is Intercompany is not enabled on this document.")}
+
+    if doc.get("intercompany_linked_doc_name"):
+        return {
+            "success": True,
+            "message": _("Document is already linked to {0} {1}.").format(
+                doc.get("intercompany_linked_doc_doctype") or "",
+                doc.get("intercompany_linked_doc_name"),
+            ),
+        }
+
+    existing_ref = None
+    if frappe.db.exists("DocType", "Inter Company Document Reference"):
+        existing_ref = frappe.db.get_value(
+            "Inter Company Document Reference",
+            {"source_doctype": doctype, "source_name": name},
+            ["target_doctype", "target_name"],
+            as_dict=True,
+        )
+    if existing_ref:
+        return {
+            "success": True,
+            "message": _("Mirrored counterpart already exists: {0} {1}.").format(
+                existing_ref.target_doctype, existing_ref.target_name
+            ),
+        }
+
+    mappings = find_applicable_mappings(doc)
+    if not mappings and not (doc.get("intercompany_target_company") or "").strip():
+        return {
+            "success": False,
+            "message": _("No active Intercompany Transaction Link mapping matched this document."),
+        }
+
+    create_linked_documents(doc, None)
+
+    new_ref = None
+    if frappe.db.exists("DocType", "Inter Company Document Reference"):
+        new_ref = frappe.db.get_value(
+            "Inter Company Document Reference",
+            {"source_doctype": doctype, "source_name": name},
+            ["target_doctype", "target_name"],
+            as_dict=True,
+        )
+
+    if new_ref:
+        return {
+            "success": True,
+            "message": _("Mirrored {0} {1} created successfully.").format(
+                new_ref.target_doctype, new_ref.target_name
+            ),
+        }
+
+    return {
+        "success": False,
+        "message": _("No linked document was created. Check Intercompany Transaction Link rules or Error Log."),
+    }
+
+
 @frappe.whitelist()
 def bulk_create_linked_documents(doc_names, doctype):
+    if doctype not in _SUPPORTED_INTERCOMPANY_DOCTYPES:
+        frappe.throw(_("DocType {0} is not supported for inter-company mirroring.").format(doctype))
+
+    if isinstance(doc_names, str):
+        doc_names = frappe.parse_json(doc_names) or []
+
     results = []
     for doc_name in doc_names:
         try:
+            frappe.has_permission(doctype, "write", doc_name, throw=True)
             doc = frappe.get_doc(doctype, doc_name)
             create_linked_documents(doc, None)
             results.append({"name": doc_name, "status": "success"})

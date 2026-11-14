@@ -121,105 +121,111 @@ def repair_disk_json_files(log):
 
 def restore_master_permissions(log):
 	"""
-	Restores Add/Delete buttons on Customer, Supplier, and Item forms:
-	1. Deletes custom role permissions (tabCustom DocPerm) on master doctypes so
-	   Frappe falls back to standard ERPNext permissions.
-	2. Ensures System Manager, Sales Manager, and Purchase Manager have create/delete=1
-	   in standard DocPerm.
+	Safely repairs Administrator/System Manager create/delete permissions on Master DocTypes
+	without wiping legitimate customer Role Permissions Manager customizations for other roles.
 	"""
 	if not (hasattr(frappe, "db") and frappe.db):
 		return "db_unavailable"
 
-	master_doctypes = ["Customer", "Supplier", "Item", "Customer Group", "Supplier Group", "Item Group", "Warehouse"]
-	deleted_custom_perms = 0
+	master_doctypes = ["Customer", "Supplier", "Item", "Customer Group", "Supplier Group", "Item Group"]
+	placeholders = ", ".join(["%s"] * len(master_doctypes))
 
-	# 1. Clear any custom permission overrides that hide Add / Delete buttons
+	# 1. Repair restrictive Custom DocPerm rows ONLY for System Manager / Administrator
 	if frappe.db.table_exists("Custom DocPerm"):
 		try:
-			placeholders = ", ".join(["%s"] * len(master_doctypes))
-			deleted_custom_perms = frappe.db.sql(f"""
-				DELETE FROM `tabCustom DocPerm`
+			frappe.db.sql(f"""
+				UPDATE `tabCustom DocPerm`
+				SET `create` = 1, `delete` = 1, `write` = 1, `read` = 1
 				WHERE `parent` IN ({placeholders})
+				  AND `role` IN ('System Manager', 'Administrator')
+				  AND (`create` = 0 OR `delete` = 0 OR `write` = 0 OR `read` = 0)
 			""", tuple(master_doctypes))
-			log(f"  Deleted restrictive Custom DocPerm overrides on master doctypes.")
+			log("  Verified System Manager & Administrator create/delete rights in Custom DocPerm.")
 		except Exception as e:
-			log(f"  Notice during Custom DocPerm cleanup: {e}")
+			log(f"  Notice during Custom DocPerm check: {e}")
 
 	# 2. Guarantee standard DocPerm has create: 1, delete: 1 for manager roles
 	if frappe.db.table_exists("DocPerm"):
 		try:
-			frappe.db.sql("""
+			frappe.db.sql(f"""
 				UPDATE `tabDocPerm`
 				SET `create` = 1, `delete` = 1, `write` = 1, `read` = 1
-				WHERE `parent` IN ('Customer', 'Supplier', 'Item', 'Customer Group', 'Supplier Group', 'Item Group')
-				  AND `role` IN ('System Manager', 'Administrator', 'Sales Manager', 'Purchase Manager')
-			""")
-			log("  Ensured System Manager & Manager roles have full Add & Delete permissions.")
+				WHERE `parent` IN ({placeholders})
+				  AND `role` IN ('System Manager', 'Administrator')
+				  AND (`create` = 0 OR `delete` = 0 OR `write` = 0 OR `read` = 0)
+			""", tuple(master_doctypes))
+			log("  Verified System Manager & Administrator permissions in DocPerm.")
 		except Exception as e:
 			log(f"  Notice updating DocPerm: {e}")
 
 	# 3. Ensure tabDocType is not flagged read_only or restricted
 	if frappe.db.table_exists("DocType"):
 		try:
-			frappe.db.sql("""
+			frappe.db.sql(f"""
 				UPDATE `tabDocType`
 				SET `read_only` = 0, `in_create` = 0
-				WHERE `name` IN ('Customer', 'Supplier', 'Item', 'Customer Group', 'Supplier Group', 'Item Group')
-			""")
+				WHERE `name` IN ({placeholders})
+				  AND (`read_only` = 1 OR `in_create` = 1)
+			""", tuple(master_doctypes))
 		except Exception as e:
 			log(f"  Notice updating DocType read_only: {e}")
 
 	frappe.db.commit()
-	return f"custom_perms_cleared, standard_roles_enforced"
+	return "admin_roles_verified"
 
 
 def cleanup_trees_and_masters(log):
 	"""
-	Removes obsolete custom fields and property setters on Tree and Master DocTypes
-	so forms don't get stuck in dirty unsaved state or show unnecessary 'Save' buttons.
+	Removes ONLY obsolete Inter Company Transactions custom fields and property setters
+	on Tree and Master DocTypes so third-party Marketplace apps or customer fields are never touched.
 	"""
 	if not (hasattr(frappe, "db") and frappe.db):
 		return 0
 
-	total_cleaned = 0
-
-	# 1. Custom Fields cleanup
+	# 1. Custom Fields cleanup (scoped strictly to ICT module / obsolete ICT fieldnames)
 	if frappe.db.table_exists("Custom Field"):
 		try:
-			# Remove all custom fields on tree doctypes
 			tree_dts = ["Customer Group", "Supplier Group", "Item Group"]
 			tree_ph = ", ".join(["%s"] * len(tree_dts))
 			frappe.db.sql(f"""
 				DELETE FROM `tabCustom Field`
 				WHERE `dt` IN ({tree_ph})
+				  AND (`module` = 'Inter Company Transactions' OR `fieldname` = 'custom_company')
 			""", tuple(tree_dts))
 
-			# Remove intercompany master custom fields
-			master_fields = [
-				"ic_customer_group", "ic_supplier_group", "is_intercompany_item",
-				"ic_item_group", "is_intercompany_warehouse", "ic_warehouse", "custom_company"
+			obsolete_master_fields = [
+				("Customer", "ic_customer_group"),
+				("Supplier", "ic_supplier_group"),
+				("Item", "is_intercompany_item"),
+				("Item", "ic_item_group"),
+				("Warehouse", "is_intercompany_warehouse"),
+				("Warehouse", "ic_warehouse"),
 			]
-			field_ph = ", ".join(["%s"] * len(master_fields))
-			frappe.db.sql(f"""
+			for m_dt, m_fn in obsolete_master_fields:
+				frappe.db.sql("""
+					DELETE FROM `tabCustom Field`
+					WHERE `dt` = %s AND `fieldname` = %s
+				""", (m_dt, m_fn))
+
+			# Also clean any lingering Custom Fields on masters explicitly owned by this module
+			frappe.db.sql("""
 				DELETE FROM `tabCustom Field`
-				WHERE `fieldname` IN ({field_ph})
-			""", tuple(master_fields))
-			log("  Removed all obsolete custom fields from Tree and Master DocTypes.")
+				WHERE `dt` IN ('Customer', 'Supplier', 'Item', 'Warehouse', 'Customer Group', 'Supplier Group', 'Item Group')
+				  AND `module` = 'Inter Company Transactions'
+			""")
+			log("  Removed obsolete ICT custom fields from Tree and Master DocTypes.")
 		except Exception as e:
 			log(f"  Notice during custom field cleanup: {e}")
 
-	# 2. Property Setters cleanup
+	# 2. Property Setters cleanup (scoped strictly to ICT module / ICT properties)
 	if frappe.db.table_exists("Property Setter"):
 		try:
-			# Delete any property setters that break Customer/Supplier naming series, make them read_only, or dirty Tree doctypes
 			frappe.db.sql("""
 				DELETE FROM `tabProperty Setter`
-				WHERE (`doc_type` IN ('Customer', 'Supplier', 'Item') AND `property` IN ('read_only', 'in_create', 'is_submittable', 'editable_grid'))
-				   OR (`doc_type` IN ('Customer', 'Supplier') AND `field_name` = 'naming_series')
-				   OR (`doc_type` IN ('Customer Group', 'Supplier Group', 'Item Group'))
-				   OR (`module` = 'Inter Company Transactions')
+				WHERE `module` = 'Inter Company Transactions'
+				   OR `property` LIKE '%intercompany%'
 			""")
-			log("  Cleaned up property setters affecting Customer/Supplier/Item and Tree doctypes.")
+			log("  Cleaned up Inter Company Transactions property setters.")
 		except Exception as e:
 			log(f"  Notice during property setter cleanup: {e}")
 

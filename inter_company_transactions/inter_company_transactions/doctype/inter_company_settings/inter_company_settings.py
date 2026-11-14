@@ -29,6 +29,7 @@ def get_enterprise_health_check():
 	Enterprise System Health Check & Telemetry
 	Audits all intercompany configurations, policies, and ledger integrity.
 	"""
+	frappe.only_for(["System Manager", "Accounts Manager", "Accounts User"])
 	health = {
 		"status": "Healthy",
 		"total_companies": 0,
@@ -82,6 +83,7 @@ def test_remote_site_connection(site_url, api_key, api_secret):
 	Tests REST API handshake with an external federated ERPNext instance.
 	Delegates to diagnose_remote_site_connectivity for deep diagnostic.
 	"""
+	frappe.only_for(["System Manager", "Accounts Manager"])
 	from inter_company_transactions.sync import diagnose_remote_site_connectivity
 	return diagnose_remote_site_connectivity(site_url, api_key, api_secret)
 
@@ -91,6 +93,7 @@ def diagnose_network_and_firewall(site_url, api_key=None, api_secret=None):
 	"""
 	Runs full multi-layer socket, DNS, SSL, and firewall diagnostics.
 	"""
+	frappe.only_for(["System Manager", "Accounts Manager"])
 	from inter_company_transactions.sync import diagnose_remote_site_connectivity
 	return diagnose_remote_site_connectivity(site_url, api_key, api_secret)
 
@@ -111,6 +114,7 @@ def get_console_dashboard_data():
 	Retrieves live metrics, links topology, and recent intercompany transaction flow
 	for the interactive visual Inter-Company Console.
 	"""
+	frappe.only_for(["System Manager", "Accounts Manager", "Accounts User"])
 	data = {
 		"metrics": {
 			"companies_count": frappe.db.count("Company"),
@@ -240,6 +244,7 @@ def quick_setup_intercompany_pair(main_company, counterparty_company, preset="fu
 	(including ERPNext allowed_to_transact_with), compliant clearing accounts,
 	transit warehouses, and activates selected transaction mirroring rules.
 	"""
+	frappe.only_for(["System Manager", "Accounts Manager"])
 	if not main_company or not counterparty_company:
 		frappe.throw(_("Both Main Company and Counterparty Company must be selected."))
 

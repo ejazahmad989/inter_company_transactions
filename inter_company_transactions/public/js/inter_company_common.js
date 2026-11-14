@@ -268,13 +268,14 @@
 
 					// Add badge/intro banner in dashboard
 					if (frm.dashboard && frm.dashboard.set_headline_alert) {
+						const esc = frappe.utils.escape_html;
 						frm.dashboard.set_headline_alert(
 							__('Linked Inter-Company Document: <a href="/app/{0}/{1}"><b>{2} {3}</b></a> ({4})', [
-								frappe.router.slug(targetDocType),
-								targetDocName,
-								__(targetDocType),
-								targetDocName,
-								targetCompany
+								encodeURIComponent(frappe.router.slug(targetDocType)),
+								encodeURIComponent(targetDocName),
+								esc(__(targetDocType)),
+								esc(targetDocName),
+								esc(targetCompany)
 							]),
 							'blue'
 						);
@@ -743,41 +744,6 @@
 		after_save: function() {
 			if (ict.refresh_party_map) {
 				ict.refresh_party_map();
-			}
-		}
-	});
-
-	// Global auto-switch for Intercompany Transaction Type child rows
-	const ICT_TARGET_MAPPING = {
-		'Sales Order': 'Purchase Order',
-		'Purchase Order': 'Sales Order',
-		'Sales Invoice': 'Purchase Invoice',
-		'Purchase Invoice': 'Sales Invoice',
-		'Delivery Note': 'Purchase Receipt',
-		'Purchase Receipt': 'Delivery Note',
-		'Stock Entry': 'Stock Entry',
-		'Journal Entry': 'Journal Entry',
-		'Payment Entry': 'Payment Entry',
-		'Quotation': 'Supplier Quotation',
-		'Supplier Quotation': 'Quotation',
-		'Material Request': 'Purchase Order',
-		'Request for Quotation': 'Supplier Quotation',
-		'Subcontracting Order': 'Purchase Order',
-		'Landed Cost Voucher': 'Journal Entry'
-	};
-
-	frappe.ui.form.on('Intercompany Transaction Type', {
-		source_type: function(frm, cdt, cdn) {
-			let row = locals[cdt][cdn];
-			if (!row || !row.source_type) return;
-
-			let target = ICT_TARGET_MAPPING[row.source_type];
-			if (target) {
-				frappe.model.set_value(cdt, cdn, 'target_type', target);
-			}
-
-			if (!row.direction) {
-				frappe.model.set_value(cdt, cdn, 'direction', 'Both');
 			}
 		}
 	});

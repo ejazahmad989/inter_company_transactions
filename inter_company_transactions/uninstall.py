@@ -66,22 +66,28 @@ def cleanup_custom_fields():
         "ic_warehouse",
         "ic_customer_group",
         "ic_supplier_group",
-        "custom_company"
     ]
 
     try:
-        # Delete by module
+        # Delete all Custom Fields owned by this module
         frappe.db.sql("""
             DELETE FROM `tabCustom Field`
             WHERE `module` = 'Inter Company Transactions'
         """)
 
-        # Delete by fieldname across all sites to ensure no orphan fields remain
+        # Delete specific ICT fieldnames safely (without touching unrelated apps)
         placeholders = ", ".join(["%s"] * len(ict_fields))
         frappe.db.sql(f"""
             DELETE FROM `tabCustom Field`
             WHERE `fieldname` IN ({placeholders})
         """, tuple(ict_fields))
+
+        # Clean legacy custom_company only on tree doctypes where ICT previously created it
+        frappe.db.sql("""
+            DELETE FROM `tabCustom Field`
+            WHERE `dt` IN ('Customer Group', 'Supplier Group', 'Item Group')
+              AND `fieldname` = 'custom_company'
+        """)
 
         print("Cleaned up all Inter Company Transactions Custom Fields.")
     except Exception as e:
@@ -98,7 +104,7 @@ def cleanup_property_setters():
             DELETE FROM `tabProperty Setter`
             WHERE `module` = 'Inter Company Transactions'
                OR `property` LIKE '%intercompany%'
-               OR (`doc_type` IN ('Customer', 'Supplier') AND `field_name` = 'naming_series')
+               OR `field_name` IN ('is_intercompany', 'intercompany_target_company', 'intercompany_linked_doc_doctype', 'intercompany_linked_doc_name', 'intercompany_linked_company')
         """)
         print("Cleaned up Inter Company Transactions Property Setters.")
 

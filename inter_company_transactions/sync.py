@@ -812,6 +812,9 @@ def diagnose_remote_site_connectivity(site_url, api_key=None, api_secret=None, t
 	  6. Intercompany Transactions App Handshake
 	Returns actionable Linux firewall commands (UFW, Firewalld, iptables, AWS SG).
 	"""
+	if getattr(frappe, "request", None):
+		frappe.only_for(["System Manager", "Accounts Manager"])
+
 	if not site_url:
 		frappe.throw(_("Please provide a Site URL to diagnose."))
 

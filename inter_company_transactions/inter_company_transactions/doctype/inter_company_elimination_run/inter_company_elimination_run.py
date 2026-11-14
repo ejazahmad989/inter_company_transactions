@@ -20,6 +20,7 @@ class InterCompanyEliminationRun(Document):
 		2. Eliminates mutual intercompany AR & AP.
 		3. Eliminates unrealized gross margin stored in ending stock.
 		"""
+		self.check_permission("write")
 		# Get all intercompany links
 		intercompany_docs = frappe.get_all(
 			"Inter Company Document Reference",

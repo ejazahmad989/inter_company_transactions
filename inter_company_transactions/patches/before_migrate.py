@@ -2,22 +2,8 @@ import frappe
 
 
 def before_migrate():
-    """Execute before migration to preserve doctypes and sanitize custom fields"""
-    print("Running pre-migration tasks for Inter Company Transactions...")
-
-    # Sanitize custom fields and doctypes before migration begins
-    try:
-        from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
-            fix_legacy_custom_fields,
-        )
-        fix_legacy_custom_fields(force=True)
-    except Exception as e:
-        print(f"Notice during pre-migration custom fields check: {e}")
-
-    # Ensure all module doctypes are standard (custom = 0) so bench migrate updates schemas
+    """Execute before migration to ensure module DocTypes remain standard (custom = 0)"""
     ensure_standard_doctypes()
-
-    print("Pre-migration tasks completed successfully!")
 
 
 def execute():

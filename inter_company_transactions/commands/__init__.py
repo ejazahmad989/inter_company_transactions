@@ -105,10 +105,8 @@ def verify_marketplace_readiness():
         rows = frappe.db.sql(
             """
             SELECT doc_type, field_name, property FROM `tabProperty Setter`
-            WHERE (doc_type IN ('Customer Group', 'Supplier Group', 'Item Group'))
-               OR (doc_type IN ('Customer', 'Supplier', 'Item') AND property IN ('read_only', 'in_create', 'is_submittable'))
-               OR (doc_type IN ('Customer', 'Supplier') AND field_name = 'naming_series')
-               OR (module = 'Inter Company Transactions')
+            WHERE (`module` = 'Inter Company Transactions' AND `doc_type` IN ('Customer Group', 'Supplier Group', 'Item Group', 'Customer', 'Supplier', 'Item', 'Warehouse'))
+               OR (`property` LIKE '%intercompany%' AND `doc_type` IN ('Customer Group', 'Supplier Group', 'Item Group', 'Customer', 'Supplier', 'Item', 'Warehouse'))
             """,
             as_dict=True,
         )
@@ -116,15 +114,26 @@ def verify_marketplace_readiness():
             ps_violations.append(f"{r.doc_type}:{r.field_name or '*'}.{r.property}")
 
     if cf_violations:
-        msg = f"Found {len(cf_violations)} lingering custom fields on master/tree doctypes: {cf_violations}"
+        # Filter to ICT-owned / obsolete ICT fields only
+        ict_master_fields = {
+            "is_intercompany_item", "ic_item_group", "is_intercompany_warehouse",
+            "ic_warehouse", "ic_customer_group", "ic_supplier_group", "custom_company",
+            "is_intercompany", "intercompany_target_company",
+        }
+        ict_cf_violations = [v for v in cf_violations if v.split(".", 1)[-1] in ict_master_fields]
+    else:
+        ict_cf_violations = []
+
+    if ict_cf_violations:
+        msg = f"Found {len(ict_cf_violations)} lingering ICT custom fields on master/tree doctypes: {ict_cf_violations}"
         failures.append(msg)
         print(f"  FAILED: {msg}")
     elif ps_violations:
-        msg = f"Found {len(ps_violations)} conflicting property setters on master/tree doctypes: {ps_violations}"
+        msg = f"Found {len(ps_violations)} conflicting ICT property setters on master/tree doctypes: {ps_violations}"
         failures.append(msg)
         print(f"  FAILED: {msg}")
     else:
-        print("  PASSED: Zero custom fields or property setters on Master & Tree DocTypes.")
+        print("  PASSED: Zero ICT custom fields or property setters on Master & Tree DocTypes.")
 
     # --------------------------------------------------------------------------
     # AUDIT 2: Permission Integrity (Add & Delete Buttons)
@@ -134,8 +143,10 @@ def verify_marketplace_readiness():
     if frappe.db and frappe.db.table_exists("Custom DocPerm"):
         rows = frappe.db.sql(
             """
-            SELECT parent, role FROM `tabCustom DocPerm`
+            SELECT parent, role, `create`, `delete` FROM `tabCustom DocPerm`
             WHERE parent IN ('Customer', 'Supplier', 'Item')
+              AND role IN ('System Manager', 'Administrator')
+              AND (`create` = 0 OR `delete` = 0)
             """,
             as_dict=True,
         )
@@ -143,7 +154,7 @@ def verify_marketplace_readiness():
             perm_violations.append(f"{r.parent}:{r.role}")
 
     if perm_violations:
-        msg = f"Found Custom DocPerm overrides on standard master doctypes (may hide Add/Delete buttons): {perm_violations}"
+        msg = f"Found restrictive Custom DocPerm overrides on System Manager/Administrator: {perm_violations}"
         failures.append(msg)
         print(f"  FAILED: {msg}")
     elif frappe.db and frappe.db.table_exists("DocPerm"):

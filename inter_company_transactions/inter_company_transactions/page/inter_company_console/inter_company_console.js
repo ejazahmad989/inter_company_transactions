@@ -87,6 +87,7 @@ function build_console_ui($container, data) {
 	let m = data.metrics;
 	let isHealthy = data.health_status === 'Healthy';
 
+	const esc = frappe.utils.escape_html;
 	let html = `
 		<div class="ict-console-body" style="padding: 10px 0;">
 			<!-- Welcome / Quick Action Banner -->
@@ -95,10 +96,10 @@ function build_console_ui($container, data) {
 					<div class="col-lg-8 mb-3 mb-lg-0">
 						<div class="d-flex align-items-center mb-2">
 							<span class="badge ${isHealthy ? 'badge-success' : 'badge-warning'} mr-2" style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">
-								<i class="fa ${isHealthy ? 'fa-check-circle' : 'fa-exclamation-triangle'} mr-1"></i>${data.health_status || 'System Ready'}
+								<i class="fa ${isHealthy ? 'fa-check-circle' : 'fa-exclamation-triangle'} mr-1"></i>${esc(data.health_status || 'System Ready')}
 							</span>
 							<span class="text-muted" style="color: #9ca3af !important; font-size: 12px;">
-								${__('Deployment Mode')}: <strong class="text-light">${data.deployment_mode}</strong>
+								${__('Deployment Mode')}: <strong class="text-light">${esc(data.deployment_mode || '')}</strong>
 							</span>
 						</div>
 						<h4 class="mb-1 font-weight-bold text-white">${__('Inter-Company Orchestration & Automation Hub')}</h4>
@@ -272,23 +273,24 @@ function render_links_cards(links) {
 		`;
 	}
 
+	const esc = frappe.utils.escape_html;
 	return links.map(l => {
-		let counterpartiesHtml = l.counterparties.map(cp => `<span class="badge badge-light border mr-1 mb-1 p-1">${cp}</span>`).join('');
+		let counterpartiesHtml = (l.counterparties || []).map(cp => `<span class="badge badge-light border mr-1 mb-1 p-1">${esc(cp)}</span>`).join('');
 		return `
 			<div class="col-md-6 col-lg-4 mb-3">
 				<div class="card h-100 p-3 border" style="border-radius: 8px; border-color: var(--border-color, #e2e8f0) !important;">
 					<div class="d-flex justify-content-between align-items-center mb-2">
 						<span class="badge ${l.enabled ? 'badge-success' : 'badge-secondary'}">${l.enabled ? __('Active') : __('Disabled')}</span>
-						<a href="/app/intercompany-transaction-link/${l.name}" class="btn btn-xs btn-default">${__('Edit')}</a>
+						<a href="/app/intercompany-transaction-link/${encodeURIComponent(l.name)}" class="btn btn-xs btn-default">${__('Edit')}</a>
 					</div>
-					<h6 class="font-weight-bold mb-1"><i class="fa fa-building-o mr-1 text-muted"></i>${l.main_company}</h6>
+					<h6 class="font-weight-bold mb-1"><i class="fa fa-building-o mr-1 text-muted"></i>${esc(l.main_company)}</h6>
 					<div class="my-2">
 						<small class="text-muted d-block mb-1">${__('Connected Entities:')}</small>
 						<div>${counterpartiesHtml || '<span class="text-muted" style="font-size: 11px;">None configured</span>'}</div>
 					</div>
 					<div class="mt-auto pt-2 border-top d-flex justify-content-between align-items-center" style="font-size: 12px;">
-						<span class="text-muted">${l.active_types_count} ${__('Transaction Rules')}</span>
-						<a href="/app/inter-company-document-reference?source_company=${encodeURIComponent(l.main_company)}" class="text-primary">${__('Audit Logs')} &rarr;</a>
+						<span class="text-muted">${cint(l.active_types_count)} ${__('Transaction Rules')}</span>
+						<a href="/app/inter-company-document-reference?source_company=${encodeURIComponent(l.main_company || '')}" class="text-primary">${__('Audit Logs')} &rarr;</a>
 					</div>
 				</div>
 			</div>
@@ -301,6 +303,7 @@ function render_recent_tx(txList) {
 		return `<tr><td colspan="7" class="text-center text-muted p-4">${__('No intercompany transactions logged yet.')}</td></tr>`;
 	}
 
+	const esc = frappe.utils.escape_html;
 	return txList.map(tx => {
 		let isMirrored = !!tx.target_name;
 		let badgeClass = isMirrored ? 'indicator-pill green' : 'indicator-pill orange';
@@ -308,13 +311,13 @@ function render_recent_tx(txList) {
 
 		return `
 			<tr>
-				<td><b>${tx.source_company}</b></td>
-				<td><a href="/app/${frappe.router.slug(tx.source_doctype)}/${tx.source_name}">${tx.source_doctype}: ${tx.source_name}</a></td>
+				<td><b>${esc(tx.source_company)}</b></td>
+				<td><a href="/app/${encodeURIComponent(frappe.router.slug(tx.source_doctype))}/${encodeURIComponent(tx.source_name)}">${esc(tx.source_doctype)}: ${esc(tx.source_name)}</a></td>
 				<td class="text-center text-muted">&rarr;</td>
-				<td><b>${tx.target_company}</b></td>
+				<td><b>${esc(tx.target_company)}</b></td>
 				<td>
 					${isMirrored 
-						? `<a href="/app/${frappe.router.slug(tx.target_doctype)}/${tx.target_name}">${tx.target_doctype}: ${tx.target_name}</a>`
+						? `<a href="/app/${encodeURIComponent(frappe.router.slug(tx.target_doctype))}/${encodeURIComponent(tx.target_name)}">${esc(tx.target_doctype)}: ${esc(tx.target_name)}</a>`
 						: `<span class="text-muted font-italic">${__('Pending creation')}</span>`
 					}
 				</td>
@@ -724,8 +727,9 @@ function run_health_audit() {
 }
 
 function show_health_dialog(h) {
-	let recsHtml = h.recommendations.length > 0
-		? h.recommendations.map(rc => `<li class="text-warning mb-1">${rc}</li>`).join('')
+	const esc = frappe.utils.escape_html;
+	let recsHtml = (h.recommendations || []).length > 0
+		? h.recommendations.map(rc => `<li class="text-warning mb-1">${esc(rc)}</li>`).join('')
 		: `<li class="text-success"><i class="fa fa-check-circle mr-1"></i>${__('All integrity checks passed with flying colors!')}</li>`;
 
 	let d = new frappe.ui.Dialog({
@@ -741,19 +745,19 @@ function show_health_dialog(h) {
 								<h6 class="mb-0 font-weight-bold">${__('Overall Integrity Status')}</h6>
 								<small class="text-muted">${__('Real-time ledger and topology telemetry')}</small>
 							</div>
-							<span class="badge ${h.status === 'Healthy' ? 'badge-success' : 'badge-warning'}" style="font-size: 14px; padding: 6px 12px;">${h.status}</span>
+							<span class="badge ${h.status === 'Healthy' ? 'badge-success' : 'badge-warning'}" style="font-size: 14px; padding: 6px 12px;">${esc(h.status)}</span>
 						</div>
 						<div class="row mb-3 text-center">
 							<div class="col-4 border-right">
-								<h4 class="mb-0 font-weight-bold text-primary">${h.total_companies}</h4>
+								<h4 class="mb-0 font-weight-bold text-primary">${cint(h.total_companies)}</h4>
 								<small class="text-muted">${__('Total Entities')}</small>
 							</div>
 							<div class="col-4 border-right">
-								<h4 class="mb-0 font-weight-bold text-success">${h.active_links}</h4>
+								<h4 class="mb-0 font-weight-bold text-success">${cint(h.active_links)}</h4>
 								<small class="text-muted">${__('Active Channels')}</small>
 							</div>
 							<div class="col-4">
-								<h4 class="mb-0 font-weight-bold ${h.error_log_count > 0 ? 'text-danger' : 'text-secondary'}">${h.error_log_count}</h4>
+								<h4 class="mb-0 font-weight-bold ${h.error_log_count > 0 ? 'text-danger' : 'text-secondary'}">${cint(h.error_log_count)}</h4>
 								<small class="text-muted">${__('Failed Syncs')}</small>
 							</div>
 						</div>

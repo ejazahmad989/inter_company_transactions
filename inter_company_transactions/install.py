@@ -477,11 +477,9 @@ def create_custom_fields():
                         "fieldtype": "Link",
                         "options": "Company",
                         "insert_after": "is_intercompany",
-                        "description": "Select the target company for inter-company transaction",
-                        "mandatory_depends_on": "is_intercompany",
+                        "description": "Target company for inter-company transaction (editable only when Is Intercompany is checked)",
                         "in_list_view": 1,
                         "in_standard_filter": 1,
-                        "fetch_if_empty": 0,
                         "ignore_user_permissions": 1
                     },
                     {
@@ -494,7 +492,7 @@ def create_custom_fields():
                     },
                     {
                         "fieldname": "intercompany_linked_doc_name",
-                        "label": "Linked Document Name",
+                        "label": "Linked Document",
                         "fieldtype": "Data",
                         "insert_after": "intercompany_linked_doc_doctype",
                         "read_only": 1,
@@ -503,10 +501,12 @@ def create_custom_fields():
                     {
                         "fieldname": "intercompany_linked_company",
                         "label": "Linked Company",
-                        "fieldtype": "Data",
+                        "fieldtype": "Link",
+                        "options": "Company",
                         "insert_after": "intercompany_linked_doc_name",
                         "read_only": 1,
-                        "hidden": 1
+                        "hidden": 1,
+                        "ignore_user_permissions": 1
                     }
                 ]
 
@@ -551,9 +551,8 @@ def create_custom_fields():
                         })
                         custom_field.flags.ignore_permissions = True
                         custom_field.insert()
-                        print(f"Created Custom Field: {doctype} - {field['fieldname']}")
                     else:
-                        # Custom field already exists; sync properties to ensure live DB is never stale
+                        # Sync only missing or core structural attributes quietly
                         sync_props = [
                             "label", "fieldtype", "options", "default", "description",
                             "read_only", "hidden", "depends_on", "mandatory_depends_on",
@@ -572,22 +571,12 @@ def create_custom_fields():
                         if updated:
                             cf_doc.flags.ignore_permissions = True
                             cf_doc.save(ignore_permissions=True)
-                            print(f"Synced Custom Field: {doctype} - {field['fieldname']}")
 
                 except Exception as e:
-                    print(f"Error creating custom field {field['fieldname']} for {doctype}: {e!s}")
                     frappe.log_error(
                         f"Custom Field Creation Error: {e!s}\nField: {field['fieldname']}\nDocType: {doctype}",
                         "Inter Company Transaction Setup"
                     )
-
-        # Run comprehensive repair patch to delete obsolete master/tree custom fields and repair depends_on
-        try:
-            from inter_company_transactions.patches.v1_5_repair_item_depends_on_and_clean_trees import execute as repair_patch
-            repair_patch()
-        except Exception as e:
-            print(f"Notice during repair patch execution: {e}")
-
 
         frappe.db.commit()
 
@@ -616,13 +605,6 @@ def set_default_permissions():
         },
         {
             "doctype": "Inter Company Settings",
-            "role": "System Manager",
-            "read": 1, "write": 1, "create": 1, "delete": 1,
-            "submit": 0, "cancel": 0, "amend": 0,
-            "report": 1, "export": 1, "print": 1, "email": 1, "share": 1
-        },
-        {
-            "doctype": "Intercompany Item Mapping",
             "role": "System Manager",
             "read": 1, "write": 1, "create": 1, "delete": 1,
             "submit": 0, "cancel": 0, "amend": 0,
@@ -703,30 +685,26 @@ def set_default_permissions():
 
                 if not existing_perm:
                     doctype_doc = frappe.get_doc("DocType", perm["doctype"])
-                    doctype_doc.append("permissions", {
-                        "role": perm["role"],
-                        "read": perm.get("read", 0),
-                        "write": perm.get("write", 0),
-                        "create": perm.get("create", 0),
-                        "delete": perm.get("delete", 0),
-                        "submit": perm.get("submit", 0),
-                        "cancel": perm.get("cancel", 0),
-                        "amend": perm.get("amend", 0),
-                        "report": perm.get("report", 0),
-                        "export": perm.get("export", 0),
-                        "print": perm.get("print", 0),
-                        "email": perm.get("email", 0),
-                        "share": perm.get("share", 0)
-                    })
-                    doctype_doc.save(ignore_permissions=True)
-                    print(f"Added permission for {perm['role']} on {perm['doctype']}")
-                else:
-                    print(f"Permission already exists for {perm['role']} on {perm['doctype']}")
-            else:
-                print(f"DocType {perm['doctype']} does not exist, skipping permissions")
+                    if not getattr(doctype_doc, "istable", 0):
+                        doctype_doc.append("permissions", {
+                            "role": perm["role"],
+                            "read": perm.get("read", 0),
+                            "write": perm.get("write", 0),
+                            "create": perm.get("create", 0),
+                            "delete": perm.get("delete", 0),
+                            "submit": perm.get("submit", 0),
+                            "cancel": perm.get("cancel", 0),
+                            "amend": perm.get("amend", 0),
+                            "report": perm.get("report", 0),
+                            "export": perm.get("export", 0),
+                            "print": perm.get("print", 0),
+                            "email": perm.get("email", 0),
+                            "share": perm.get("share", 0)
+                        })
+                        doctype_doc.save(ignore_permissions=True)
 
         except Exception as e:
-            print(f"Error setting permissions for {perm['doctype']}: {e!s}")
+            frappe.log_error(f"Error setting permissions for {perm['doctype']}: {e!s}", "ICT Install")
 
 def create_sample_data():
     """Ensure Inter Company Settings single doctype is initialized with default values"""
@@ -771,12 +749,15 @@ def create_page_and_workspace():
             print("Created Page: inter-company-console")
         else:
             page = frappe.get_doc("Page", "inter-company-console")
-            roles = [r.role for r in page.roles]
+            roles = {r.role for r in (page.roles or [])}
+            roles_added = False
             for r in ["System Manager", "Accounts Manager", "Accounts User"]:
                 if r not in roles:
                     page.append("roles", {"role": r})
-            page.flags.ignore_permissions = True
-            page.save()
+                    roles_added = True
+            if roles_added:
+                page.flags.ignore_permissions = True
+                page.save()
 
         # 2. Workspace
         ws_file = os.path.join(os.path.dirname(__file__), "inter_company_transactions", "workspace", "inter_company", "inter_company.json")

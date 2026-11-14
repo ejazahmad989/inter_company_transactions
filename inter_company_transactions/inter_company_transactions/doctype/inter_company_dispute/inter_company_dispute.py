@@ -20,6 +20,7 @@ class InterCompanyDispute(Document):
 		- Journal Adjustment
 		- Accept Variance
 		"""
+		self.check_permission("write")
 		if self.status == "Resolved":
 			frappe.throw(_("Dispute is already resolved."))
 

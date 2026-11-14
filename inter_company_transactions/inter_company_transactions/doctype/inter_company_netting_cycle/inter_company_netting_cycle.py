@@ -18,6 +18,7 @@ class InterCompanyNettingCycle(Document):
 		Fetches all outstanding intercompany Sales and Purchase Invoices
 		between the participating entities.
 		"""
+		self.check_permission("write")
 		companies = [row.company for row in self.participating_companies if row.company]
 		if len(companies) < 2:
 			frappe.throw(_("At least two participating companies are required."))
@@ -113,6 +114,7 @@ class InterCompanyNettingCycle(Document):
 		Calculates gross receivables, gross payables, and net position for each company,
 		then resolves debtor-creditor settlements minimizing bank transactions.
 		"""
+		self.check_permission("write")
 		company_stats = {}
 		for row in self.participating_companies:
 			company_stats[row.company] = {

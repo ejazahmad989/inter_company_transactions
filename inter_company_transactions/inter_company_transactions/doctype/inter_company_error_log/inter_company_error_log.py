@@ -14,6 +14,7 @@ class InterCompanyErrorLog(Document):
 		Retry synchronization for the failed source document.
 		Handles both local document creation and remote federated REST push.
 		"""
+		self.check_permission("write")
 		if not frappe.db.exists(self.source_doctype, self.source_name):
 			frappe.throw(_("Source document {0} {1} no longer exists.").format(self.source_doctype, self.source_name))
 
@@ -58,6 +59,9 @@ def auto_retry_pending_errors():
 	"""
 	Scheduled task to retry pending/failed inter-company sync errors automatically.
 	"""
+	if getattr(frappe, "request", None):
+		frappe.only_for(["System Manager", "Accounts Manager"])
+
 	if not (hasattr(frappe, "db") and frappe.db):
 		return
 	if not frappe.db.table_exists("Inter Company Error Log"):

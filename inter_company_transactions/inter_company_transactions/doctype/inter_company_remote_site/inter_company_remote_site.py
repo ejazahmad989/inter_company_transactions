@@ -13,6 +13,7 @@ class InterCompanyRemoteSite(Document):
 		"""
 		Executes connection verification and updates sync status.
 		"""
+		self.check_permission("write")
 		from inter_company_transactions.sync import diagnose_remote_site_connectivity
 		diag = diagnose_remote_site_connectivity(
 			site_url=self.site_url,
