@@ -280,6 +280,9 @@ def create_linked_documents(doc, method=None):
     if not cint(settings.get("enabled", 1)):
         return
 
+    # Prevent silent 1.0 fallback when submitting cross-currency vouchers
+    validate_intercompany_cross_currency_rate(doc)
+
     if (
         settings.get("execution_mode") == "Asynchronous (Background Job)"
         and not getattr(frappe.flags, "in_test", False)
@@ -1770,7 +1773,9 @@ def validate_intercompany_cross_currency_rate(doc):
         _(
             "Multi-Currency Exchange Rate Required: <b>{0}</b> ({1}) and <b>{2}</b> ({3}) use different currencies.<br><br>"
             "No exchange rate was found between <b>{1}</b> and <b>{3}</b> for <b>{4}</b>. "
-            "Please enter the exchange rate on this voucher or add a <b>Currency Exchange</b> record so both company ledgers stay 100% tallied."
+            "Please enter the exchange rate on this voucher or "
+            "<a href='/app/currency-exchange/new'><b>create a Currency Exchange record</b></a> "
+            "so both company ledgers stay 100% tallied."
         ).format(source_company, src_ccy, target_company, tgt_ccy, tx_date),
         title=_("Exchange Rate Required"),
     )
@@ -3025,16 +3030,17 @@ def _build_je_row(account, side, target_base_amount, target_company_currency, fx
     ) or target_company_currency
 
     base_amt = flt(target_base_amount, 2)
-    row_fx = 1.0
+    raw_fx = 1.0
     if acc_currency and target_company_currency and acc_currency != target_company_currency:
         hint = (fx_hint_map or {}).get((acc_currency, target_company_currency))
-        row_fx = flt(hint or get_intercompany_exchange_rate(acc_currency, target_company_currency, tx_date), 9)
-        if row_fx <= 0:
-            row_fx = 1.0
-        amt_in_acc_ccy = flt(base_amt / row_fx, 2)
+        raw_fx = flt(hint) if hint else flt(get_intercompany_exchange_rate(acc_currency, target_company_currency, tx_date))
+        if raw_fx <= 0:
+            raw_fx = 1.0
+        amt_in_acc_ccy = flt(base_amt / raw_fx, 2)
     else:
         amt_in_acc_ccy = base_amt
 
+    row_fx = flt(raw_fx, 9)
     row = {
         "account": account,
         "account_currency": acc_currency,
@@ -3106,12 +3112,12 @@ def create_journal_entry(source_je, mapping, linked_company, direction):
         )
 
     fx_hint_map = {}
-    if source_party_row:
-        p_ccy = getattr(source_party_row, "account_currency", None)
-        p_fx = flt(getattr(source_party_row, "exchange_rate", 0))
-        if p_ccy and source_company_currency and p_ccy != source_company_currency and p_fx > 0:
-            fx_hint_map[(p_ccy, source_company_currency)] = flt(p_fx, 9)
-            fx_hint_map[(source_company_currency, p_ccy)] = flt(1.0 / p_fx, 9)
+    for acc_row in (getattr(source_je, "accounts", None) or []):
+        r_ccy = getattr(acc_row, "account_currency", None)
+        r_fx = flt(getattr(acc_row, "exchange_rate", 0))
+        if r_ccy and source_company_currency and r_ccy != source_company_currency and r_fx > 0:
+            fx_hint_map[(r_ccy, source_company_currency)] = r_fx
+            fx_hint_map[(source_company_currency, r_ccy)] = 1.0 / r_fx
 
     if source_company_currency == target_company_currency:
         target_base_amount = flt(src_base_total, 2)
@@ -4139,7 +4145,8 @@ def validate_intercompany_document(doc, method=None):
     if cint(doc.get("is_intercompany")) and doc.get("intercompany_target_company"):
         if doc.get("intercompany_target_company") == doc.get("company"):
             frappe.throw(_("Intercompany Target Company cannot be the same as Source Company ({0}).").format(doc.get("company")))
-        validate_intercompany_cross_currency_rate(doc)
+        if cint(doc.get("docstatus")) == 1:
+            validate_intercompany_cross_currency_rate(doc)
 
 
 def auto_detect_intercompany_party(doc, method=None):

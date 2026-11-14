@@ -756,6 +756,72 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 			self.assertEqual(res.accounts[1].account, "TMP-MAIN - JC")
 			self.assertEqual(res.accounts[1].debit, 500.0)
 
+		# Case B: Same 500 USD @ 275 source JE when Customer MAIN receivable account in John USD Co is PKR-denominated
+		fake_je_b = frappe._dict({"accounts": []})
+		fake_je_b.doctype = "Journal Entry"
+		fake_je_b.append = lambda tbl, row: fake_je_b["accounts"].append(frappe._dict(row))
+		fake_je_b.flags = frappe._dict()
+
+		def mock_get_value_pkr_party(dt, filters=None, fieldname=None, **kwargs):
+			if dt == "Company" and fieldname == "default_currency":
+				return "PKR" if filters == "Main PKR Co" else "USD"
+			if dt == "Company" and fieldname == "default_receivable_account":
+				return "Debtors PKR - JC"
+			if dt == "Company" and fieldname == "cost_center":
+				return "Main - JC"
+			if dt == "Account" and fieldname == "account_currency":
+				return "PKR" if filters == "Debtors PKR - JC" else "USD"
+			return None
+
+		with patch.object(frappe, "new_doc", return_value=fake_je_b), patch.object(
+			frappe.db, "exists", return_value=True
+		), patch.object(frappe.db, "get_value", side_effect=mock_get_value_pkr_party):
+			res_b = create_journal_entry(src_je_pkr, mapping, linked_company, "main_to_other")
+			self.assertEqual(res_b.accounts[0].account_currency, "PKR")
+			self.assertAlmostEqual(res_b.accounts[0].exchange_rate, 1.0 / 275.0, places=7)
+			self.assertEqual(res_b.accounts[0].credit_in_account_currency, 137500.0)
+			self.assertEqual(res_b.accounts[0].credit, 500.0)
+			self.assertEqual(res_b.accounts[1].debit, 500.0)
+
+	def test_draft_save_unblocked_while_submit_guards_missing_fx_rate(self):
+		"""Verify Draft save uses native ERPNext UI without blocking, while Submit guards missing cross-currency rate"""
+		from unittest.mock import patch
+
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			validate_intercompany_document,
+		)
+
+		draft_doc = frappe._dict({
+			"doctype": "Sales Order",
+			"name": "SO-DRAFT-1",
+			"company": "Main PKR Co",
+			"docstatus": 0,
+			"is_intercompany": 1,
+			"intercompany_target_company": "John USD Co",
+			"currency": "PKR",
+			"conversion_rate": 1.0,
+			"flags": frappe._dict(),
+		})
+
+		def mock_ccy(dt, name, fieldname=None, **kwargs):
+			if dt == "Company" and fieldname == "default_currency":
+				return "PKR" if name == "Main PKR Co" else "USD"
+			return None
+
+		with patch.object(frappe.db, "get_value", side_effect=mock_ccy), patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.auto_detect_intercompany_party",
+		), patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.lookup_intercompany_exchange_rate",
+			return_value=None,
+		):
+			# Draft save must succeed without blocking
+			validate_intercompany_document(draft_doc)
+
+			# Submit with missing FX rate must block
+			submit_doc = frappe._dict({**draft_doc, "docstatus": 1, "flags": frappe._dict()})
+			with self.assertRaises(Exception):
+				validate_intercompany_document(submit_doc)
+
 	def test_multi_currency_payment_entry_enforces_bank_tmp_and_parity(self):
 		"""Verify Payment Entry replaces invalid Temporary account with Bank TMP account and sets exact FX rates"""
 		from unittest.mock import patch
