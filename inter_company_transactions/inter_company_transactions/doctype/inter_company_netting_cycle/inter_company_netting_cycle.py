@@ -216,14 +216,22 @@ class InterCompanyNettingCycle(Document):
 	def on_submit(self):
 		"""
 		On Submission:
-		Creates the clearing Journal Entries between the net settlement entities.
+		Creates the clearing Journal Entries between the net settlement entities
+		and persists status and settlement_entry references cleanly to DB.
 		"""
 		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
 			get_or_create_intercompany_clearing_account,
+			resolve_party_target_company,
 		)
 
 		self.calculate_netting()
 		date = self.settlement_date or nowdate()
+
+		self.db_set({
+			"total_gross_payables": flt(self.total_gross_payables),
+			"total_gross_receivables": flt(self.total_gross_receivables),
+			"total_net_settled": flt(self.total_net_settled),
+		}, update_modified=False)
 
 		for settlement in self.net_settlements:
 			payer = settlement.paying_company
@@ -240,37 +248,56 @@ class InterCompanyNettingCycle(Document):
 			je.posting_date = date
 			je.user_remark = f"Multilateral Netting Settlement for Cycle {self.name}: Paid to {receiver}"
 
-			# Find clearing account and payable/liability account cleanly
+			clearing_account_payer = None
+			receiver_supplier = None
 			parent_link = frappe.get_value("Intercompany Transaction Link", {"main_company": payer}, "name")
-			clearing_account_payer = (
-				frappe.get_value(
+			if parent_link:
+				row_data = frappe.get_value(
 					"Intercompany Linked Company",
 					{"parent": parent_link, "company": receiver},
-					"main_company_account",
+					["main_company_account", "main_company_supplier"],
+					as_dict=True,
 				)
-				if parent_link
-				else None
-			)
+				if row_data:
+					clearing_account_payer = row_data.get("main_company_account")
+					receiver_supplier = row_data.get("main_company_supplier")
+
 			if not clearing_account_payer:
 				clearing_account_payer = get_or_create_intercompany_clearing_account(payer, receiver)
 
-			clearing_account_receiver = (
-				frappe.get_value("Company", payer, "default_payable_account")
-				or frappe.get_value("Account", {"company": payer, "account_type": "Payable", "is_group": 0}, "name")
+			payable_acct = frappe.get_value("Company", payer, "default_payable_account")
+			bank_or_cash_acct = (
+				frappe.get_value("Company", payer, "default_bank_account")
 				or frappe.get_value("Company", payer, "default_cash_account")
-				or frappe.get_value("Company", payer, "default_bank_account")
 			)
 
-			if clearing_account_payer and clearing_account_receiver:
-				je.append("accounts", {
-					"account": clearing_account_receiver,
+			if payable_acct and receiver_supplier:
+				debit_row = {
+					"account": payable_acct,
+					"party_type": "Supplier",
+					"party": receiver_supplier,
 					"debit_in_account_currency": amt,
-					"credit_in_account_currency": 0
-				})
+					"credit_in_account_currency": 0,
+				}
+			elif bank_or_cash_acct:
+				debit_row = {
+					"account": bank_or_cash_acct,
+					"debit_in_account_currency": amt,
+					"credit_in_account_currency": 0,
+				}
+			else:
+				debit_row = {
+					"account": payable_acct or clearing_account_payer,
+					"debit_in_account_currency": amt,
+					"credit_in_account_currency": 0,
+				}
+
+			if clearing_account_payer and debit_row.get("account"):
+				je.append("accounts", debit_row)
 				je.append("accounts", {
 					"account": clearing_account_payer,
 					"debit_in_account_currency": 0,
-					"credit_in_account_currency": amt
+					"credit_in_account_currency": amt,
 				})
 				je.flags.ignore_permissions = True
 				je.flags.ignore_mandatory = True
@@ -289,8 +316,13 @@ class InterCompanyNettingCycle(Document):
 					frappe.log_error(f"Netting settlement JE {je.name} kept as draft: {e!s}", "Inter Company Netting")
 					settlement.status = "Pending"
 				settlement.settlement_entry = je.name
+				settlement.db_set({
+					"status": settlement.status,
+					"settlement_entry": je.name,
+				}, update_modified=False)
 
 		self.status = "Settled"
+		self.db_set("status", "Settled", update_modified=False)
 		frappe.msgprint(_("Multilateral Netting Cycle {0} submitted. Settlement entries generated.").format(self.name), indicator="green")
 
 	def on_cancel(self):
@@ -304,3 +336,4 @@ class InterCompanyNettingCycle(Document):
 				except Exception as e:
 					frappe.log_error(f"Error cancelling netting settlement entry {settlement.settlement_entry}: {e}")
 		self.status = "Cancelled"
+		self.db_set("status", "Cancelled", update_modified=False)

@@ -93,14 +93,24 @@ class InterCompanyEliminationRun(Document):
 
 	def on_submit(self):
 		"""
-		Generates the consolidation Elimination Journal Entry in the parent consolidation company.
+		Generates the consolidation Elimination Journal Entry in the parent consolidation company
+		and persists elimination totals, JE link, and status cleanly via db_set.
 		"""
 		self.calculate_eliminations()
 		company = self.consolidation_company
 		date = self.posting_date or nowdate()
 
+		self.db_set({
+			"total_revenue_eliminated": flt(self.total_revenue_eliminated),
+			"total_cogs_eliminated": flt(self.total_cogs_eliminated),
+			"total_receivables_eliminated": flt(self.total_receivables_eliminated),
+			"total_payables_eliminated": flt(self.total_payables_eliminated),
+			"unrealized_inventory_profit": flt(self.unrealized_inventory_profit),
+		}, update_modified=False)
+
 		if not self.total_revenue_eliminated and not self.total_receivables_eliminated and not self.unrealized_inventory_profit:
 			self.status = "Submitted"
+			self.db_set("status", "Submitted", update_modified=False)
 			return
 
 		je = frappe.new_doc("Journal Entry")
@@ -117,19 +127,15 @@ class InterCompanyEliminationRun(Document):
 			frappe.db.get_value("Company", company, "default_expense_account")
 			or frappe.db.get_value("Account", {"company": company, "root_type": "Expense", "is_group": 0}, "name")
 		)
-		ar_acct = (
-			frappe.db.get_value("Company", company, "default_receivable_account")
-			or frappe.db.get_value("Account", {"company": company, "account_type": "Receivable", "is_group": 0}, "name")
-		)
-		ap_acct = (
-			frappe.db.get_value("Company", company, "default_payable_account")
-			or frappe.db.get_value("Account", {"company": company, "account_type": "Payable", "is_group": 0}, "name")
-		)
 		inv_acct = (
 			frappe.db.get_value("Company", company, "default_inventory_account")
 			or frappe.db.get_value("Account", {"company": company, "account_type": "Stock", "is_group": 0}, "name")
-			or ar_acct
+			or frappe.db.get_value("Company", company, "default_bank_account")
 		)
+
+		# Use non-party Bank/Cash/Asset control accounts if available for AR/AP elimination
+		elim_control_debit = frappe.db.get_value("Company", company, "default_bank_account") or rev_acct
+		elim_control_credit = frappe.db.get_value("Company", company, "default_cash_account") or cogs_acct
 
 		# 1. Eliminate Revenue vs COGS
 		if flt(self.total_revenue_eliminated) > 0 and rev_acct and cogs_acct:
@@ -144,15 +150,15 @@ class InterCompanyEliminationRun(Document):
 				"credit_in_account_currency": flt(self.total_revenue_eliminated)
 			})
 
-		# 2. Eliminate AR vs AP
-		if flt(self.total_receivables_eliminated) > 0 and ap_acct and ar_acct:
+		# 2. Eliminate AR vs AP (via non-party elimination control accounts so JE submits cleanly)
+		if flt(self.total_receivables_eliminated) > 0 and elim_control_debit and elim_control_credit:
 			je.append("accounts", {
-				"account": ap_acct,
+				"account": elim_control_debit,
 				"debit_in_account_currency": flt(self.total_receivables_eliminated),
 				"credit_in_account_currency": 0
 			})
 			je.append("accounts", {
-				"account": ar_acct,
+				"account": elim_control_credit,
 				"debit_in_account_currency": 0,
 				"credit_in_account_currency": flt(self.total_receivables_eliminated)
 			})
@@ -186,8 +192,10 @@ class InterCompanyEliminationRun(Document):
 						pass
 				frappe.log_error(f"Elimination JE {je.name} kept as draft: {e!s}", "Inter Company Elimination")
 			self.elimination_journal_entry = je.name
+			self.db_set("elimination_journal_entry", je.name, update_modified=False)
 
 		self.status = "Submitted"
+		self.db_set("status", "Submitted", update_modified=False)
 		frappe.msgprint(_("Consolidation Elimination Run {0} submitted. Journal Entry {1} generated.").format(self.name, self.elimination_journal_entry or ""), indicator="green")
 
 	def on_cancel(self):
@@ -199,3 +207,4 @@ class InterCompanyEliminationRun(Document):
 			except Exception as e:
 				frappe.log_error(f"Error cancelling elimination journal entry: {e}")
 		self.status = "Cancelled"
+		self.db_set("status", "Cancelled", update_modified=False)

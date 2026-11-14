@@ -488,7 +488,8 @@ def create_custom_fields():
                         "fieldtype": "Data",
                         "insert_after": "intercompany_target_company",
                         "read_only": 1,
-                        "hidden": 1
+                        "hidden": 1,
+                        "no_copy": 1
                     },
                     {
                         "fieldname": "intercompany_linked_doc_name",
@@ -496,7 +497,8 @@ def create_custom_fields():
                         "fieldtype": "Data",
                         "insert_after": "intercompany_linked_doc_doctype",
                         "read_only": 1,
-                        "hidden": 1
+                        "hidden": 1,
+                        "no_copy": 1
                     },
                     {
                         "fieldname": "intercompany_linked_company",
@@ -506,6 +508,7 @@ def create_custom_fields():
                         "insert_after": "intercompany_linked_doc_name",
                         "read_only": 1,
                         "hidden": 1,
+                        "no_copy": 1,
                         "ignore_user_permissions": 1
                     }
                 ]
@@ -540,6 +543,7 @@ def create_custom_fields():
                             "description": field.get("description", ""),
                             "read_only": field.get("read_only", 0),
                             "hidden": field.get("hidden", 0),
+                            "no_copy": field.get("no_copy", 0),
                             "depends_on": field.get("depends_on", ""),
                             "mandatory_depends_on": field.get("mandatory_depends_on", ""),
                             "read_only_depends_on": field.get("read_only_depends_on", ""),
@@ -555,7 +559,7 @@ def create_custom_fields():
                         # Sync only missing or core structural attributes quietly
                         sync_props = [
                             "label", "fieldtype", "options", "default", "description",
-                            "read_only", "hidden", "depends_on", "mandatory_depends_on",
+                            "read_only", "hidden", "no_copy", "depends_on", "mandatory_depends_on",
                             "read_only_depends_on", "in_list_view", "columns",
                             "in_standard_filter", "fetch_if_empty", "ignore_user_permissions"
                         ]
@@ -725,6 +729,8 @@ def create_sample_data():
                 settings.tolerance_amount = 0.05
             if settings.notify_on_sync_failure is None:
                 settings.notify_on_sync_failure = 1
+            if hasattr(settings, "cancellation_authority") and not settings.cancellation_authority:
+                settings.cancellation_authority = "Source Company Only (Strict Control)"
             settings.save(ignore_permissions=True)
             print("Initialized Inter Company Settings default values")
         frappe.db.commit()

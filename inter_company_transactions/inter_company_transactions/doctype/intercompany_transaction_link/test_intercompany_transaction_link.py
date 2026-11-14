@@ -536,3 +536,407 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 			self.assertEqual(party, "Remote Co A (Internal)")
 			for _dt, flt_dict in queried_filters:
 				self.assertNotIn("is_inter_company", flt_dict)
+
+	def test_tmp_bank_account_scan_create_and_upgrade(self):
+		"""Verify TMP-<ABBR> clearing accounts prefer Bank type and upgrade legacy Temporary accounts"""
+		from unittest.mock import MagicMock, patch
+
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			get_or_create_intercompany_clearing_account,
+		)
+
+		# Case 1: Legacy Temporary account gets upgraded to Bank
+		def mock_get_value_upgrade(dt, filters=None, fieldname=None, as_dict=False, **kwargs):
+			if dt == "Company" and fieldname == "abbr":
+				return "JC" if filters == "John Company" else "MC"
+			if dt == "Account" and isinstance(filters, dict):
+				if filters.get("account_type") == ["in", ["Bank", "Cash"]]:
+					return None
+				if filters.get("account_name") == "TMP-JC":
+					return frappe._dict({"name": "TMP-JC - MC", "account_type": "Temporary"})
+			return None
+
+		with patch.object(frappe.db, "get_value", side_effect=mock_get_value_upgrade), patch.object(
+			frappe.db, "set_value"
+		) as mock_set_value:
+			acc = get_or_create_intercompany_clearing_account("Main Company", "John Company")
+			self.assertEqual(acc, "TMP-JC - MC")
+			mock_set_value.assert_called_once_with("Account", "TMP-JC - MC", "account_type", "Bank")
+
+		# Case 2: No existing account -> auto-creates Bank account named TMP-JC
+		created_docs = []
+
+		def mock_new_account(data):
+			doc = frappe._dict(data)
+			doc.name = f"{data['account_name']} - MC"
+			doc.flags = frappe._dict()
+			doc.insert = MagicMock(side_effect=lambda **kw: created_docs.append(doc))
+			return doc
+
+		def mock_get_value_create(dt, filters=None, fieldname=None, as_dict=False, **kwargs):
+			if dt == "Company" and fieldname == "abbr":
+				return "JC" if filters == "John Company" else "MC"
+			return None
+
+		with patch.object(frappe.db, "get_value", side_effect=mock_get_value_create), patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.get_parent_clearing_account",
+			return_value="Bank Accounts - MC",
+		), patch.object(frappe, "get_doc", side_effect=mock_new_account):
+			acc = get_or_create_intercompany_clearing_account("Main Company", "John Company")
+			self.assertEqual(acc, "TMP-JC - MC")
+			self.assertEqual(len(created_docs), 1)
+			self.assertEqual(created_docs[0].account_type, "Bank")
+			self.assertEqual(created_docs[0].account_name, "TMP-JC")
+
+	def test_scan_linked_company_defaults_pair_matching(self):
+		"""Verify scan_linked_company_defaults auto-populates internal parties and TMP-<ABBR> clearing accounts"""
+		from unittest.mock import patch
+
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			scan_linked_company_defaults,
+		)
+
+		def mock_get_value(dt, filters=None, fieldname=None, **kwargs):
+			if dt == "Company" and fieldname == "abbr":
+				return "MAIN" if filters == "Main Corp" else "JC"
+			return None
+
+		def mock_find_acc(company, sister):
+			return f"TMP-{sister[:2].upper()} - {company[:2].upper()}"
+
+		def mock_sql(query, params=None, as_dict=False, **kwargs):
+			counterparty, party_dt, _owner = params
+			return [frappe._dict({"name": f"{counterparty} ({party_dt})"})]
+
+		with patch.object(frappe.db, "table_exists", return_value=True), patch.object(
+			frappe.db, "sql", side_effect=mock_sql
+		), patch.object(frappe.db, "get_value", side_effect=mock_get_value), patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.find_existing_clearing_account",
+			side_effect=mock_find_acc,
+		), patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.get_intercompany_warehouse",
+			side_effect=lambda c: f"Transit - {c}",
+		):
+			res = scan_linked_company_defaults("Main Corp", "John Co")
+			self.assertEqual(res["main_company_customer"], "John Co (Customer)")
+			self.assertEqual(res["main_company_supplier"], "John Co (Supplier)")
+			self.assertEqual(res["other_company_customer"], "Main Corp (Customer)")
+			self.assertEqual(res["other_company_supplier"], "Main Corp (Supplier)")
+			self.assertEqual(res["main_suggested_tmp"], "TMP-JC")
+			self.assertEqual(res["other_suggested_tmp"], "TMP-MAIN")
+
+	def test_bidirectional_exchange_rate_lookup_and_strict_validation(self):
+		"""Verify inverse 1/275 lookup works cleanly and missing cross-currency rate raises error instead of 1.0 fallback"""
+		from unittest.mock import patch
+
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			lookup_intercompany_exchange_rate,
+			validate_intercompany_cross_currency_rate,
+		)
+
+		# 1. Inverse rate lookup: only USD -> PKR = 275 exists; PKR -> USD must return ~0.003636364
+		def mock_get_all(dt, filters=None, fields=None, **kwargs):
+			if dt == "Currency Exchange" and filters.get("from_currency") == "USD" and filters.get("to_currency") == "PKR":
+				return [{"exchange_rate": 275.0}]
+			return []
+
+		with patch.object(frappe.db, "exists", return_value=True), patch.object(
+			frappe, "get_all", side_effect=mock_get_all
+		):
+			inv_rate = lookup_intercompany_exchange_rate("PKR", "USD", "2026-11-14")
+			self.assertAlmostEqual(inv_rate, 1.0 / 275.0, places=7)
+
+		# 2. Validation throws when PKR company transacts with USD company with no Currency Exchange and no doc rate
+		src_doc = frappe._dict({
+			"doctype": "Sales Order",
+			"name": "SO-001",
+			"company": "Main PKR Co",
+			"is_intercompany": 1,
+			"intercompany_target_company": "John USD Co",
+			"currency": "PKR",
+			"conversion_rate": 1.0,
+			"transaction_date": "2026-11-14",
+		})
+
+		def mock_ccy(dt, name, fieldname=None, **kwargs):
+			if dt == "Company" and fieldname == "default_currency":
+				return "PKR" if name == "Main PKR Co" else "USD"
+			return None
+
+		with patch.object(frappe.db, "get_value", side_effect=mock_ccy), patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.lookup_intercompany_exchange_rate",
+			return_value=None,
+		):
+			with self.assertRaises(Exception):
+				validate_intercompany_cross_currency_rate(src_doc)
+
+		# 3. Validation passes when source document itself specifies conversion_rate = 275 for USD
+		src_doc_with_rate = frappe._dict({
+			"doctype": "Sales Order",
+			"name": "SO-002",
+			"company": "Main PKR Co",
+			"is_intercompany": 1,
+			"intercompany_target_company": "John USD Co",
+			"currency": "USD",
+			"conversion_rate": 275.0,
+			"transaction_date": "2026-11-14",
+		})
+		with patch.object(frappe.db, "get_value", side_effect=mock_ccy), patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.lookup_intercompany_exchange_rate",
+			return_value=None,
+		):
+			validate_intercompany_cross_currency_rate(src_doc_with_rate)
+
+	def test_multi_currency_journal_entry_pkr_usd_parity(self):
+		"""Verify 500 USD @ 275 (137,500 PKR) mirrors cleanly into balanced USD and PKR ledgers"""
+		from unittest.mock import patch
+
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			create_journal_entry,
+		)
+
+		# Case A: Main Co (PKR) debits Supplier 500 USD @ 275 (= 137,500 PKR) -> John Co (USD) gets 500 USD JE
+		src_je_pkr = frappe._dict({
+			"doctype": "Journal Entry",
+			"name": "ACC-JV-2026-0001",
+			"company": "Main PKR Co",
+			"posting_date": "2026-11-14",
+			"total_debit": 137500.0,
+			"total_credit": 137500.0,
+			"accounts": [
+				frappe._dict({
+					"party_type": "Supplier",
+					"party": "John Co (Internal)",
+					"account_currency": "USD",
+					"exchange_rate": 275.0,
+					"debit_in_account_currency": 500.0,
+					"debit": 137500.0,
+					"credit_in_account_currency": 0.0,
+					"credit": 0.0,
+				}),
+			],
+		})
+
+		mapping = frappe._dict({"main_company": "Main PKR Co"})
+		linked_company = frappe._dict({
+			"company": "John USD Co",
+			"other_company_customer": "Main Co (Internal)",
+			"other_company_supplier": "Main Supplier (Internal)",
+			"other_company_account": "TMP-MAIN - JC",
+		})
+
+		fake_je = frappe._dict({"accounts": []})
+		fake_je.doctype = "Journal Entry"
+		fake_je.append = lambda tbl, row: fake_je["accounts"].append(frappe._dict(row))
+		fake_je.flags = frappe._dict()
+
+		def mock_get_value(dt, filters=None, fieldname=None, **kwargs):
+			if dt == "Company" and fieldname == "default_currency":
+				return "PKR" if filters == "Main PKR Co" else "USD"
+			if dt == "Company" and fieldname == "default_receivable_account":
+				return "Debtors - JC"
+			if dt == "Company" and fieldname == "cost_center":
+				return "Main - JC"
+			if dt == "Account" and fieldname == "account_currency":
+				return "USD"
+			return None
+
+		with patch.object(frappe, "new_doc", return_value=fake_je), patch.object(
+			frappe.db, "exists", return_value=True
+		), patch.object(frappe.db, "get_value", side_effect=mock_get_value):
+			res = create_journal_entry(src_je_pkr, mapping, linked_company, "main_to_other")
+			self.assertEqual(res.company, "John USD Co")
+			self.assertEqual(len(res.accounts), 2)
+			total_debit = sum(flt(r.debit) for r in res.accounts)
+			total_credit = sum(flt(r.credit) for r in res.accounts)
+			self.assertEqual(total_debit, 500.0)
+			self.assertEqual(total_credit, 500.0)
+			self.assertEqual(res.accounts[0].party_type, "Customer")
+			self.assertEqual(res.accounts[0].credit, 500.0)
+			self.assertEqual(res.accounts[1].account, "TMP-MAIN - JC")
+			self.assertEqual(res.accounts[1].debit, 500.0)
+
+	def test_multi_currency_payment_entry_enforces_bank_tmp_and_parity(self):
+		"""Verify Payment Entry replaces invalid Temporary account with Bank TMP account and sets exact FX rates"""
+		from unittest.mock import patch
+
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			create_payment_entry,
+		)
+
+		src_pe = frappe._dict({
+			"doctype": "Payment Entry",
+			"name": "ACC-PAY-2026-0001",
+			"company": "Main PKR Co",
+			"posting_date": "2026-11-14",
+			"payment_type": "Pay",
+			"paid_amount": 137500.0,
+			"received_amount": 500.0,
+			"paid_from_account_currency": "PKR",
+			"paid_to_account_currency": "USD",
+			"source_exchange_rate": 1.0,
+			"target_exchange_rate": 275.0,
+		})
+		mapping = frappe._dict({"main_company": "Main PKR Co"})
+		linked_company = frappe._dict({
+			"company": "John USD Co",
+			"other_company_customer": "Main Co (Internal)",
+			"other_company_account": "Legacy Temp - JC",
+		})
+
+		fake_pe = frappe._dict({})
+		fake_pe.doctype = "Payment Entry"
+		fake_pe.flags = frappe._dict()
+
+		def mock_get_value(dt, filters=None, fieldname=None, **kwargs):
+			if dt == "Account" and filters == "Legacy Temp - JC" and fieldname == "account_type":
+				return "Temporary"
+			if dt == "Account" and fieldname == "account_currency":
+				return "USD"
+			if dt == "Company" and fieldname == "default_currency":
+				return "PKR" if filters == "Main PKR Co" else "USD"
+			if dt == "Company" and fieldname == "default_receivable_account":
+				return "Debtors - JC"
+			if dt == "Customer" and fieldname == "customer_name":
+				return "Main Co (Internal)"
+			return None
+
+		with patch.object(frappe, "new_doc", return_value=fake_pe), patch.object(
+			frappe.db, "get_value", side_effect=mock_get_value
+		), patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.get_or_create_intercompany_clearing_account",
+			return_value="TMP-MAIN - JC",
+		):
+			res = create_payment_entry(src_pe, mapping, linked_company, "main_to_other")
+			self.assertEqual(res.company, "John USD Co")
+			self.assertEqual(res.payment_type, "Receive")
+			self.assertEqual(res.paid_to, "TMP-MAIN - JC")
+			self.assertEqual(res.paid_amount, 500.0)
+			self.assertEqual(res.received_amount, 500.0)
+			self.assertEqual(res.source_exchange_rate, 1.0)
+			self.assertEqual(res.target_exchange_rate, 1.0)
+
+	def test_locked_mirrored_fields_enforced_allows_local_warehouse(self):
+		"""Verify mirrored counterpart blocks currency/FX/rate/amount edits but permits local warehouse updates"""
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			validate_locked_mirrored_fields,
+		)
+
+		prev_doc = frappe._dict({
+			"doctype": "Purchase Invoice",
+			"name": "PINV-001",
+			"company": "John USD Co",
+			"currency": "USD",
+			"conversion_rate": 1.0,
+			"supplier": "Main Supplier",
+			"is_intercompany": 1,
+			"intercompany_target_company": "Main PKR Co",
+			"intercompany_linked_doc_doctype": "Sales Invoice",
+			"intercompany_linked_doc_name": "SINV-001",
+			"intercompany_linked_company": "Main PKR Co",
+			"items": [
+				frappe._dict({
+					"item_code": "WIDGET-01",
+					"uom": "Nos",
+					"qty": 5.0,
+					"rate": 100.0,
+					"amount": 500.0,
+					"warehouse": "Stores - JC",
+					"cost_center": "Main - JC",
+				})
+			],
+		})
+
+		# Safe edit: only warehouse changed -> must pass without exception
+		safe_doc = frappe._dict({
+			**prev_doc,
+			"flags": frappe._dict(),
+			"items": [
+				frappe._dict({
+					"item_code": "WIDGET-01",
+					"uom": "Nos",
+					"qty": 5.0,
+					"rate": 100.0,
+					"amount": 500.0,
+					"warehouse": "Finished Goods - JC",
+					"cost_center": "Sales - JC",
+				})
+			],
+		})
+		validate_locked_mirrored_fields(safe_doc, previous=prev_doc)
+
+		# Illegal edit: conversion_rate or item rate tampered -> must throw
+		tampered_doc = frappe._dict({
+			**prev_doc,
+			"conversion_rate": 2.5,
+			"flags": frappe._dict(),
+			"items": [frappe._dict(prev_doc["items"][0])],
+		})
+		with self.assertRaises(Exception):
+			validate_locked_mirrored_fields(tampered_doc, previous=prev_doc)
+
+	def test_cancellation_authority_strict_vs_bidirectional(self):
+		"""Verify Target-side cancellation is blocked under Source Company Only and permitted under Bidirectional"""
+		from unittest.mock import patch
+
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			validate_intercompany_cancellation,
+		)
+
+		target_doc = frappe._dict({
+			"doctype": "Purchase Invoice",
+			"name": "PINV-001",
+			"company": "John USD Co",
+			"is_intercompany": 1,
+			"intercompany_target_company": "Main PKR Co",
+			"intercompany_linked_doc_doctype": "Sales Invoice",
+			"intercompany_linked_doc_name": "SINV-001",
+			"intercompany_linked_company": "Main PKR Co",
+			"flags": frappe._dict(),
+		})
+
+		# Strict mode -> must throw on mirrored counterpart
+		with patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link._get_intercompany_settings",
+			return_value={"cancellation_authority": "Source Company Only (Strict Control)"},
+		):
+			with self.assertRaises(Exception):
+				validate_intercompany_cancellation(target_doc)
+
+		# Bidirectional mode -> allowed to proceed when no downstream blockers exist
+		with patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link._get_intercompany_settings",
+			return_value={"cancellation_authority": "Bidirectional (Either Side Cancels Both)"},
+		), patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.get_linked_counterpart_documents",
+			return_value=[],
+		):
+			validate_intercompany_cancellation(target_doc)
+
+	def test_cleanup_intercompany_links_on_trash(self):
+		"""Verify deleting a voucher purges orphan Inter Company Document Reference & Error Log rows"""
+		from unittest.mock import patch
+
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			cleanup_intercompany_links_on_trash,
+		)
+
+		doc = frappe._dict({"doctype": "Sales Order", "name": "SO-DEL-001"})
+		deleted = []
+
+		def mock_sql(query, params=None, pluck=False, **kwargs):
+			if "Inter Company Document Reference" in query:
+				return ["ICDR-0001"]
+			if "Inter Company Error Log" in query:
+				return ["ICEL-0001"]
+			return []
+
+		with patch.object(frappe.db, "exists", return_value=True), patch.object(
+			frappe.db, "sql", side_effect=mock_sql
+		), patch.object(
+			frappe, "delete_doc", side_effect=lambda dt, name, **kw: deleted.append((dt, name))
+		):
+			cleanup_intercompany_links_on_trash(doc)
+			self.assertIn(("Inter Company Document Reference", "ICDR-0001"), deleted)
+			self.assertIn(("Inter Company Error Log", "ICEL-0001"), deleted)
+

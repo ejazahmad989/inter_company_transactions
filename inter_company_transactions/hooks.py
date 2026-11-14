@@ -47,87 +47,113 @@ before_uninstall = "inter_company_transactions.uninstall.before_uninstall"
 after_uninstall = "inter_company_transactions.uninstall.after_uninstall"
 
 
+# Ignore audit/log references when deleting cancelled or draft vouchers
+ignore_links_on_delete = [
+    "Inter Company Document Reference",
+    "Inter Company Error Log",
+]
+
 # Document Events for Inter-Company Transactions
+_ICT_BASE = "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link"
+
 doc_events = {
     "Sales Order": {
-        "validate": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.auto_detect_intercompany_party",
-        "on_submit": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
-        "before_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_cancellation",
-        "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents"
+        "validate": f"{_ICT_BASE}.validate_intercompany_document",
+        "on_submit": f"{_ICT_BASE}.create_linked_documents",
+        "before_cancel": f"{_ICT_BASE}.validate_intercompany_cancellation",
+        "on_cancel": f"{_ICT_BASE}.cancel_linked_documents",
+        "on_trash": f"{_ICT_BASE}.cleanup_intercompany_links_on_trash",
     },
     "Purchase Order": {
-        "validate": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.auto_detect_intercompany_party",
-        "on_submit": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
-        "before_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_cancellation",
-        "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents"
+        "validate": f"{_ICT_BASE}.validate_intercompany_document",
+        "on_submit": f"{_ICT_BASE}.create_linked_documents",
+        "before_cancel": f"{_ICT_BASE}.validate_intercompany_cancellation",
+        "on_cancel": f"{_ICT_BASE}.cancel_linked_documents",
+        "on_trash": f"{_ICT_BASE}.cleanup_intercompany_links_on_trash",
     },
     "Sales Invoice": {
-        "validate": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.auto_detect_intercompany_party",
-        "on_submit": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
-        "before_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_cancellation",
-        "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents"
+        "validate": f"{_ICT_BASE}.validate_intercompany_document",
+        "on_submit": f"{_ICT_BASE}.create_linked_documents",
+        "before_cancel": f"{_ICT_BASE}.validate_intercompany_cancellation",
+        "on_cancel": f"{_ICT_BASE}.cancel_linked_documents",
+        "on_trash": f"{_ICT_BASE}.cleanup_intercompany_links_on_trash",
     },
     "Purchase Invoice": {
-        "validate": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.auto_detect_intercompany_party",
-        "on_submit": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
-        "before_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_cancellation",
-        "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents"
+        "validate": f"{_ICT_BASE}.validate_intercompany_document",
+        "on_submit": f"{_ICT_BASE}.create_linked_documents",
+        "before_cancel": f"{_ICT_BASE}.validate_intercompany_cancellation",
+        "on_cancel": f"{_ICT_BASE}.cancel_linked_documents",
+        "on_trash": f"{_ICT_BASE}.cleanup_intercompany_links_on_trash",
     },
     "Delivery Note": {
-        "validate": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.auto_detect_intercompany_party",
-        "on_submit": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
-        "before_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_cancellation",
-        "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents"
+        "validate": f"{_ICT_BASE}.validate_intercompany_document",
+        "on_submit": f"{_ICT_BASE}.create_linked_documents",
+        "before_cancel": f"{_ICT_BASE}.validate_intercompany_cancellation",
+        "on_cancel": f"{_ICT_BASE}.cancel_linked_documents",
+        "on_trash": f"{_ICT_BASE}.cleanup_intercompany_links_on_trash",
     },
     "Purchase Receipt": {
-        "validate": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.auto_detect_intercompany_party",
-        "on_submit": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
-        "before_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_cancellation",
-        "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents"
+        "validate": f"{_ICT_BASE}.validate_intercompany_document",
+        "on_submit": f"{_ICT_BASE}.create_linked_documents",
+        "before_cancel": f"{_ICT_BASE}.validate_intercompany_cancellation",
+        "on_cancel": f"{_ICT_BASE}.cancel_linked_documents",
+        "on_trash": f"{_ICT_BASE}.cleanup_intercompany_links_on_trash",
     },
     "Material Request": {
-        "on_submit": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
-        "before_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_cancellation",
-        "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents"
+        "validate": f"{_ICT_BASE}.validate_intercompany_document",
+        "on_submit": f"{_ICT_BASE}.create_linked_documents",
+        "before_cancel": f"{_ICT_BASE}.validate_intercompany_cancellation",
+        "on_cancel": f"{_ICT_BASE}.cancel_linked_documents",
+        "on_trash": f"{_ICT_BASE}.cleanup_intercompany_links_on_trash",
     },
     "Stock Entry": {
-        "validate": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.sanitize_intercompany_stock_entry",
-        "on_submit": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
-        "before_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_cancellation",
-        "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents"
+        "validate": f"{_ICT_BASE}.validate_intercompany_document",
+        "on_submit": f"{_ICT_BASE}.create_linked_documents",
+        "before_cancel": f"{_ICT_BASE}.validate_intercompany_cancellation",
+        "on_cancel": f"{_ICT_BASE}.cancel_linked_documents",
+        "on_trash": f"{_ICT_BASE}.cleanup_intercompany_links_on_trash",
     },
     "Journal Entry": {
-        "validate": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.auto_detect_intercompany_party",
-        "on_submit": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
-        "before_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_cancellation",
-        "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents"
+        "validate": f"{_ICT_BASE}.validate_intercompany_document",
+        "on_submit": f"{_ICT_BASE}.create_linked_documents",
+        "before_cancel": f"{_ICT_BASE}.validate_intercompany_cancellation",
+        "on_cancel": f"{_ICT_BASE}.cancel_linked_documents",
+        "on_trash": f"{_ICT_BASE}.cleanup_intercompany_links_on_trash",
     },
     "Payment Entry": {
-        "validate": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.auto_detect_intercompany_party",
-        "on_submit": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
-        "before_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_cancellation",
-        "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents"
+        "validate": f"{_ICT_BASE}.validate_intercompany_document",
+        "on_submit": f"{_ICT_BASE}.create_linked_documents",
+        "before_cancel": f"{_ICT_BASE}.validate_intercompany_cancellation",
+        "on_cancel": f"{_ICT_BASE}.cancel_linked_documents",
+        "on_trash": f"{_ICT_BASE}.cleanup_intercompany_links_on_trash",
     },
     "Quotation": {
-        "validate": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.auto_detect_intercompany_party",
-        "on_submit": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
-        "before_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_cancellation",
-        "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents"
+        "validate": f"{_ICT_BASE}.validate_intercompany_document",
+        "on_submit": f"{_ICT_BASE}.create_linked_documents",
+        "before_cancel": f"{_ICT_BASE}.validate_intercompany_cancellation",
+        "on_cancel": f"{_ICT_BASE}.cancel_linked_documents",
+        "on_trash": f"{_ICT_BASE}.cleanup_intercompany_links_on_trash",
     },
     "Supplier Quotation": {
-        "validate": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.auto_detect_intercompany_party",
-        "on_submit": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
-        "before_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_cancellation",
-        "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents"
+        "validate": f"{_ICT_BASE}.validate_intercompany_document",
+        "on_submit": f"{_ICT_BASE}.create_linked_documents",
+        "before_cancel": f"{_ICT_BASE}.validate_intercompany_cancellation",
+        "on_cancel": f"{_ICT_BASE}.cancel_linked_documents",
+        "on_trash": f"{_ICT_BASE}.cleanup_intercompany_links_on_trash",
     },
     "Request for Quotation": {
-        "on_submit": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
-        "before_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_cancellation",
-        "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents"
+        "validate": f"{_ICT_BASE}.validate_intercompany_document",
+        "on_submit": f"{_ICT_BASE}.create_linked_documents",
+        "before_cancel": f"{_ICT_BASE}.validate_intercompany_cancellation",
+        "on_cancel": f"{_ICT_BASE}.cancel_linked_documents",
+        "on_trash": f"{_ICT_BASE}.cleanup_intercompany_links_on_trash",
     },
     "Landed Cost Voucher": {
-        "on_submit": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.create_linked_documents",
-        "before_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.validate_intercompany_cancellation",
-        "on_cancel": "inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cancel_linked_documents"
+        "validate": f"{_ICT_BASE}.validate_intercompany_document",
+        "on_submit": f"{_ICT_BASE}.create_linked_documents",
+        "before_cancel": f"{_ICT_BASE}.validate_intercompany_cancellation",
+        "on_cancel": f"{_ICT_BASE}.cancel_linked_documents",
+        "on_trash": f"{_ICT_BASE}.cleanup_intercompany_links_on_trash",
     }
 }
+

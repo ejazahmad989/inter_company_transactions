@@ -8,6 +8,7 @@
     "section_break_execution",
     "execution_mode",
     "auto_submit_target_doc",
+    "cancellation_authority",
     "logging_level",
     "section_break_items_tax",
     "auto_create_missing_items",
@@ -45,6 +46,14 @@
       "fieldtype": "Check",
       "label": "Auto-Submit Target Document When Feasible",
       "description": "If enabled, creates target document directly in Submitted status when all dependencies are satisfied"
+    },
+    {
+      "default": "Source Company Only (Strict Control)",
+      "fieldname": "cancellation_authority",
+      "fieldtype": "Select",
+      "label": "Cancellation Authority",
+      "options": "Source Company Only (Strict Control)\nBidirectional (Either Side Cancels Both)",
+      "description": "Controls whether only the originating source company can cancel a linked pair atomically or either side can cancel both together."
     },
     {
       "default": "Info",

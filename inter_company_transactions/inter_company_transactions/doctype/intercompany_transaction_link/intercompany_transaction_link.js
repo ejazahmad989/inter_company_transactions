@@ -3,19 +3,116 @@
 
 frappe.ui.form.on('Intercompany Transaction Link', {
 	setup: function(frm) {
-		// Filter main company customer and supplier to only show parties belonging to or representing the main company
-		frm.set_query('main_company_customer', function() {
+		const PARTY_QUERY = 'inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.intercompany_party_query';
+		const ACCOUNT_QUERY = 'inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.intercompany_account_query';
+
+		// Prevent picking Main Company inside linked_companies grid
+		frm.set_query('company', 'linked_companies', function(doc) {
 			return {
+				filters: doc.main_company ? [['Company', 'name', '!=', doc.main_company]] : []
+			};
+		});
+
+		// Main Company Settings (parties representing the sister company; accounts & warehouses belonging to main company)
+		frm.set_query('main_company_customer', 'linked_companies', function(doc, cdt, cdn) {
+			let row = locals[cdt] && locals[cdt][cdn];
+			if (!doc.main_company || !row || !row.company) {
+				return { filters: { name: ['=', ''] } };
+			}
+			return {
+				query: PARTY_QUERY,
 				filters: {
-					disabled: 0
+					company: doc.main_company,
+					represents_company: row.company
 				}
 			};
 		});
 
-		frm.set_query('main_company_supplier', function() {
+		frm.set_query('main_company_supplier', 'linked_companies', function(doc, cdt, cdn) {
+			let row = locals[cdt] && locals[cdt][cdn];
+			if (!doc.main_company || !row || !row.company) {
+				return { filters: { name: ['=', ''] } };
+			}
+			return {
+				query: PARTY_QUERY,
+				filters: {
+					company: doc.main_company,
+					represents_company: row.company
+				}
+			};
+		});
+
+		frm.set_query('main_company_account', 'linked_companies', function(doc) {
+			if (!doc.main_company) {
+				return { filters: { name: ['=', ''] } };
+			}
+			return {
+				query: ACCOUNT_QUERY,
+				filters: { company: doc.main_company }
+			};
+		});
+
+		frm.set_query('main_company_warehouse', 'linked_companies', function(doc) {
+			if (!doc.main_company) {
+				return { filters: { name: ['=', ''] } };
+			}
 			return {
 				filters: {
-					disabled: 0
+					company: doc.main_company,
+					is_group: 0
+				}
+			};
+		});
+
+		// Other Company Settings (parties representing main company; accounts & warehouses belonging to sister company)
+		frm.set_query('other_company_customer', 'linked_companies', function(doc, cdt, cdn) {
+			let row = locals[cdt] && locals[cdt][cdn];
+			if (!doc.main_company || !row || !row.company) {
+				return { filters: { name: ['=', ''] } };
+			}
+			return {
+				query: PARTY_QUERY,
+				filters: {
+					company: row.company,
+					represents_company: doc.main_company
+				}
+			};
+		});
+
+		frm.set_query('other_company_supplier', 'linked_companies', function(doc, cdt, cdn) {
+			let row = locals[cdt] && locals[cdt][cdn];
+			if (!doc.main_company || !row || !row.company) {
+				return { filters: { name: ['=', ''] } };
+			}
+			return {
+				query: PARTY_QUERY,
+				filters: {
+					company: row.company,
+					represents_company: doc.main_company
+				}
+			};
+		});
+
+		frm.set_query('other_company_account', 'linked_companies', function(doc, cdt, cdn) {
+			let row = locals[cdt] && locals[cdt][cdn];
+			if (!row || !row.company) {
+				return { filters: { name: ['=', ''] } };
+			}
+			return {
+				query: ACCOUNT_QUERY,
+				filters: { company: row.company }
+			};
+		});
+
+		frm.set_query('other_company_warehouse', 'linked_companies', function(doc, cdt, cdn) {
+			let row = locals[cdt] && locals[cdt][cdn];
+			if (!row || !row.company) {
+				return { filters: { name: ['=', ''] } };
+			}
+			return {
+				filters: {
+					company: row.company,
+					is_group: 0
 				}
 			};
 		});
@@ -59,22 +156,24 @@ frappe.ui.form.on('Intercompany Transaction Link', {
 				});
 			}, __('Actions'));
 
-			// 1-Click Button to auto-create & link GAAP/IFRS compliant Intercompany Clearing Accounts
+			// 1-Click Button to scan Chart of Accounts and auto-create Bank-typed TMP-<ABBR> Clearing Accounts
 			let all_accounts_configured = (frm.doc.linked_companies || []).length > 0 &&
 				(frm.doc.linked_companies || []).every(r => r.main_company_account && r.other_company_account);
 
-			let account_btn_label = all_accounts_configured ? __('Bridge Accounts Configured ✓') : __('Auto-Setup Bridge Accounts');
+			let account_btn_label = all_accounts_configured
+				? __('Verify / Sync TMP Bank Accounts')
+				: __('Auto-Setup TMP Bank Accounts');
 			let account_btn = frm.add_custom_button(account_btn_label, function() {
 				frappe.call({
 					doc: frm.doc,
 					method: 'auto_create_intercompany_accounts',
 					freeze: true,
-					freeze_message: __('Configuring Intercompany Clearing Accounts in Chart of Accounts...'),
+					freeze_message: __('Scanning Chart of Accounts & configuring Bank TMP-<ABBR> Clearing Accounts...'),
 					callback: function(r) {
 						if (!r.exc && r.message) {
 							frm.reload_doc();
 							frappe.show_alert({
-								message: r.message.message || __('Intercompany Clearing Accounts verified and linked.'),
+								message: r.message.message || __('Intercompany Bank TMP Clearing Accounts verified and linked.'),
 								indicator: 'green'
 							});
 						}
@@ -82,11 +181,7 @@ frappe.ui.form.on('Intercompany Transaction Link', {
 				});
 			}, __('Actions'));
 
-			if (all_accounts_configured) {
-				account_btn.addClass('text-success');
-				account_btn.prop('disabled', true);
-				account_btn.attr('title', __('All intercompany clearing / bridge accounts are already configured and active in Chart of Accounts.'));
-			} else {
+			if (!all_accounts_configured) {
 				account_btn.addClass('btn-primary font-weight-bold');
 			}
 
@@ -111,10 +206,68 @@ frappe.ui.form.on('Intercompany Transaction Link', {
 	}
 });
 
-// Real-time synchronization of sister_company field when linked companies table changes
+// Real-time synchronization & smart CoA/party scan when linked companies table changes
 frappe.ui.form.on('Intercompany Linked Company', {
 	company: function(frm, cdt, cdn) {
 		update_sister_company_field(frm);
+		let row = locals[cdt] && locals[cdt][cdn];
+		if (!row || !row.company || !frm.doc.main_company || row.company === frm.doc.main_company) {
+			return;
+		}
+		frappe.call({
+			method: 'inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.scan_linked_company_defaults',
+			args: {
+				main_company: frm.doc.main_company,
+				other_company: row.company
+			},
+			callback: function(r) {
+				if (!r || !r.message) return;
+				let d = r.message;
+				const auto_fields = [
+					'main_company_customer',
+					'main_company_supplier',
+					'main_company_account',
+					'main_company_warehouse',
+					'other_company_customer',
+					'other_company_supplier',
+					'other_company_account',
+					'other_company_warehouse'
+				];
+				let filled = 0;
+				auto_fields.forEach(fn => {
+					if (!row[fn] && d[fn]) {
+						frappe.model.set_value(cdt, cdn, fn, d[fn]);
+						filled++;
+					}
+				});
+
+				let missing_tmp = [];
+				if (!d.main_company_account && !row.main_company_account && d.main_suggested_tmp) {
+					missing_tmp.push(`${d.main_suggested_tmp} (${frm.doc.main_company})`);
+				}
+				if (!d.other_company_account && !row.other_company_account && d.other_suggested_tmp) {
+					missing_tmp.push(`${d.other_suggested_tmp} (${row.company})`);
+				}
+
+				if (missing_tmp.length > 0) {
+					frappe.show_alert({
+						message: __('Chart of Accounts scan complete ({0} auto-filled). Click Save then Actions -> Auto-Setup TMP Bank Accounts to create: {1}', [
+							filled,
+							frappe.utils.escape_html(missing_tmp.join(', '))
+						]),
+						indicator: 'blue'
+					}, 7);
+				} else if (filled > 0) {
+					frappe.show_alert({
+						message: __('Auto-matched {0} existing party/account/warehouse field(s) for {1}.', [
+							filled,
+							frappe.utils.escape_html(row.company)
+						]),
+						indicator: 'green'
+					});
+				}
+			}
+		});
 	},
 	linked_companies_remove: function(frm) {
 		update_sister_company_field(frm);

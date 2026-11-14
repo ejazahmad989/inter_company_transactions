@@ -150,9 +150,10 @@ class IntercompanyTransactionLink(Document):
     @frappe.whitelist()
     def auto_create_intercompany_accounts(self):
         """
-        Auto-provisions GAAP/IFRS-compliant Intercompany Clearing accounts in the Chart of Accounts
-        for both Main Company and all Linked Companies.
-        Automatically links them to main_company_account and other_company_account.
+        Scans Chart of Accounts and auto-provisions Bank-typed TMP-<ABBR>
+        Intercompany Clearing accounts for both Main Company and all Linked Companies.
+        Also upgrades/replaces any legacy Temporary clearing account with a Bank account
+        so Payment Entry and Journal Entry both work cleanly.
         """
         self.check_permission("write")
         created_count = 0
@@ -162,21 +163,37 @@ class IntercompanyTransactionLink(Document):
             if not row.company:
                 continue
 
-            # 1. Ensure Main Company has clearing account for this sister company
-            if not row.main_company_account:
+            # 1. Ensure Main Company has Bank/Cash TMP clearing account for this sister company
+            main_acc = row.main_company_account
+            main_acc_type = (
+                frappe.db.get_value("Account", main_acc, "account_type")
+                if main_acc and hasattr(frappe, "db") and frappe.db
+                else None
+            )
+            if not main_acc or main_acc_type not in ("Bank", "Cash"):
                 acc = get_or_create_intercompany_clearing_account(self.main_company, row.company)
-                if acc:
+                if acc and acc != main_acc:
                     row.main_company_account = acc
                     created_count += 1
+                elif acc:
+                    linked_count += 1
             else:
                 linked_count += 1
 
-            # 2. Ensure Sister Company has clearing account for main company
-            if not row.other_company_account:
+            # 2. Ensure Sister Company has Bank/Cash TMP clearing account for main company
+            other_acc = row.other_company_account
+            other_acc_type = (
+                frappe.db.get_value("Account", other_acc, "account_type")
+                if other_acc and hasattr(frappe, "db") and frappe.db
+                else None
+            )
+            if not other_acc or other_acc_type not in ("Bank", "Cash"):
                 acc = get_or_create_intercompany_clearing_account(row.company, self.main_company)
-                if acc:
+                if acc and acc != other_acc:
                     row.other_company_account = acc
                     created_count += 1
+                elif acc:
+                    linked_count += 1
             else:
                 linked_count += 1
 
@@ -186,7 +203,7 @@ class IntercompanyTransactionLink(Document):
         return {
             "created": created_count,
             "already_configured": linked_count,
-            "message": _("Configured {0} clearing account(s) ({1} verified).").format(created_count, linked_count),
+            "message": _("Configured {0} Bank TMP clearing account(s) ({1} verified).").format(created_count, linked_count),
         }
 
 
@@ -201,6 +218,7 @@ def _get_intercompany_settings():
         "default_transfer_pricing_rule": "Source Document Rate",
         "markup_percentage": 0.0,
         "notify_on_sync_failure": 1,
+        "cancellation_authority": "Source Company Only (Strict Control)",
     }
     try:
         if hasattr(frappe, "db") and frappe.db and frappe.db.exists("DocType", "Inter Company Settings"):
@@ -360,8 +378,9 @@ def create_linked_documents(doc, method=None):
             linked_doc = create_corresponding_document(doc, mapping, direction, settings=settings)
 
             if linked_doc:
-                # Ensure correct target company
+                # Ensure correct target company and immutable counterpart markers
                 linked_doc.company = target_comp
+                linked_doc.is_intercompany = 1
                 linked_doc.intercompany_linked_doc_doctype = doc.doctype
                 linked_doc.intercompany_linked_doc_name = doc.name
                 linked_doc.intercompany_linked_company = doc.company
@@ -382,6 +401,7 @@ def create_linked_documents(doc, method=None):
 
                 linked_doc.flags.ignore_permissions = True
                 linked_doc.flags.ignore_mandatory = True
+                linked_doc.flags.ict_system_sync = True
                 linked_doc.insert(ignore_permissions=True, ignore_mandatory=True)
 
                 created_targets.add(dedup_key)
@@ -396,6 +416,7 @@ def create_linked_documents(doc, method=None):
                         if hasattr(frappe.db, "savepoint"):
                             frappe.db.savepoint("ict_auto_submit")
                         linked_doc.flags.ignore_permissions = True
+                        linked_doc.flags.ict_system_sync = True
                         linked_doc.submit()
                         status_label = "submitted"
                     except Exception as sub_err:
@@ -629,9 +650,10 @@ def check_active_downstream_transactions(doctype, docname, company):
 
 def validate_intercompany_cancellation(doc, method=None):
     """
-    Validates before cancellation that neither this document nor any linked
-    intercompany counterpart documents have active payments or downstream transactions.
-    If active transactions exist, cancellation is blocked with clear, actionable instructions.
+    Validates before cancellation:
+    1. Enforces Cancellation Authority (Source Company Only vs Bidirectional).
+    2. Ensures neither this document nor linked counterpart documents have active downstream
+       payments, deliveries, receipts, or invoices.
     """
     if not hasattr(doc, "company") or not doc.company:
         return
@@ -642,6 +664,58 @@ def validate_intercompany_cancellation(doc, method=None):
 
     if doc.flags.get("intercompany_auto_cancel"):
         return
+
+    # Enforce configurable Cancellation Authority
+    settings = _get_intercompany_settings()
+    authority = (settings.get("cancellation_authority") or "Source Company Only (Strict Control)").strip()
+    if authority.startswith("Source Company Only"):
+        is_target_counterpart = bool(doc.get("intercompany_linked_doc_name"))
+        source_info = None
+        if is_target_counterpart:
+            source_info = {
+                "doctype": doc.get("intercompany_linked_doc_doctype") or "",
+                "name": doc.get("intercompany_linked_doc_name") or "",
+                "company": doc.get("intercompany_linked_company") or doc.get("intercompany_target_company") or "",
+            }
+        elif hasattr(frappe, "db") and frappe.db and frappe.db.exists("DocType", "Inter Company Document Reference"):
+            ref = frappe.db.get_value(
+                "Inter Company Document Reference",
+                {"target_doctype": doc.doctype, "target_name": doc.name, "target_company": doc.company},
+                ["source_doctype", "source_name", "source_company"],
+                as_dict=True,
+            )
+            if ref:
+                is_target_counterpart = True
+                source_info = {
+                    "doctype": ref.source_doctype,
+                    "name": ref.source_name,
+                    "company": ref.source_company,
+                }
+
+        if is_target_counterpart and source_info:
+            esc = frappe.utils.escape_html
+            frappe.throw(
+                _(
+                    "<div style='font-size: 13px; line-height: 1.6;'>"
+                    "<h4><b>Cancellation Restricted to Source Company</b></h4>"
+                    "<b>{0} {1}</b> in company <b>{2}</b> is a mirrored inter-company entry "
+                    "generated from <b>{3} {4}</b> in company <b>{5}</b>.<br><br>"
+                    "Under current <b>Inter Company Settings</b> (<i>Source Company Only</i>), "
+                    "only the originating company (<b>{5}</b>) can cancel or amend this transaction pair "
+                    "so both ledgers remain 100% tallied.<br><br>"
+                    "<b>Required Action:</b> Please contact the accounting team in <b>{5}</b> "
+                    "to cancel <b>{3} {4}</b>, which will automatically cancel this entry."
+                    "</div>"
+                ).format(
+                    esc(doc.doctype),
+                    esc(doc.name),
+                    esc(doc.company),
+                    esc(source_info.get("doctype") or ""),
+                    esc(source_info.get("name") or ""),
+                    esc(source_info.get("company") or _("Source Company")),
+                ),
+                title=_("Source Company Cancellation Authority"),
+            )
 
     # Check counterpart documents
     counterparts = get_linked_counterpart_documents(doc)
@@ -772,6 +846,57 @@ def cancel_linked_documents(doc, method=None):
                 ).format(doctype, docname, company or getattr(target_doc, 'company', ''), str(e), doc.doctype, doc.name),
                 title=_("Inter-Company Cancellation Aborted")
             )
+
+
+def cleanup_intercompany_links_on_trash(doc, method=None):
+    """
+    Hooked on on_trash across supported transaction DocTypes.
+    Prevents LinkExistsError ('Cannot delete or cancel because ... is linked with Inter Company Document Reference')
+    by purging audit tracking rows when a cancelled or draft voucher is permanently deleted.
+    """
+    if not hasattr(doc, "doctype") or not getattr(doc, "name", None):
+        return
+    if not (hasattr(frappe, "db") and frappe.db):
+        return
+
+    try:
+        if frappe.db.exists("DocType", "Inter Company Document Reference"):
+            ref_names = frappe.db.sql(
+                """
+                SELECT name FROM `tabInter Company Document Reference`
+                WHERE (source_doctype = %s AND source_name = %s)
+                   OR (target_doctype = %s AND target_name = %s)
+                """,
+                (doc.doctype, doc.name, doc.doctype, doc.name),
+                pluck=True,
+            )
+            for ref_name in (ref_names or []):
+                frappe.delete_doc(
+                    "Inter Company Document Reference",
+                    ref_name,
+                    ignore_permissions=True,
+                    force=True,
+                )
+
+        if frappe.db.exists("DocType", "Inter Company Error Log"):
+            err_names = frappe.db.sql(
+                """
+                SELECT name FROM `tabInter Company Error Log`
+                WHERE (source_doctype = %s AND source_name = %s)
+                   OR (target_doctype = %s AND target_name = %s)
+                """,
+                (doc.doctype, doc.name, doc.doctype, doc.name),
+                pluck=True,
+            )
+            for err_name in (err_names or []):
+                frappe.delete_doc(
+                    "Inter Company Error Log",
+                    err_name,
+                    ignore_permissions=True,
+                    force=True,
+                )
+    except Exception as e:
+        frappe.logger().warning(f"Non-fatal cleanup warning on trash for {doc.doctype} {doc.name}: {e!s}")
 
 
 def find_applicable_mappings(doc):
@@ -1015,25 +1140,48 @@ def validate_intercompany_items(doc, mapping):
 
 def get_parent_clearing_account(company):
     """
-    Finds the appropriate parent account for an Intercompany Clearing account
-    under Current Assets for the given company.
+    Finds the appropriate parent group account for an Intercompany TMP Clearing account
+    under Bank Accounts -> Current Assets -> Asset for the given company.
     """
-    if not company:
+    if not company or not (hasattr(frappe, "db") and frappe.db):
         return None
 
-    # 1. Look for 'Current Assets' group account in this company
+    # 1. Prefer 'Bank Accounts' group under Asset so child Bank accounts align with ERPNext CoA
     parent = frappe.db.get_value(
         "Account",
         {
             "company": company,
             "is_group": 1,
             "root_type": "Asset",
-            "account_name": ["in", ["Current Assets", "Current Asset"]],
+            "account_name": ["in", ["Bank Accounts", "Bank Account"]],
         },
         "name",
     )
     if not parent:
-        # Try finding any group account containing 'Current Asset'
+        parent = frappe.db.get_value(
+            "Account",
+            {
+                "company": company,
+                "is_group": 1,
+                "root_type": "Asset",
+                "account_name": ["like", "%Bank%"],
+            },
+            "name",
+        )
+
+    # 2. Fallback to 'Current Assets' group
+    if not parent:
+        parent = frappe.db.get_value(
+            "Account",
+            {
+                "company": company,
+                "is_group": 1,
+                "root_type": "Asset",
+                "account_name": ["in", ["Current Assets", "Current Asset"]],
+            },
+            "name",
+        )
+    if not parent:
         parent = frappe.db.get_value(
             "Account",
             {
@@ -1044,8 +1192,9 @@ def get_parent_clearing_account(company):
             },
             "name",
         )
+
+    # 3. Final fallback to any non-root Asset group account
     if not parent:
-        # Fallback to any group Asset account that is not root
         parent = frappe.db.get_value(
             "Account",
             {
@@ -1059,57 +1208,116 @@ def get_parent_clearing_account(company):
     return parent
 
 
-def get_or_create_intercompany_clearing_account(company, sister_company):
-    """
-    Finds or creates an IFRS/GAAP-compliant Intercompany Clearing / Bridge account
-    under Current Assets for the given company.
-    """
+def _get_company_abbr_token(company):
+    """Return company abbr (preferred) or sanitized uppercase token for TMP-<ABBR> naming."""
     if not company:
+        return "IC"
+    abbr = None
+    if hasattr(frappe, "db") and frappe.db:
+        try:
+            abbr = frappe.db.get_value("Company", company, "abbr")
+        except Exception:
+            abbr = None
+    if abbr and str(abbr).strip():
+        return str(abbr).strip()
+    import re
+    cleaned = re.sub(r"[^A-Za-z0-9]+", "", str(company)).upper()
+    return (cleaned[:6] or "IC")
+
+
+def find_existing_clearing_account(company, sister_company=None):
+    """
+    Scans the Chart of Accounts of `company` for an existing Bank/Cash intercompany
+    clearing account mapped to `sister_company` (preferring TMP-<ABBR> naming).
+    Only returns Bank or Cash accounts so Payment Entry and Journal Entry both succeed.
+    """
+    if not company or not (hasattr(frappe, "db") and frappe.db):
         return None
 
     sister_clean = (sister_company or "").strip()
+    sister_abbr = _get_company_abbr_token(sister_clean) if sister_clean else None
 
-    # 1. Search for existing account with matching sister company name in this company
+    search_patterns = []
+    if sister_abbr:
+        search_patterns.extend([
+            f"TMP-{sister_abbr}",
+            f"TMP-{sister_abbr}%",
+            f"TMP {sister_abbr}%",
+            f"TMP - {sister_abbr}%",
+        ])
     if sister_clean:
+        search_patterns.extend([
+            f"%TMP%{sister_clean}%",
+            f"%Intercompany%{sister_clean}%",
+        ])
+
+    for pat in search_patterns:
+        op = "=" if "%" not in pat else "like"
         candidate = frappe.db.get_value(
             "Account",
             {
                 "company": company,
                 "is_group": 0,
-                "account_name": ["like", f"%Intercompany Clearing%{sister_clean}%"],
+                "account_type": ["in", ["Bank", "Cash"]],
+                "account_name": [op, pat] if op == "like" else pat,
             },
             "name",
         )
         if candidate:
             return candidate
 
-    # 2. General intercompany clearing account in this company
-    candidate = frappe.db.get_value(
-        "Account",
-        {
-            "company": company,
-            "is_group": 0,
-            "account_name": ["like", "%Intercompany Clearing%"],
-        },
-        "name",
-    )
-    if candidate:
-        return candidate
+    return None
 
-    # 3. Create a compliant clearing account under Current Assets
+
+def get_or_create_intercompany_clearing_account(company, sister_company):
+    """
+    Scans Chart of Accounts for an existing Bank/Cash TMP clearing account for `sister_company`,
+    or creates a Bank-typed `TMP-<COUNTERPARTY ABBR>` clearing account under Bank Accounts / Current Assets.
+    Bank-typed accounts allow BOTH Payment Entry and Journal Entry without validation errors.
+    """
+    if not company:
+        return None
+
+    # 1. Scan Chart of Accounts for an already-valid Bank/Cash TMP clearing account
+    existing_valid = find_existing_clearing_account(company, sister_company)
+    if existing_valid:
+        return existing_valid
+
+    sister_clean = (sister_company or "").strip()
+    sister_abbr = _get_company_abbr_token(sister_clean) if sister_clean else "IC"
+    acc_label = f"TMP-{sister_abbr}"
+
+    # 2. Check if an account named TMP-<ABBR> already exists (e.g. legacy Temporary type)
+    if hasattr(frappe, "db") and frappe.db:
+        existing_same_name = frappe.db.get_value(
+            "Account",
+            {"company": company, "is_group": 0, "account_name": acc_label},
+            ["name", "account_type"],
+            as_dict=True,
+        )
+        if existing_same_name:
+            if existing_same_name.account_type in ("Bank", "Cash"):
+                return existing_same_name.name
+            # Attempt safe upgrade of legacy Temporary account to Bank if allowed
+            try:
+                frappe.db.set_value("Account", existing_same_name.name, "account_type", "Bank")
+                return existing_same_name.name
+            except Exception:
+                acc_label = f"TMP-{sister_abbr}-Bank"
+
+    # 3. Auto-create Bank-typed TMP-<ABBR> account in Chart of Accounts
     try:
         parent_account = get_parent_clearing_account(company)
         if not parent_account:
-            return frappe.db.get_value("Company", company, "default_cash_account") or frappe.db.get_value("Company", company, "default_bank_account")
+            return frappe.db.get_value("Company", company, "default_bank_account") or frappe.db.get_value("Company", company, "default_cash_account")
 
-        acc_label = f"Intercompany Clearing - {sister_clean}" if sister_clean else "Intercompany Clearing"
         acc = frappe.get_doc({
             "doctype": "Account",
             "account_name": acc_label,
             "company": company,
             "parent_account": parent_account,
             "root_type": "Asset",
-            "account_type": "Temporary",
+            "account_type": "Bank",
             "is_group": 0,
         })
         acc.flags.ignore_permissions = True
@@ -1117,54 +1325,461 @@ def get_or_create_intercompany_clearing_account(company, sister_company):
         acc.insert()
         return acc.name
     except Exception as e:
-        frappe.log_error(f"Error auto-creating intercompany clearing account in {company}: {e}", "Intercompany Accounting")
-        return frappe.db.get_value("Company", company, "default_cash_account") or frappe.db.get_value("Company", company, "default_bank_account")
+        frappe.log_error(f"Error auto-creating intercompany TMP Bank account in {company}: {e}", "Intercompany Accounting")
+        return frappe.db.get_value("Company", company, "default_bank_account") or frappe.db.get_value("Company", company, "default_cash_account")
 
 
-def get_intercompany_exchange_rate(from_currency, to_currency, transaction_date=None):
+@frappe.whitelist()
+def scan_linked_company_defaults(main_company, other_company):
     """
-    Safely get the exchange rate from from_currency to to_currency on transaction_date.
-    Returns 1.0 if currencies are equal or cannot be resolved.
+    Read-only CoA & Party scanner for Intercompany Linked Company rows.
+    Finds matching internal Customers/Suppliers, existing Bank/Cash TMP-<ABBR> clearing accounts,
+    and transit warehouses for the exact (main_company, other_company) pair.
+    """
+    result = {
+        "main_company_customer": None,
+        "main_company_supplier": None,
+        "main_company_account": None,
+        "main_company_warehouse": None,
+        "other_company_customer": None,
+        "other_company_supplier": None,
+        "other_company_account": None,
+        "other_company_warehouse": None,
+        "main_suggested_tmp": f"TMP-{_get_company_abbr_token(other_company)}" if other_company else None,
+        "other_suggested_tmp": f"TMP-{_get_company_abbr_token(main_company)}" if main_company else None,
+    }
+    if not main_company or not other_company or not (hasattr(frappe, "db") and frappe.db):
+        return result
+
+    def _find_internal_party(owner_co, counterparty_co, party_dt):
+        flag_col = "is_internal_customer" if party_dt == "Customer" else "is_internal_supplier"
+        if not frappe.db.table_exists(party_dt):
+            return None
+        rows = frappe.db.sql(
+            f"""
+            SELECT p.name
+            FROM `tab{party_dt}` p
+            WHERE (p.disabled IS NULL OR p.disabled = 0)
+              AND p.`{flag_col}` = 1
+              AND p.represents_company = %s
+            ORDER BY
+              EXISTS (
+                SELECT 1 FROM `tabAllowed To Transact With` att
+                WHERE att.parent = p.name AND att.parenttype = %s AND att.company = %s
+              ) DESC,
+              p.modified DESC
+            LIMIT 1
+            """,
+            (counterparty_co, party_dt, owner_co),
+            as_dict=True,
+        )
+        return rows[0].name if rows else None
+
+    result["main_company_customer"] = _find_internal_party(main_company, other_company, "Customer")
+    result["main_company_supplier"] = _find_internal_party(main_company, other_company, "Supplier")
+    result["other_company_customer"] = _find_internal_party(other_company, main_company, "Customer")
+    result["other_company_supplier"] = _find_internal_party(other_company, main_company, "Supplier")
+
+    result["main_company_account"] = find_existing_clearing_account(main_company, other_company)
+    result["other_company_account"] = find_existing_clearing_account(other_company, main_company)
+    result["main_company_warehouse"] = get_intercompany_warehouse(main_company)
+    result["other_company_warehouse"] = get_intercompany_warehouse(other_company)
+
+    return result
+
+
+@frappe.whitelist()
+@frappe.validate_and_sanitize_search_inputs
+def intercompany_party_query(doctype, txt, searchfield, start, page_len, filters):
+    """
+    Filters Customer or Supplier link dropdowns inside Intercompany Linked Company
+    to active internal parties linked to the (company, represents_company) pair.
+    """
+    if doctype not in ("Customer", "Supplier"):
+        return []
+
+    filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
+    owner_company = (filters.get("company") or "").strip()
+    rep_company = (filters.get("represents_company") or "").strip()
+    flag_col = "is_internal_customer" if doctype == "Customer" else "is_internal_supplier"
+    name_col = "customer_name" if doctype == "Customer" else "supplier_name"
+
+    conditions = ["(p.disabled IS NULL OR p.disabled = 0)", f"p.`{flag_col}` = 1"]
+    params = {
+        "txt": f"%{txt or ''}%",
+        "start": cint(start),
+        "page_len": cint(page_len) or 20,
+        "dt": doctype,
+    }
+
+    if rep_company:
+        conditions.append("p.represents_company = %(rep_company)s")
+        params["rep_company"] = rep_company
+
+    if owner_company:
+        conditions.append(
+            "(EXISTS (SELECT 1 FROM `tabAllowed To Transact With` att "
+            "WHERE att.parent = p.name AND att.parenttype = %(dt)s AND att.company = %(owner_company)s) "
+            "OR NOT EXISTS (SELECT 1 FROM `tabAllowed To Transact With` att2 "
+            "WHERE att2.parent = p.name AND att2.parenttype = %(dt)s))"
+        )
+        params["owner_company"] = owner_company
+
+    conditions.append(f"(p.name LIKE %(txt)s OR p.`{name_col}` LIKE %(txt)s)")
+    where_clause = " AND ".join(conditions)
+
+    return frappe.db.sql(
+        f"""
+        SELECT p.name, p.`{name_col}`, p.represents_company
+        FROM `tab{doctype}` p
+        WHERE {where_clause}
+        ORDER BY p.modified DESC, p.name ASC
+        LIMIT %(start)s, %(page_len)s
+        """,
+        params,
+    )
+
+
+@frappe.whitelist()
+@frappe.validate_and_sanitize_search_inputs
+def intercompany_account_query(doctype, txt, searchfield, start, page_len, filters):
+    """
+    Filters Account dropdowns inside Intercompany Linked Company strictly to
+    leaf Bank/Cash accounts belonging to the selected company, prioritizing TMP clearing accounts.
+    """
+    if doctype != "Account":
+        return []
+
+    filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
+    company = (filters.get("company") or "").strip()
+
+    conditions = [
+        "a.is_group = 0",
+        "(a.disabled IS NULL OR a.disabled = 0)",
+        "a.account_type IN ('Bank', 'Cash')",
+    ]
+    params = {
+        "txt": f"%{txt or ''}%",
+        "start": cint(start),
+        "page_len": cint(page_len) or 20,
+    }
+    if company:
+        conditions.append("a.company = %(company)s")
+        params["company"] = company
+
+    conditions.append("(a.name LIKE %(txt)s OR a.account_name LIKE %(txt)s)")
+    where_clause = " AND ".join(conditions)
+
+    return frappe.db.sql(
+        f"""
+        SELECT a.name, a.account_type, a.account_currency
+        FROM `tabAccount` a
+        WHERE {where_clause}
+        ORDER BY
+            (a.account_name LIKE 'TMP%%') DESC,
+            (a.account_name LIKE '%%Intercompany%%') DESC,
+            a.name ASC
+        LIMIT %(start)s, %(page_len)s
+        """,
+        params,
+    )
+
+
+def lookup_intercompany_exchange_rate(from_currency, to_currency, transaction_date=None):
+    """
+    Silently queries Currency Exchange in both forward and inverse (1 / rate) directions
+    without invoking erpnext.setup.utils.get_exchange_rate (which prints 4x msgprint popups when missing).
+    Returns float (9 decimals) or None if no Currency Exchange record exists.
     """
     if not from_currency or not to_currency or from_currency == to_currency:
         return 1.0
 
-    rate = None
-    # 1. Try ERPNext setup utility
+    if not (hasattr(frappe, "db") and frappe.db and frappe.db.exists("DocType", "Currency Exchange")):
+        return None
+
+    tx_date = str(getdate(transaction_date or nowdate()))
+
     try:
-        from erpnext.setup.utils import get_exchange_rate
-        rate = get_exchange_rate(from_currency, to_currency, transaction_date or nowdate())
+        # 1. Exact forward match on or before transaction_date
+        fwd = frappe.get_all(
+            "Currency Exchange",
+            filters={
+                "from_currency": from_currency,
+                "to_currency": to_currency,
+                "date": ["<=", tx_date],
+            },
+            fields=["exchange_rate"],
+            order_by="date desc",
+            limit=1,
+            ignore_permissions=True,
+        )
+        if fwd and flt(fwd[0].get("exchange_rate")) > 0:
+            return flt(fwd[0].get("exchange_rate"), 9)
+
+        # 2. Inverse match on or before transaction_date (e.g. USD->PKR when PKR->USD requested)
+        inv = frappe.get_all(
+            "Currency Exchange",
+            filters={
+                "from_currency": to_currency,
+                "to_currency": from_currency,
+                "date": ["<=", tx_date],
+            },
+            fields=["exchange_rate"],
+            order_by="date desc",
+            limit=1,
+            ignore_permissions=True,
+        )
+        if inv and flt(inv[0].get("exchange_rate")) > 0:
+            return flt(1.0 / flt(inv[0].get("exchange_rate")), 9)
+
+        # 3. Fallback to latest available record regardless of date
+        fwd_any = frappe.get_all(
+            "Currency Exchange",
+            filters={"from_currency": from_currency, "to_currency": to_currency},
+            fields=["exchange_rate"],
+            order_by="date desc",
+            limit=1,
+            ignore_permissions=True,
+        )
+        if fwd_any and flt(fwd_any[0].get("exchange_rate")) > 0:
+            return flt(fwd_any[0].get("exchange_rate"), 9)
+
+        inv_any = frappe.get_all(
+            "Currency Exchange",
+            filters={"from_currency": to_currency, "to_currency": from_currency},
+            fields=["exchange_rate"],
+            order_by="date desc",
+            limit=1,
+            ignore_permissions=True,
+        )
+        if inv_any and flt(inv_any[0].get("exchange_rate")) > 0:
+            return flt(1.0 / flt(inv_any[0].get("exchange_rate")), 9)
     except Exception:
         pass
 
-    # 2. Try Currency Exchange DocType
-    if not rate and frappe.db and hasattr(frappe.db, "exists") and frappe.db.exists("DocType", "Currency Exchange"):
-        try:
-            rate = frappe.db.get_value(
-                "Currency Exchange",
-                {"from_currency": from_currency, "to_currency": to_currency},
-                "exchange_rate",
-                order_by="date desc"
-            )
-            if not rate:
-                # Inverted rate
-                inv = frappe.db.get_value(
-                    "Currency Exchange",
-                    {"from_currency": to_currency, "to_currency": from_currency},
-                    "exchange_rate",
-                    order_by="date desc"
-                )
-                if inv and flt(inv) > 0:
-                    rate = 1.0 / flt(inv)
-        except Exception:
-            pass
+    return None
 
-    return flt(rate or 1.0)
+
+def extract_document_exchange_rate(doc, from_currency, to_currency):
+    """
+    Extracts an explicit exchange rate already specified on the source voucher itself
+    (e.g., Journal Entry row exchange_rate=275 for USD row in PKR company, or SO/PO conversion_rate=275).
+    Returns flt(rate, 9) if found, else None.
+    """
+    if not doc or not from_currency or not to_currency:
+        return None
+    if from_currency == to_currency:
+        return 1.0
+
+    src_company = getattr(doc, "company", None) or (doc.get("company") if isinstance(doc, dict) else None)
+    src_company_ccy = (
+        frappe.db.get_value("Company", src_company, "default_currency")
+        if src_company and hasattr(frappe, "db") and frappe.db
+        else None
+    )
+
+    # 1. Sales / Purchase Orders, Invoices, Quotations, DN, PR
+    doc_ccy = getattr(doc, "currency", None) or (doc.get("currency") if isinstance(doc, dict) else None)
+    conv_rate = flt(getattr(doc, "conversion_rate", 0) or (doc.get("conversion_rate", 0) if isinstance(doc, dict) else 0))
+    if doc_ccy and src_company_ccy and doc_ccy != src_company_ccy and conv_rate > 0:
+        # ERPNext conversion_rate represents 1 doc_ccy = conv_rate src_company_ccy
+        if from_currency == doc_ccy and to_currency == src_company_ccy:
+            return flt(conv_rate, 9)
+        if from_currency == src_company_ccy and to_currency == doc_ccy:
+            return flt(1.0 / conv_rate, 9)
+
+    # 2. Payment Entry (source_exchange_rate: paid_from -> company_ccy, target_exchange_rate: paid_to -> company_ccy)
+    if (getattr(doc, "doctype", None) or (doc.get("doctype") if isinstance(doc, dict) else None)) == "Payment Entry":
+        p_from_ccy = getattr(doc, "paid_from_account_currency", None)
+        p_to_ccy = getattr(doc, "paid_to_account_currency", None)
+        src_fx = flt(getattr(doc, "source_exchange_rate", 0))
+        tgt_fx = flt(getattr(doc, "target_exchange_rate", 0))
+        if p_from_ccy and src_company_ccy and p_from_ccy != src_company_ccy and src_fx > 0:
+            if from_currency == p_from_ccy and to_currency == src_company_ccy:
+                return flt(src_fx, 9)
+            if from_currency == src_company_ccy and to_currency == p_from_ccy:
+                return flt(1.0 / src_fx, 9)
+        if p_to_ccy and src_company_ccy and p_to_ccy != src_company_ccy and tgt_fx > 0:
+            if from_currency == p_to_ccy and to_currency == src_company_ccy:
+                return flt(tgt_fx, 9)
+            if from_currency == src_company_ccy and to_currency == p_to_ccy:
+                return flt(1.0 / tgt_fx, 9)
+
+    # 3. Journal Entry Account rows (row.account_currency + row.exchange_rate)
+    rows = getattr(doc, "accounts", None) or (doc.get("accounts") if isinstance(doc, dict) else None) or []
+    for row in rows:
+        r_ccy = getattr(row, "account_currency", None) or (row.get("account_currency") if isinstance(row, dict) else None)
+        r_fx = flt(getattr(row, "exchange_rate", 0) or (row.get("exchange_rate", 0) if isinstance(row, dict) else 0))
+        if r_ccy and src_company_ccy and r_ccy != src_company_ccy and r_fx > 0:
+            if from_currency == r_ccy and to_currency == src_company_ccy:
+                return flt(r_fx, 9)
+            if from_currency == src_company_ccy and to_currency == r_ccy:
+                return flt(1.0 / r_fx, 9)
+
+    return None
+
+
+def get_intercompany_exchange_rate(from_currency, to_currency, transaction_date=None, raise_if_missing=False):
+    """
+    Safely resolve the exchange rate from `from_currency` to `to_currency`.
+    Queries Currency Exchange in both directions cleanly without trigger msgprint spam.
+    """
+    if not from_currency or not to_currency or from_currency == to_currency:
+        return 1.0
+
+    rate = lookup_intercompany_exchange_rate(from_currency, to_currency, transaction_date)
+    if rate and flt(rate) > 0:
+        return flt(rate, 9)
+
+    if raise_if_missing:
+        frappe.throw(
+            _(
+                "Currency Exchange rate between <b>{0}</b> and <b>{1}</b> for date <b>{2}</b> is required "
+                "so both intercompany ledgers stay 100% tallied. Please add the exchange rate first."
+            ).format(from_currency, to_currency, transaction_date or nowdate()),
+            title=_("Exchange Rate Required"),
+        )
+
+    return 1.0
+
+
+@frappe.whitelist()
+def check_intercompany_exchange_rate(
+    source_company,
+    target_company,
+    transaction_date=None,
+    doc_currency=None,
+    conversion_rate=None,
+):
+    """
+    Used by Desk JS before saving a cross-currency intercompany voucher.
+    Returns whether an exchange rate is required and whether a valid rate exists.
+    """
+    if not source_company or not target_company or source_company == target_company:
+        return {"required": False, "has_rate": True}
+
+    if not (hasattr(frappe, "db") and frappe.db):
+        return {"required": False, "has_rate": True}
+
+    src_ccy = frappe.db.get_value("Company", source_company, "default_currency")
+    tgt_ccy = frappe.db.get_value("Company", target_company, "default_currency")
+    if not src_ccy or not tgt_ccy or src_ccy == tgt_ccy:
+        return {
+            "required": False,
+            "has_rate": True,
+            "from_currency": src_ccy,
+            "to_currency": tgt_ccy,
+        }
+
+    tx_date = str(getdate(transaction_date or nowdate()))
+    rate = None
+    if doc_currency == tgt_ccy and flt(conversion_rate) > 0:
+        rate = flt(1.0 / flt(conversion_rate), 9)
+    else:
+        rate = lookup_intercompany_exchange_rate(src_ccy, tgt_ccy, tx_date)
+
+    return {
+        "required": True,
+        "has_rate": bool(rate and flt(rate) > 0),
+        "from_currency": src_ccy,
+        "to_currency": tgt_ccy,
+        "exchange_rate": flt(rate, 9) if rate else None,
+        "inverse_rate": flt(1.0 / flt(rate), 9) if rate else None,
+        "transaction_date": tx_date,
+    }
+
+
+@frappe.whitelist()
+def save_intercompany_currency_exchange(from_currency, to_currency, exchange_rate, date=None):
+    """
+    Saves a Currency Exchange record from the guided Exchange Rate modal dialog.
+    """
+    frappe.has_permission("Currency Exchange", "create", throw=True)
+    rate = flt(exchange_rate)
+    if rate <= 0:
+        frappe.throw(_("Exchange rate must be greater than zero."))
+    if not from_currency or not to_currency or from_currency == to_currency:
+        frappe.throw(_("From Currency and To Currency must be different."))
+
+    tx_date = str(getdate(date or nowdate()))
+    existing = frappe.db.get_value(
+        "Currency Exchange",
+        {"date": tx_date, "from_currency": from_currency, "to_currency": to_currency},
+        "name",
+    )
+    if existing:
+        frappe.db.set_value("Currency Exchange", existing, "exchange_rate", flt(rate, 9))
+        name = existing
+    else:
+        ce = frappe.get_doc({
+            "doctype": "Currency Exchange",
+            "date": tx_date,
+            "from_currency": from_currency,
+            "to_currency": to_currency,
+            "exchange_rate": flt(rate, 9),
+            "for_buying": 1,
+            "for_selling": 1,
+        })
+        ce.insert(ignore_permissions=True)
+        name = ce.name
+
+    return {
+        "success": True,
+        "name": name,
+        "from_currency": from_currency,
+        "to_currency": to_currency,
+        "exchange_rate": flt(rate, 9),
+        "inverse_rate": flt(1.0 / rate, 9),
+        "date": tx_date,
+    }
+
+
+def validate_intercompany_cross_currency_rate(doc):
+    """
+    Blocks saving/submitting a source intercompany document across companies with different
+    default currencies unless a valid exchange rate exists on the document OR in Currency Exchange.
+    Guarantees Company A and Company B ledgers never silently fall back to 1.0.
+    """
+    if not doc or not cint(doc.get("is_intercompany")):
+        return
+    if doc.get("intercompany_linked_doc_name"):
+        return
+
+    source_company = doc.get("company")
+    target_company = doc.get("intercompany_target_company")
+    if not source_company or not target_company or source_company == target_company:
+        return
+    if not (hasattr(frappe, "db") and frappe.db):
+        return
+
+    src_ccy = frappe.db.get_value("Company", source_company, "default_currency")
+    tgt_ccy = frappe.db.get_value("Company", target_company, "default_currency")
+    if not src_ccy or not tgt_ccy or src_ccy == tgt_ccy:
+        return
+
+    tx_date = getattr(doc, "posting_date", None) or getattr(doc, "transaction_date", None) or nowdate()
+    doc_rate = extract_document_exchange_rate(doc, src_ccy, tgt_ccy)
+    if doc_rate and flt(doc_rate) > 0:
+        return
+
+    db_rate = lookup_intercompany_exchange_rate(src_ccy, tgt_ccy, tx_date)
+    if db_rate and flt(db_rate) > 0:
+        return
+
+    frappe.throw(
+        _(
+            "Multi-Currency Exchange Rate Required: <b>{0}</b> ({1}) and <b>{2}</b> ({3}) use different currencies.<br><br>"
+            "No exchange rate was found between <b>{1}</b> and <b>{3}</b> for <b>{4}</b>. "
+            "Please enter the exchange rate on this voucher or add a <b>Currency Exchange</b> record so both company ledgers stay 100% tallied."
+        ).format(source_company, src_ccy, target_company, tgt_ccy, tx_date),
+        title=_("Exchange Rate Required"),
+    )
 
 
 def resolve_intercompany_currency_and_rate(source_doc, target_company, party_type=None, party_name=None, date=None):
     """
     Resolve target document currency, conversion_rate, and item rate factor.
+    Honors any explicit exchange rate entered on `source_doc` first, then Currency Exchange (bidirectional).
     - target_currency: party default currency or source document currency or target company default currency
     - conversion_rate: exchange rate from target_currency to target_company default currency
     - rate_factor: multiplier to convert unit prices from source_currency to target_currency
@@ -1181,11 +1796,14 @@ def resolve_intercompany_currency_and_rate(source_doc, target_company, party_typ
     # Priority: Party designated billing currency -> Source document currency -> Target company currency
     target_currency = party_currency or source_currency or target_company_currency
 
-    # ERPNext conversion_rate represents: target_currency -> target_company_currency
+    # ERPNext conversion_rate represents: 1 target_currency = conversion_rate target_company_currency
     if target_currency == target_company_currency:
         conversion_rate = 1.0
     else:
-        conversion_rate = get_intercompany_exchange_rate(target_currency, target_company_currency, date)
+        conversion_rate = (
+            extract_document_exchange_rate(source_doc, target_currency, target_company_currency)
+            or get_intercompany_exchange_rate(target_currency, target_company_currency, date)
+        )
         if not conversion_rate or conversion_rate <= 0:
             conversion_rate = 1.0
 
@@ -1193,11 +1811,14 @@ def resolve_intercompany_currency_and_rate(source_doc, target_company, party_typ
     if source_currency == target_currency:
         rate_factor = 1.0
     else:
-        rate_factor = get_intercompany_exchange_rate(source_currency, target_currency, date)
+        rate_factor = (
+            extract_document_exchange_rate(source_doc, source_currency, target_currency)
+            or get_intercompany_exchange_rate(source_currency, target_currency, date)
+        )
         if not rate_factor or rate_factor <= 0:
             rate_factor = 1.0
 
-    return target_currency, conversion_rate, rate_factor
+    return target_currency, flt(conversion_rate, 9), flt(rate_factor, 9)
 
 
 def ensure_item_exists(item_code, item_name=None, description=None, uom="Nos", item_group=None):
@@ -2391,8 +3012,50 @@ def create_journal_entry_from_lcv(source_lcv, mapping, linked_company, direction
     return je
 
 
+def _build_je_row(account, side, target_base_amount, target_company_currency, fx_hint_map=None, tx_date=None, party_type=None, party=None, cost_center=None):
+    """
+    Constructs a balanced Journal Entry Account row respecting the target account's account_currency.
+    Guarantees debit/credit (company base currency) == target_base_amount while computing
+    debit_in_account_currency / credit_in_account_currency & exchange_rate accurately.
+    """
+    acc_currency = (
+        frappe.db.get_value("Account", account, "account_currency")
+        if account and hasattr(frappe, "db") and frappe.db
+        else None
+    ) or target_company_currency
+
+    base_amt = flt(target_base_amount, 2)
+    row_fx = 1.0
+    if acc_currency and target_company_currency and acc_currency != target_company_currency:
+        hint = (fx_hint_map or {}).get((acc_currency, target_company_currency))
+        row_fx = flt(hint or get_intercompany_exchange_rate(acc_currency, target_company_currency, tx_date), 9)
+        if row_fx <= 0:
+            row_fx = 1.0
+        amt_in_acc_ccy = flt(base_amt / row_fx, 2)
+    else:
+        amt_in_acc_ccy = base_amt
+
+    row = {
+        "account": account,
+        "account_currency": acc_currency,
+        "exchange_rate": row_fx,
+        "cost_center": cost_center,
+        "debit_in_account_currency": amt_in_acc_ccy if side == "debit" else 0,
+        "credit_in_account_currency": amt_in_acc_ccy if side == "credit" else 0,
+        "debit": base_amt if side == "debit" else 0,
+        "credit": base_amt if side == "credit" else 0,
+    }
+    if party_type and party:
+        row["party_type"] = party_type
+        row["party"] = party
+    return row
+
+
 def create_journal_entry(source_je, mapping, linked_company, direction):
-    """Create corresponding Journal Entry (including Landed Cost Voucher recharge JEs)"""
+    """
+    Create corresponding Journal Entry (including Landed Cost Voucher recharge JEs)
+    with 100% multi-currency ledger parity (e.g. 500 USD @ 275 <-> 137,500 PKR).
+    """
     if getattr(source_je, "doctype", "") == "Landed Cost Voucher":
         return create_journal_entry_from_lcv(source_je, mapping, linked_company, direction)
 
@@ -2412,93 +3075,99 @@ def create_journal_entry(source_je, mapping, linked_company, direction):
     if not tmp_account:
         tmp_account = get_or_create_intercompany_clearing_account(je.company, source_je.company)
 
-    je.posting_date = source_je.posting_date
-    je.user_remark = f"Auto-generated from {source_je.doctype} {source_je.name} " + (source_je.user_remark or "")
+    je.posting_date = getattr(source_je, "posting_date", None) or nowdate()
+    je.voucher_type = (
+        "Inter Company Journal Entry"
+        if hasattr(frappe, "db") and frappe.db and frappe.db.exists("Journal Entry Type", "Inter Company Journal Entry")
+        else "Journal Entry"
+    )
+    je.user_remark = f"Auto-generated from {source_je.doctype} {source_je.name} " + (getattr(source_je, "user_remark", None) or "")
 
-    # Multi-currency exchange rate handling
     source_company_currency = frappe.db.get_value("Company", source_je.company, "default_currency")
     target_company_currency = frappe.db.get_value("Company", je.company, "default_currency")
-    fx_rate = get_intercompany_exchange_rate(source_company_currency, target_company_currency, je.posting_date)
+
+    # Inspect source accounts for party direction + exact multi-currency hints
+    source_party_type = None
+    source_is_credit = False
+    source_party_row = None
+    for acc in (getattr(source_je, "accounts", None) or []):
+        if getattr(acc, "party_type", None) and getattr(acc, "party", None):
+            source_party_type = acc.party_type
+            source_is_credit = flt(getattr(acc, "credit_in_account_currency", 0)) > 0 or flt(getattr(acc, "credit", 0)) > 0
+            source_party_row = acc
+            break
+
+    # Compute exact base amount in target company's default currency
+    src_base_total = flt(getattr(source_je, "total_credit", 0)) or flt(getattr(source_je, "total_debit", 0))
+    if src_base_total <= 0:
+        src_base_total = sum(
+            flt(getattr(r, "credit", 0)) or (flt(getattr(r, "credit_in_account_currency", 0)) * (flt(getattr(r, "exchange_rate", 1)) or 1.0))
+            for r in (getattr(source_je, "accounts", None) or [])
+        )
+
+    fx_hint_map = {}
+    if source_party_row:
+        p_ccy = getattr(source_party_row, "account_currency", None)
+        p_fx = flt(getattr(source_party_row, "exchange_rate", 0))
+        if p_ccy and source_company_currency and p_ccy != source_company_currency and p_fx > 0:
+            fx_hint_map[(p_ccy, source_company_currency)] = flt(p_fx, 9)
+            fx_hint_map[(source_company_currency, p_ccy)] = flt(1.0 / p_fx, 9)
+
+    if source_company_currency == target_company_currency:
+        target_base_amount = flt(src_base_total, 2)
+    elif (
+        source_party_row
+        and getattr(source_party_row, "account_currency", None) == target_company_currency
+        and (
+            flt(getattr(source_party_row, "credit_in_account_currency", 0)) > 0
+            or flt(getattr(source_party_row, "debit_in_account_currency", 0)) > 0
+        )
+    ):
+        # Source already entered in target company's currency (e.g. 500 USD @ 275 in PKR Co -> exact 500 USD in USD Co)
+        target_base_amount = flt(
+            flt(getattr(source_party_row, "credit_in_account_currency", 0))
+            or flt(getattr(source_party_row, "debit_in_account_currency", 0)),
+            2,
+        )
+    else:
+        fx_src_to_tgt = (
+            fx_hint_map.get((source_company_currency, target_company_currency))
+            or extract_document_exchange_rate(source_je, source_company_currency, target_company_currency)
+            or get_intercompany_exchange_rate(source_company_currency, target_company_currency, je.posting_date)
+        )
+        target_base_amount = flt(src_base_total * flt(fx_src_to_tgt), 2)
 
     if source_company_currency != target_company_currency:
         je.multi_currency = 1
     else:
-        je.multi_currency = source_je.multi_currency
-
-    credit_amt = flt(source_je.total_credit) * flt(fx_rate)
-    debit_amt = flt(source_je.total_debit) * flt(fx_rate)
-
-    source_party_type = None
-    source_is_credit = False
-
-    for acc in source_je.accounts:
-        if acc.party_type and acc.party:
-            source_party_type = acc.party_type
-            source_is_credit = acc.credit_in_account_currency > 0
-            break
+        je.multi_currency = getattr(source_je, "multi_currency", 0)
 
     default_cost_center = get_default_cost_center(je.company)
 
-    if source_party_type == "Supplier" and source_is_credit:
-        je.append("accounts", {
-            "account": frappe.db.get_value("Company", je.company, "default_receivable_account"),
-            "party_type": "Customer",
-            "party": customer,
-            "credit_in_account_currency": 0,
-            "debit_in_account_currency": credit_amt,
-            "cost_center": default_cost_center
-        })
-        je.append("accounts", {
-            "account": tmp_account,
-            "debit_in_account_currency": 0,
-            "credit_in_account_currency": credit_amt,
-            "cost_center": default_cost_center
-        })
-    elif source_party_type == "Supplier" and not source_is_credit:
-        je.append("accounts", {
-            "account": frappe.db.get_value("Company", je.company, "default_receivable_account"),
-            "party_type": "Customer",
-            "party": customer,
-            "debit_in_account_currency": 0,
-            "credit_in_account_currency": debit_amt,
-            "cost_center": default_cost_center
-        })
-        je.append("accounts", {
-            "account": tmp_account,
-            "credit_in_account_currency": 0,
-            "debit_in_account_currency": debit_amt,
-            "cost_center": default_cost_center
-        })
-    elif source_party_type == "Customer" and source_is_credit:
-        je.append("accounts", {
-            "account": frappe.db.get_value("Company", je.company, "default_payable_account"),
-            "party_type": "Supplier",
-            "party": supplier,
-            "credit_in_account_currency": 0,
-            "debit_in_account_currency": credit_amt,
-            "cost_center": default_cost_center
-        })
-        je.append("accounts", {
-            "account": tmp_account,
-            "debit_in_account_currency": 0,
-            "credit_in_account_currency": credit_amt,
-            "cost_center": default_cost_center
-        })
+    if source_party_type == "Supplier":
+        party_acct = (
+            frappe.db.get_value("Party Account", {"parenttype": "Customer", "parent": customer, "company": je.company}, "account")
+            if customer else None
+        ) or frappe.db.get_value("Company", je.company, "default_receivable_account")
+        p_side = "debit" if source_is_credit else "credit"
+        t_side = "credit" if source_is_credit else "debit"
+        r1 = _build_je_row(party_acct, p_side, target_base_amount, target_company_currency, fx_hint_map, je.posting_date, "Customer", customer, default_cost_center)
+        r2 = _build_je_row(tmp_account, t_side, target_base_amount, target_company_currency, fx_hint_map, je.posting_date, None, None, default_cost_center)
     else:
-        je.append("accounts", {
-            "account": frappe.db.get_value("Company", je.company, "default_payable_account"),
-            "party_type": "Supplier",
-            "party": supplier,
-            "debit_in_account_currency": 0,
-            "credit_in_account_currency": debit_amt,
-            "cost_center": default_cost_center
-        })
-        je.append("accounts", {
-            "account": tmp_account,
-            "credit_in_account_currency": 0,
-            "debit_in_account_currency": debit_amt,
-            "cost_center": default_cost_center
-        })
+        party_acct = (
+            frappe.db.get_value("Party Account", {"parenttype": "Supplier", "parent": supplier, "company": je.company}, "account")
+            if supplier else None
+        ) or frappe.db.get_value("Company", je.company, "default_payable_account")
+        p_side = "debit" if source_is_credit else "credit"
+        t_side = "credit" if source_is_credit else "debit"
+        r1 = _build_je_row(party_acct, p_side, target_base_amount, target_company_currency, fx_hint_map, je.posting_date, "Supplier", supplier, default_cost_center)
+        r2 = _build_je_row(tmp_account, t_side, target_base_amount, target_company_currency, fx_hint_map, je.posting_date, None, None, default_cost_center)
+
+    if r1.get("account_currency") != target_company_currency or r2.get("account_currency") != target_company_currency:
+        je.multi_currency = 1
+
+    je.append("accounts", r1)
+    je.append("accounts", r2)
 
     je.flags.ignore_permissions = True
     je.flags.ignore_mandatory = True
@@ -2506,13 +3175,19 @@ def create_journal_entry(source_je, mapping, linked_company, direction):
     je.flags.ignore_validate = True
     je.flags.ignore_links = True
 
+    je.intercompany_linked_doc_doctype = source_je.doctype
+    je.intercompany_linked_doc_name = source_je.name
+    je.intercompany_linked_company = source_je.company
     je.intercompany_target_company = source_je.company
     je.docstatus = 0  # Draft
     return je
 
 
 def create_payment_entry(source_pe, mapping, linked_company, direction):
-    """Create corresponding Payment Entry"""
+    """
+    Create corresponding Payment Entry using Bank/Cash TMP clearing accounts
+    and exact multi-currency exchange rates (100% ledger parity).
+    """
     pe = frappe.new_doc("Payment Entry")
 
     if direction == "other_to_main":
@@ -2526,21 +3201,33 @@ def create_payment_entry(source_pe, mapping, linked_company, direction):
         customer = linked_company.other_company_customer
         supplier = linked_company.other_company_supplier
 
-    if not tmp_account:
+    # Guarantee TMP clearing account is Bank or Cash so Payment Entry never rejects Temporary accounts
+    tmp_type = (
+        frappe.db.get_value("Account", tmp_account, "account_type")
+        if tmp_account and hasattr(frappe, "db") and frappe.db
+        else None
+    )
+    if not tmp_account or tmp_type not in ("Bank", "Cash"):
         tmp_account = get_or_create_intercompany_clearing_account(pe.company, source_pe.company)
 
-    pe.posting_date = source_pe.posting_date
+    pe.posting_date = getattr(source_pe, "posting_date", None) or nowdate()
     pe.payment_type = "Pay" if source_pe.payment_type == "Receive" else "Receive"
-    pe.mode_of_payment = source_pe.mode_of_payment
+    pe.mode_of_payment = getattr(source_pe, "mode_of_payment", None)
 
     if pe.payment_type == "Pay":
         pe.paid_from = tmp_account
-        pe.paid_to = frappe.db.get_value("Company", pe.company, "default_payable_account")
+        pe.paid_to = (
+            (frappe.db.get_value("Party Account", {"parenttype": "Supplier", "parent": supplier, "company": pe.company}, "account") if supplier else None)
+            or frappe.db.get_value("Company", pe.company, "default_payable_account")
+        )
         pe.party_type = "Supplier"
         pe.party = supplier
         pe.party_name = frappe.db.get_value("Supplier", supplier, "supplier_name") if supplier else ""
     else:
-        pe.paid_from = frappe.db.get_value("Company", pe.company, "default_receivable_account")
+        pe.paid_from = (
+            (frappe.db.get_value("Party Account", {"parenttype": "Customer", "parent": customer, "company": pe.company}, "account") if customer else None)
+            or frappe.db.get_value("Company", pe.company, "default_receivable_account")
+        )
         pe.paid_to = tmp_account
         pe.party_type = "Customer"
         pe.party = customer
@@ -2549,26 +3236,50 @@ def create_payment_entry(source_pe, mapping, linked_company, direction):
     source_company_currency = frappe.db.get_value("Company", source_pe.company, "default_currency")
     target_company_currency = frappe.db.get_value("Company", pe.company, "default_currency")
 
-    if pe.paid_from:
-        pe.paid_from_account_currency = frappe.db.get_value("Account", pe.paid_from, "account_currency") or target_company_currency
-    if pe.paid_to:
-        pe.paid_to_account_currency = frappe.db.get_value("Account", pe.paid_to, "account_currency") or target_company_currency
+    pe.paid_from_account_currency = (
+        frappe.db.get_value("Account", pe.paid_from, "account_currency") if pe.paid_from else None
+    ) or target_company_currency
+    pe.paid_to_account_currency = (
+        frappe.db.get_value("Account", pe.paid_to, "account_currency") if pe.paid_to else None
+    ) or target_company_currency
 
-    source_paid_currency = getattr(source_pe, "paid_from_account_currency", None) or source_company_currency
+    # Determine economic amount settled in source voucher:
+    # When source was "Pay" to intercompany supplier, paid_to is the supplier's payable account;
+    # when source was "Receive" from intercompany customer, paid_from is the customer's receivable account.
+    if source_pe.payment_type == "Pay":
+        ref_amt = flt(getattr(source_pe, "received_amount", 0)) or flt(getattr(source_pe, "paid_amount", 0))
+        ref_ccy = getattr(source_pe, "paid_to_account_currency", None) or source_company_currency
+    else:
+        ref_amt = flt(getattr(source_pe, "paid_amount", 0)) or flt(getattr(source_pe, "received_amount", 0))
+        ref_ccy = getattr(source_pe, "paid_from_account_currency", None) or source_company_currency
 
-    # Rate from source payment currency to target paid_from currency
-    fx_source_to_target_from = get_intercompany_exchange_rate(source_paid_currency, pe.paid_from_account_currency, pe.posting_date)
-    pe.paid_amount = flt(source_pe.paid_amount) * flt(fx_source_to_target_from)
+    def _pe_rate(c_from, c_to):
+        if not c_from or not c_to or c_from == c_to:
+            return 1.0
+        r = extract_document_exchange_rate(source_pe, c_from, c_to)
+        if not r:
+            r = get_intercompany_exchange_rate(c_from, c_to, pe.posting_date)
+        return flt(r or 1.0, 9)
 
-    # Conversion between target paid_from and paid_to
-    fx_from_to_to = get_intercompany_exchange_rate(pe.paid_from_account_currency, pe.paid_to_account_currency, pe.posting_date)
-    pe.target_exchange_rate = fx_from_to_to
-    pe.received_amount = flt(pe.paid_amount) * flt(fx_from_to_to)
+    pe.source_exchange_rate = _pe_rate(pe.paid_from_account_currency, target_company_currency)
+    pe.target_exchange_rate = _pe_rate(pe.paid_to_account_currency, target_company_currency)
 
-    pe.source_exchange_rate = get_intercompany_exchange_rate(pe.paid_from_account_currency, target_company_currency, pe.posting_date)
+    fx_ref_to_paid_from = _pe_rate(ref_ccy, pe.paid_from_account_currency)
+    pe.paid_amount = flt(ref_amt * fx_ref_to_paid_from, 2)
+
+    base_paid_amt = flt(pe.paid_amount * flt(pe.source_exchange_rate), 2)
+    if pe.paid_to_account_currency == pe.paid_from_account_currency:
+        pe.received_amount = pe.paid_amount
+    elif pe.paid_to_account_currency == ref_ccy:
+        pe.received_amount = flt(ref_amt, 2)
+    else:
+        pe.received_amount = flt(base_paid_amt / (flt(pe.target_exchange_rate) or 1.0), 2)
+
+    pe.base_paid_amount = base_paid_amt
+    pe.base_received_amount = flt(pe.received_amount * flt(pe.target_exchange_rate), 2)
 
     pe.reference_no = getattr(source_pe, "reference_no", None) or source_pe.name
-    pe.reference_date = getattr(source_pe, "reference_date", None) or source_pe.posting_date
+    pe.reference_date = getattr(source_pe, "reference_date", None) or pe.posting_date
 
     pe.intercompany_linked_doc_doctype = source_pe.doctype
     pe.intercompany_linked_doc_name = source_pe.name
@@ -2900,6 +3611,52 @@ def trigger_manual_intercompany_sync(doctype, name):
 
 
 @frappe.whitelist()
+def get_linked_counterpart_for_form(doctype, name):
+    """
+    Lightweight lookup used by Desk JS on Source or Target forms to display
+    'Open Linked ...' and 'Raise Dispute' controls without modifying source records.
+    """
+    if doctype not in _SUPPORTED_INTERCOMPANY_DOCTYPES or not name:
+        return {"counterparts": []}
+    if not (hasattr(frappe, "db") and frappe.db and frappe.db.exists("DocType", "Inter Company Document Reference")):
+        return {"counterparts": []}
+
+    frappe.has_permission(doctype, "read", name, throw=True)
+    counterparts = []
+
+    src_refs = frappe.get_all(
+        "Inter Company Document Reference",
+        filters={"source_doctype": doctype, "source_name": name},
+        fields=["target_doctype", "target_name", "target_company"],
+        ignore_permissions=True,
+    )
+    for r in src_refs:
+        counterparts.append({
+            "doctype": r.target_doctype,
+            "name": r.target_name,
+            "company": r.target_company,
+            "relationship": "target",
+        })
+
+    if not counterparts:
+        tgt_refs = frappe.get_all(
+            "Inter Company Document Reference",
+            filters={"target_doctype": doctype, "target_name": name},
+            fields=["source_doctype", "source_name", "source_company"],
+            ignore_permissions=True,
+        )
+        for r in tgt_refs:
+            counterparts.append({
+                "doctype": r.source_doctype,
+                "name": r.source_name,
+                "company": r.source_company,
+                "relationship": "source",
+            })
+
+    return {"counterparts": counterparts}
+
+
+@frappe.whitelist()
 def bulk_create_linked_documents(doc_names, doctype):
     if doctype not in _SUPPORTED_INTERCOMPANY_DOCTYPES:
         frappe.throw(_("DocType {0} is not supported for inter-company mirroring.").format(doctype))
@@ -3227,18 +3984,175 @@ def resolve_party_target_company(party_name, party_type=None, current_company=No
     return None
 
 
+def validate_locked_mirrored_fields(doc, previous=None):
+    """
+    Strictly prevents modifying currency, exchange rates, parties, or financial amounts/quantities
+    on mirrored intercompany counterparts created by ICT (where intercompany_linked_doc_name is set).
+    Local operational classification fields (Warehouse, Cost Center, Expense/Income Account) remain editable.
+    """
+    if not doc or not doc.get("intercompany_linked_doc_name"):
+        return
+    if doc.flags.get("ict_system_sync"):
+        return
+
+    if previous is None:
+        if hasattr(doc, "get_doc_before_save"):
+            previous = doc.get_doc_before_save()
+        if not previous and getattr(doc, "name", None) and hasattr(frappe, "db") and frappe.db and frappe.db.exists(doc.doctype, doc.name):
+            try:
+                previous = frappe.get_doc(doc.doctype, doc.name)
+            except Exception:
+                previous = None
+
+    if not previous:
+        return
+
+    source_company = (
+        doc.get("intercompany_linked_company")
+        or previous.get("intercompany_linked_company")
+        or doc.get("intercompany_target_company")
+        or _("Source Company")
+    )
+    source_ref = f"{doc.get('intercompany_linked_doc_doctype') or ''} {doc.get('intercompany_linked_doc_name') or ''}".strip()
+
+    def _differs(v_new, v_old, is_num=False):
+        if is_num:
+            return abs(flt(v_new) - flt(v_old)) > 0.0001
+        return (v_new or "") != (v_old or "")
+
+    changed_fields = []
+
+    str_locked = [
+        ("company", _("Company")),
+        ("currency", _("Currency")),
+        ("customer", _("Customer")),
+        ("supplier", _("Supplier")),
+        ("party_type", _("Party Type")),
+        ("party", _("Party")),
+        ("payment_type", _("Payment Type")),
+        ("intercompany_target_company", _("Intercompany Target Company")),
+    ]
+    num_locked = [
+        ("conversion_rate", _("Exchange Rate")),
+        ("source_exchange_rate", _("Source Exchange Rate")),
+        ("target_exchange_rate", _("Target Exchange Rate")),
+        ("paid_amount", _("Paid Amount")),
+        ("received_amount", _("Received Amount")),
+        ("total_debit", _("Total Debit")),
+        ("total_credit", _("Total Credit")),
+    ]
+
+    for fname, label in str_locked:
+        if hasattr(previous, fname) or fname in previous:
+            if _differs(doc.get(fname), previous.get(fname), is_num=False):
+                changed_fields.append(label)
+
+    for fname, label in num_locked:
+        if hasattr(previous, fname) or fname in previous:
+            if _differs(doc.get(fname), previous.get(fname), is_num=True):
+                changed_fields.append(label)
+
+    if cint(doc.get("is_intercompany")) != cint(previous.get("is_intercompany")):
+        changed_fields.append(_("Is Intercompany"))
+
+    # Item child table locked fields (preserve item_code, qty, uom, rate/basic_rate, amount/basic_amount)
+    old_items = previous.get("items") or []
+    new_items = doc.get("items") or []
+    if old_items:
+        if len(new_items) != len(old_items):
+            changed_fields.append(_("Items (Row Count)"))
+        else:
+            for idx, (n_row, o_row) in enumerate(zip(new_items, old_items), start=1):
+                for fname, label in [("item_code", "Item Code"), ("uom", "UOM")]:
+                    if _differs(n_row.get(fname), o_row.get(fname), is_num=False):
+                        changed_fields.append(_("Row #{0} {1}").format(idx, _(label)))
+                for fname, label in [
+                    ("qty", "Qty"),
+                    ("rate", "Rate"),
+                    ("basic_rate", "Basic Rate"),
+                    ("amount", "Amount"),
+                    ("basic_amount", "Basic Amount"),
+                ]:
+                    if (o_row.get(fname) is not None or n_row.get(fname) is not None) and _differs(n_row.get(fname), o_row.get(fname), is_num=True):
+                        changed_fields.append(_("Row #{0} {1}").format(idx, _(label)))
+
+    # Journal Entry Account child table locked fields
+    old_accts = previous.get("accounts") or []
+    new_accts = doc.get("accounts") or []
+    if old_accts:
+        if len(new_accts) != len(old_accts):
+            changed_fields.append(_("Accounting Entries (Row Count)"))
+        else:
+            for idx, (n_row, o_row) in enumerate(zip(new_accts, old_accts), start=1):
+                for fname, label in [("account_currency", "Account Currency"), ("party_type", "Party Type"), ("party", "Party")]:
+                    if _differs(n_row.get(fname), o_row.get(fname), is_num=False):
+                        changed_fields.append(_("Account Row #{0} {1}").format(idx, _(label)))
+                for fname, label in [
+                    ("exchange_rate", "Exchange Rate"),
+                    ("debit_in_account_currency", "Debit"),
+                    ("credit_in_account_currency", "Credit"),
+                    ("debit", "Base Debit"),
+                    ("credit", "Base Credit"),
+                ]:
+                    if (o_row.get(fname) is not None or n_row.get(fname) is not None) and _differs(n_row.get(fname), o_row.get(fname), is_num=True):
+                        changed_fields.append(_("Account Row #{0} {1}").format(idx, _(label)))
+
+    if changed_fields:
+        esc = frappe.utils.escape_html
+        unique_labels = ", ".join(dict.fromkeys(changed_fields))
+        frappe.throw(
+            _(
+                "<div style='font-size: 13px; line-height: 1.6;'>"
+                "<h4><b>Mirrored Inter-Company Entry Locked</b></h4>"
+                "Cannot change <b>{0}</b> because this document is linked with source entry "
+                "<b>{1}</b> in company <b>{2}</b>.<br><br>"
+                "To keep both companies' ledgers 100% tallied, currency, exchange rates, parties, "
+                "and financial amounts are strictly read-only on mirrored drafts.<br><br>"
+                "<b>Required Action:</b> Contact the accounting team in <b>{2}</b> to cancel or amend "
+                "the source entry <b>{1}</b>."
+                "</div>"
+            ).format(esc(unique_labels), esc(source_ref), esc(source_company)),
+            title=_("Inter-Company Field Locked"),
+        )
+
+
+def validate_intercompany_document(doc, method=None):
+    """
+    Unified validate doc_event across all 14 supported intercompany DocTypes:
+    1. Sanitizes cross-company warehouses on Material Receipt Stock Entries.
+    2. Enforces strict read-only locks on existing mirrored counterparts.
+    3. Auto-detects intercompany parties & locks target company cleanly.
+    4. Blocks saving/submitting cross-currency source vouchers without a valid exchange rate.
+    """
+    if getattr(doc, "doctype", None) == "Stock Entry":
+        sanitize_intercompany_stock_entry(doc, method)
+
+    if doc.flags.get("ict_system_sync"):
+        return
+
+    if doc.get("intercompany_linked_doc_name") or doc.get("intercompany_linked_doc_doctype"):
+        validate_locked_mirrored_fields(doc)
+        return
+
+    auto_detect_intercompany_party(doc, method)
+
+    if cint(doc.get("is_intercompany")) and doc.get("intercompany_target_company"):
+        if doc.get("intercompany_target_company") == doc.get("company"):
+            frappe.throw(_("Intercompany Target Company cannot be the same as Source Company ({0}).").format(doc.get("company")))
+        validate_intercompany_cross_currency_rate(doc)
+
+
 def auto_detect_intercompany_party(doc, method=None):
     """
-    Hooked on document validate/before_save:
-    1. Checks if customer, supplier, or any journal entry account row belongs to a sister company.
+    Hooked on document validate:
+    1. Checks if customer, supplier, Payment Entry party, or Journal Entry row party belongs to a sister company.
     2. If an intercompany party IS detected:
        - Auto-sets is_intercompany = 1
-       - Auto-populates intercompany_target_company = <Target Sister Company>
+       - Strictly enforces intercompany_target_company = <Target Sister Company>
        - For Journal Entry: Auto-populates row.intercompany_target_company on applicable rows.
     3. If NO intercompany party is detected:
-       - If the user did not manually specify an explicit valid target company:
-         Strictly sets is_intercompany = 0 and clears intercompany_target_company,
-         preventing any unwanted draft creation for non-intercompany transactions.
+       - If user did not manually specify a valid target company != company:
+         Enforces clean non-intercompany state (is_intercompany = 0).
     """
     if not hasattr(doc, "doctype") or not doc.get("company"):
         return
@@ -3296,8 +4210,6 @@ def auto_detect_intercompany_party(doc, method=None):
 
     # Case B: No intercompany party detected
     else:
-        # If user explicitly selected an intercompany target company different from current company,
-        # respect their manual selection; otherwise enforce clean non-intercompany state.
         existing_target = (doc.get("intercompany_target_company") or "").strip()
         if not existing_target or existing_target == company:
             doc.is_intercompany = 0

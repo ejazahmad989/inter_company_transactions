@@ -17,13 +17,13 @@
 |---|---|
 | **App Name** | `inter_company_transactions` |
 | **App Title** | Inter Company Transactions |
-| **Publisher** | Ejaz Ahmed (`ejazahmad989@gmail.com`) |
+| **Publisher Contact** | `rahilali3311@gmail.com` / `ejazahmad989@gmail.com` |
 | **Category** | Accounting & Finance / Supply Chain / Enterprise Management |
 | **Supported Frappe Versions** | **Frappe v14, Frappe v15, Frappe v16 (Verified)** |
 | **Supported ERPNext Versions** | **ERPNext v14, ERPNext v15, ERPNext v16 (Latest)** |
 | **App Version** | `1.0.0` (Production Stable) |
-| **License** | MIT / Commercial Enterprise License |
-| **Repository URL** | `https://github.com/ejazahmad989/inter_company_transactions` |
+| **License** | MIT (Open Source — required for Frappe Cloud Marketplace) |
+| **Repository URL** | `https://github.com/shaid3311/inter_company_transactions` |
 | **Documentation** | Included (`USER_GUIDE.md` & `Inter_Company_Transactions_User_Guide.pdf`) |
 | **App Icon** | `inter_company_transactions/public/images/inter_company_icon.svg` |
 | **Hero Banner** | `inter_company_transactions/public/images/marketplace_banner.png` |
@@ -103,14 +103,16 @@ Seamless bidirectional mirroring for every operational document:
 
 ---
 
-## 5. Recommended Marketplace Pricing Strategy
+## 5. Recommended Marketplace Pricing Strategy & Official Payout Terms
 
-When publishing on Frappe Cloud Marketplace, you can offer one of the following models:
+- **License & Repository Requirement:** Paid apps on Frappe Cloud Marketplace must reside in a **public GitHub repository** with an **open-source license (`MIT`)** (already configured in `license.txt` & `hooks.py`).
+- **Revenue Split & Payouts:** Frappe Cloud retains the first **$500 USD** of lifetime app revenue; after that threshold, publishers receive **80%** of subscription revenue (20% platform fee) paid via **PayPal** (minimum $50/month threshold).
+- **Mandatory Seller Listing Assets:** >=200x200px icon, screenshots/walkthrough video, Website URL, Support URL, Documentation URL, Terms of Service URL, and Privacy Policy URL.
 
 | Plan | Price Model | Target Audience | What's Included |
 |---|---|---|---|
-| **Monthly Subscription** | **$49 / month / site** | Multi-company groups, holding entities | Complete intercompany engine, all 15 doctypes, 2-way bilateral trading, automated bridge accounts |
-| **Annual Subscription** | **$490 / year / site** (2 Months Free) | Annual subscribers saving $98/year | All features, continuous updates for ERPNext v14, v15 & v16, community support |
+| **Monthly Subscription** | **$49 / month / site** | Multi-company groups, holding entities | Complete intercompany engine, all 15 doctypes, 2-way bilateral trading, automated `TMP-<ABBR>` Bank accounts |
+| **Annual Subscription** | **$490 / year / site** (2 Months Free) | Annual subscribers saving $98/year | All features, continuous updates for ERPNext v14, v15 & v16, email support |
 | **Enterprise Support Retainer** | **$299 / month** | Large conglomerates & holding groups | Federated Multi-Site Sync, custom ERP integrations, priority engineering SLA |
 
 ---
@@ -131,3 +133,4 @@ Before submitting to Frappe Marketplace:
 - [x] **Multi-Language Translations:** Standard CSV translation bundles included for Spanish (`es`), French (`fr`), and Arabic (`ar`).
 - [x] **Automated Tests:** Comprehensive unit test suite with 100% passing tests.
 - [x] **Documentation & Assets:** Full User Guide markdown, PDF user guide, and installation instructions included in repo.
+- [x] **Zero-Residual Uninstallation:** Certified `before_uninstall` and `after_uninstall` hooks that wipe all custom artifacts on uninstall.
