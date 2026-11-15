@@ -402,10 +402,24 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 			"other_company_warehouse": "Transit B - CB",
 		})
 
-		fake_se = frappe.new_doc("Stock Entry")
-		fake_se.items = []
-		fake_se.flags = frappe._dict()
-		fake_se.set_missing_values = lambda **kw: None
+		class FakeStockEntry:
+			def __init__(self):
+				self.doctype = "Stock Entry"
+				self.items = []
+				self.flags = frappe._dict()
+				self.from_warehouse = None
+				self.to_warehouse = None
+
+			def append(self, tbl, row):
+				getattr(self, tbl).append(frappe._dict(row))
+
+			def get(self, key, default=None):
+				return getattr(self, key, default)
+
+			def set_missing_values(self, **kwargs):
+				pass
+
+		fake_se = FakeStockEntry()
 
 		def mock_get_value(dt=None, filters=None, fieldname=None, doctype=None, **kwargs):
 			target_dt = dt or doctype
