@@ -20,7 +20,6 @@ app_include_js = [
 ]
 
 # Session Hooks
-before_request = "inter_company_transactions.session.before_request"
 on_session_creation = "inter_company_transactions.session.on_session_creation"
 
 # Boot Session
@@ -45,6 +44,7 @@ before_migrate = "inter_company_transactions.patches.before_migrate.before_migra
 after_migrate = "inter_company_transactions.patches.after_migrate.after_migrate"
 before_uninstall = "inter_company_transactions.uninstall.before_uninstall"
 after_uninstall = "inter_company_transactions.uninstall.after_uninstall"
+before_tests = "inter_company_transactions.tests_bootstrap.before_tests"
 
 
 # Ignore audit/log references when deleting cancelled or draft vouchers
@@ -156,4 +156,3 @@ doc_events = {
         "on_trash": f"{_ICT_BASE}.cleanup_intercompany_links_on_trash",
     }
 }
-
