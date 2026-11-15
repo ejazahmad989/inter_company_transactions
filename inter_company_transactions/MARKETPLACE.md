@@ -24,7 +24,7 @@
 | **Supported ERPNext Versions** | **ERPNext v14, ERPNext v15, ERPNext v16 (Latest)** |
 | **App Version** | `1.0.0` (Production Stable) |
 | **License** | MIT (Open Source — required for Frappe Cloud Marketplace) |
-| **Repository URL** | `https://github.com/shaid3311/inter_company_transactions` |
+| **Repository URL** | `https://github.com/ejazahmad989/inter_company_transactions` |
 | **Documentation** | Included (`USER_GUIDE.md` & `Inter_Company_Transactions_User_Guide.pdf`) |
 | **App Icon** | `inter_company_transactions/public/images/inter_company_icon.svg` |
 | **Hero Banner** | `inter_company_transactions/public/images/marketplace_banner.png` |
