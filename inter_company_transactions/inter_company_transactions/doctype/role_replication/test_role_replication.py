@@ -11,6 +11,8 @@ from inter_company_transactions.inter_company_transactions.doctype.role_replicat
 	RoleReplication,
 )
 
+IGNORE_TEST_RECORD_DEPENDENCIES = ["Role"]
+
 
 class TestRoleReplication(FrappeTestCase):
 	"""
@@ -45,10 +47,9 @@ class TestRoleReplication(FrappeTestCase):
 		self.assertEqual(doc.new_role, "Accounts User Junior")
 
 	@patch("frappe.only_for")
-	@patch("frappe.db.commit")
 	@patch("frappe.clear_cache")
 	@patch("frappe.msgprint")
-	def test_replicate_role_returns_summary(self, mock_msgprint, mock_clear, mock_commit, mock_only_for):
+	def test_replicate_role_returns_summary(self, mock_msgprint, mock_clear, mock_only_for):
 		"""Verify replicate_role creates role and returns structured summary"""
 		doc = frappe.new_doc("Role Replication")
 		doc.existing_role = "Accounts User"

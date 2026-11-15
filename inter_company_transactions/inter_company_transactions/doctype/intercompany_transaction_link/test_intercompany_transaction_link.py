@@ -13,6 +13,16 @@ from inter_company_transactions.inter_company_transactions.doctype.intercompany_
 )
 
 
+IGNORE_TEST_RECORD_DEPENDENCIES = [
+	"Company",
+	"Customer",
+	"Supplier",
+	"Account",
+	"Warehouse",
+	"Item",
+]
+
+
 class TestIntercompanyTransactionLink(unittest.TestCase):
 	"""
 	Unit and integration tests for Inter Company Transactions ERPNext app.
