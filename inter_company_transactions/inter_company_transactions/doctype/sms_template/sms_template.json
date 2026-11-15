@@ -1,14 +1,25 @@
 {
-  "doctype": "DocType",
-  "name": "SMS Template",
-  "module": "Inter Company Transactions",
+  "actions": [],
+  "allow_rename": 1,
+  "autoname": "field:template_name",
+  "creation": "2024-03-14 00:00:00.000000",
   "custom": 0,
+  "doctype": "DocType",
+  "editable_grid": 1,
+  "engine": "InnoDB",
+  "field_order": [
+    "template_name",
+    "message",
+    "enabled"
+  ],
   "fields": [
     {
       "fieldname": "template_name",
       "fieldtype": "Data",
+      "in_list_view": 1,
       "label": "Template Name",
-      "reqd": 1
+      "reqd": 1,
+      "unique": 1
     },
     {
       "fieldname": "message",
@@ -17,25 +28,37 @@
       "reqd": 1
     },
     {
+      "default": "1",
       "fieldname": "enabled",
       "fieldtype": "Check",
-      "label": "Enabled",
-      "default": 1
-    }
-  ],
-  "permissions": [
-    {
-      "role": "System Manager",
-      "read": 1,
-      "write": 1,
-      "create": 1,
-      "delete": 1
+      "in_list_view": 1,
+      "label": "Enabled"
     }
   ],
   "issingle": 0,
-  "editable_grid": 1,
+  "links": [],
+  "modified": "2024-03-14 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Inter Company Transactions",
+  "name": "SMS Template",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    }
+  ],
+  "sort_field": "creation",
+  "sort_order": "DESC",
+  "states": [],
   "track_changes": 1,
-  "track_views": 0,
-  "engine": "InnoDB",
-  "autoname": "field:template_name"
+  "track_views": 0
 }

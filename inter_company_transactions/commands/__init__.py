@@ -9,50 +9,15 @@ import frappe
 
 
 def execute():
-    """Import doctypes for inter-company transactions"""
+    """Reload module DocTypes safely from JSON schemas without requiring developer_mode."""
     try:
         app_path = frappe.get_app_path("inter_company_transactions")
-
-        doctypes = [
-            "Inter Company Transaction Map",
-            "Inter Company Transaction Mapping",
-            "Intercompany Transaction Link",
-            "Intercompany Transaction Type Mapping",
-        ]
-
-        for doctype in doctypes:
-            try:
-                file_name = doctype.lower().replace(" ", "_")
-                json_file = os.path.join(
-                    app_path,
-                    "inter_company_transactions",
-                    "doctype",
-                    file_name,
-                    f"{file_name}.json",
-                )
-
+        doctypes_dir = os.path.join(app_path, "inter_company_transactions", "doctype")
+        if os.path.isdir(doctypes_dir):
+            for entry in sorted(os.listdir(doctypes_dir)):
+                json_file = os.path.join(doctypes_dir, entry, f"{entry}.json")
                 if os.path.exists(json_file):
-                    with open(json_file) as f:
-                        doc_data = json.load(f)
-
-                    if not frappe.db.exists("DocType", doctype):
-                        doc = frappe.new_doc("DocType")
-                        doc.update(doc_data)
-                        doc.insert(ignore_permissions=True)
-                        print(f"Created DocType: {doctype}")
-                    else:
-                        doc = frappe.get_doc("DocType", doctype)
-                        doc.update(doc_data)
-                        doc.save(ignore_permissions=True)
-                        print(f"Updated DocType: {doctype}")
-
-                    frappe.db.commit()
-                else:
-                    print(f"JSON file not found for DocType: {doctype}")
-
-            except Exception as e:
-                print(f"Error importing DocType {doctype}: {e!s}")
-                frappe.log_error(f"DocType Import Error: {e!s}", "Inter Company Transaction Setup")
+                    frappe.reload_doc("inter_company_transactions", "doctype", entry)
     except Exception as e:
         print(f"Failed to execute command: {e!s}")
         frappe.log_error(f"Command Execution Error: {e!s}", "Inter Company Transaction Setup")
@@ -61,7 +26,7 @@ def execute():
 def verify_marketplace_readiness():
     """
     Automated 8-Point Quality & Safety Audit for Frappe Marketplace Certification.
-    Ensures zero intrusion on standard ERPNext DocTypes across v14, v15, and v16:
+    Ensures zero intrusion on standard ERPNext DocTypes across v15 and v16:
     1. Master & Tree DocType Isolation Audit
     2. Permission Integrity Audit
     3. Expression & Syntax Sanity Audit
@@ -73,7 +38,7 @@ def verify_marketplace_readiness():
     """
     print("\n" + "=" * 75)
     print("  FRAPPE MARKETPLACE READINESS & SAFETY AUDIT")
-    print("  App: inter_company_transactions | Target: ERPNext v14, v15, v16")
+    print("  App: inter_company_transactions | Target: ERPNext v15, v16")
     print("=" * 75)
 
     failures = []

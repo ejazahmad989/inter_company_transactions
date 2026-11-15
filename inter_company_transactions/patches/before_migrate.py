@@ -30,7 +30,8 @@ def ensure_standard_doctypes():
         "Inter Company Dispute",
         "Inter Company Remote Site",
         "ICT Notification Setting",
-        "Role Replication"
+        "Role Replication",
+        "SMS Template",
     ]
 
     for doctype_name in app_doctypes:
