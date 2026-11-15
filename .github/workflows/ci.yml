@@ -65,11 +65,14 @@ jobs:
           node-version: ${{ matrix.node_version }}
           check-latest: true
 
+      - name: Ensure Yarn is available
+        run: command -v yarn >/dev/null 2>&1 || npm install -g yarn
+
       - name: Cache pip
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-${{ matrix.python_version }}-pip-${{ hashFiles('**/*requirements.txt', '**/pyproject.toml', '**/setup.py', '**/setup.cfg') }}
+          key: ${{ runner.os }}-${{ matrix.python_version }}-pip-${{ hashFiles('**/*requirements.txt', '**/pyproject.toml') }}
           restore-keys: |
             ${{ runner.os }}-${{ matrix.python_version }}-pip-
 
@@ -86,7 +89,7 @@ jobs:
             ${{ runner.os }}-yarn-
 
       - name: Install MariaDB Client
-        run: sudo apt-get update && sudo apt-get install -y mariadb-client-10.6
+        run: sudo apt-get update && sudo apt-get install -y mariadb-client libmariadb-dev
 
       - name: Setup Bench & Frappe
         run: |
@@ -104,7 +107,7 @@ jobs:
           bench get-app erpnext --branch ${{ matrix.branch }}
           bench get-app inter_company_transactions $GITHUB_WORKSPACE
           bench setup requirements --dev
-          bench new-site --db-root-password root --admin-password admin test_site
+          bench new-site --db-root-password root --admin-password admin --mariadb-user-host-login-scope='%' test_site
           bench --site test_site install-app erpnext
           bench --site test_site install-app inter_company_transactions
           bench build
@@ -117,5 +120,15 @@ jobs:
           bench --site test_site execute inter_company_transactions.commands.verify_marketplace_readiness
           bench --site test_site set-config allow_tests true
           bench --site test_site run-tests --app inter_company_transactions
+          bench --site test_site set-config allow_tests false
         env:
           TYPE: server
+
+      - name: Verify Clean Uninstall & Reinstall Lifecycle
+        working-directory: /home/runner/frappe-bench
+        run: |
+          bench --site test_site uninstall-app inter_company_transactions --yes
+          bench --site test_site migrate
+          bench --site test_site install-app inter_company_transactions
+          bench --site test_site migrate
+          bench --site test_site execute inter_company_transactions.commands.verify_marketplace_readiness
