@@ -17,7 +17,8 @@
 |---|---|
 | **App Name** | `inter_company_transactions` |
 | **App Title** | Inter Company Transactions |
-| **Publisher Contact** | `rahilali3311@gmail.com` / `ejazahmad989@gmail.com` |
+| **Publisher** | Ejaz Tech (`E Tech`) |
+| **Publisher Contact** | `ejazahmad989@gmail.com` (Support / Testing: `rahilali3311@gmail.com`) |
 | **Category** | Accounting & Finance / Supply Chain / Enterprise Management |
 | **Supported Frappe Versions** | **Frappe v14, Frappe v15, Frappe v16 (Verified)** |
 | **Supported ERPNext Versions** | **ERPNext v14, ERPNext v15, ERPNext v16 (Latest)** |

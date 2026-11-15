@@ -1,7 +1,7 @@
 
 app_name = "inter_company_transactions"
 app_title = "Inter Company Transactions"
-app_publisher = "Ejaz Ahmed"
+app_publisher = "Ejaz Tech"
 app_description = "Enterprise Inter-Company Transactions, Transfer Pricing, Elimination and Netting for ERPNext"
 app_version = "1.0.0"
 app_icon = "octicon octicon-git-compare"

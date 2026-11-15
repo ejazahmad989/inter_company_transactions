@@ -9,8 +9,8 @@ from inter_company_transactions import __version__ as version
 setup(
 	name='inter_company_transactions',
 	version=version,
-	description='Enterprise Inter-Company Transactions for ERPNext (v14, v15 & v16 Compatible)',
-	author='Ejaz Ahmed',
+	description='Enterprise Inter-Company Transactions for ERPNext (v15 & v16 Compatible)',
+	author='Ejaz Tech',
 	author_email='ejazahmad989@gmail.com',
 	packages=find_packages(),
 	zip_safe=False,
@@ -25,6 +25,8 @@ setup(
 		'Programming Language :: Python :: 3.10',
 		'Programming Language :: Python :: 3.11',
 		'Programming Language :: Python :: 3.12',
+		'Programming Language :: Python :: 3.13',
+		'Programming Language :: Python :: 3.14',
 		'Topic :: Office/Business :: Financial :: Accounting',
 	]
 )
