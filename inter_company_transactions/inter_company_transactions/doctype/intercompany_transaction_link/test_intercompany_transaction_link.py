@@ -407,15 +407,23 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 		fake_se.flags = frappe._dict()
 		fake_se.set_missing_values = lambda **kw: None
 
-		def mock_get_value(dt, filters=None, fieldname=None, **kwargs):
-			if dt == "Company" and fieldname == "default_currency":
+		def mock_get_value(dt=None, filters=None, fieldname=None, doctype=None, **kwargs):
+			target_dt = dt or doctype
+			if target_dt == "Company" and fieldname == "default_currency":
 				return "USD"
-			if dt == "Item" and fieldname == "valuation_rate":
+			if target_dt == "Item" and fieldname == "valuation_rate":
 				return 0
 			return None
 
+		def mock_exists(dt, name=None, **kwargs):
+			if dt == "Item":
+				return True
+			return False
+
 		with patch.object(frappe, "new_doc", return_value=fake_se), patch.object(
 			frappe.db, "has_column", return_value=False
+		), patch.object(
+			frappe.db, "exists", side_effect=mock_exists
 		), patch.object(
 			frappe.db, "get_value", side_effect=mock_get_value
 		):

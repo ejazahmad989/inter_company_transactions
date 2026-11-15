@@ -1899,7 +1899,11 @@ def ensure_item_exists(item_code, item_name=None, description=None, uom="Nos", i
     try:
         # Determine valid item_group
         if not item_group or not frappe.db.exists("Item Group", item_group):
-            item_group = frappe.db.get_value("Item Group", {"is_group": 0}, "name") or "All Item Groups"
+            item_group = (
+                frappe.db.get_value("Item Group", {"is_group": 0}, "name")
+                or frappe.db.get_value("Item Group", {}, "name")
+                or "All Item Groups"
+            )
 
         if not uom or not frappe.db.exists("UOM", uom):
             uom = frappe.db.get_value("UOM", {}, "name") or "Nos"
@@ -1919,7 +1923,10 @@ def ensure_item_exists(item_code, item_name=None, description=None, uom="Nos", i
         item_doc.insert()
         return item_doc.name
     except Exception as e:
-        frappe.log_error(f"Could not auto-create item {item_code}: {e}", "Intercompany Item Creation")
+        try:
+            frappe.log_error(f"Could not auto-create item {item_code}: {e}", "Intercompany Item Creation")
+        except Exception:
+            pass
         return item_code
 
 
