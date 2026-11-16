@@ -288,9 +288,9 @@ def verify_marketplace_readiness():
         print("  PASSED: Zero references to non-existent columns (`is_inter_company`); standard ERPNext fields used.")
 
     # --------------------------------------------------------------------------
-    # AUDIT 8: Multi-Version API Compatibility Check (v14, v15, v16)
+    # AUDIT 8: Multi-Version API Compatibility Check (v15, v16)
     # --------------------------------------------------------------------------
-    print("\n[Audit 8/8] Verifying ERPNext v14, v15, and v16 Compatibility...")
+    print("\n[Audit 8/8] Verifying ERPNext v15 and v16 Compatibility...")
     try:
         import inter_company_transactions.safe_eval_patch as sep
 
