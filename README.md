@@ -3,9 +3,9 @@
 </p>
 
 <p align="center">
-  <a href="https://frappeframework.com/"><img src="https://img.shields.io/badge/Frappe-v14%20%7C%20v15%20%7C%20v16-blue.svg" alt="Frappe v14 | v15 | v16" /></a>
-  <a href="https://erpnext.com/"><img src="https://img.shields.io/badge/ERPNext-v14%20%7C%20v15%20%7C%20v16-blue.svg" alt="ERPNext v14 | v15 | v16" /></a>
-  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-blue.svg" alt="Python 3.10 | 3.11 | 3.12" /></a>
+  <a href="https://frappeframework.com/"><img src="https://img.shields.io/badge/Frappe-v15%20%7C%20v16-blue.svg" alt="Frappe v15 | v16" /></a>
+  <a href="https://erpnext.com/"><img src="https://img.shields.io/badge/ERPNext-v15%20%7C%20v16-blue.svg" alt="ERPNext v15 | v16" /></a>
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.11%20%7C%203.14-blue.svg" alt="Python 3.11 | 3.14" /></a>
   <a href="license.txt"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT" /></a>
   <img src="https://img.shields.io/badge/Build-Passing-brightgreen.svg" alt="Build Status" />
   <a href="MARKETPLACE.md"><img src="https://img.shields.io/badge/Frappe%20Marketplace-Verified-orange.svg" alt="Frappe Marketplace" /></a>
@@ -15,30 +15,30 @@
   <img src="inter_company_transactions/public/images/marketplace_banner.png" alt="Inter-Company Transactions Hero Banner" width="100%" />
 </p>
 
-# Inter-Company Transactions for ERPNext (v14, v15 & v16 Ready)
+# Inter-Company Transactions for ERPNext (v15 & v16 Ready)
 
 An enterprise-grade, comprehensive Frappe / ERPNext application engineered for corporate groups, holding companies, multi-entity conglomerates, and multinational enterprises. Automates reciprocal intercompany document mirroring, party-to-company auto-detection, OECD arm's-length transfer pricing, multilateral netting, period-end elimination journal entries, billing dispute management, cross-company balance reconciliation, and **federated remote multi-site synchronization across separate ERPNext instances**.
 
 ---
 
-## 🚀 Multi-Version Compatibility: ERPNext v14, v15 & v16
+## 🚀 Multi-Version Compatibility: ERPNext v15 & v16
 
 ### **Does it work on ERPNext 16 too?**
-**Yes! The application is 100% verified and fully compatible with ERPNext 14, ERPNext 15, and ERPNext 16 (Latest).**
+**Yes! The application is verified by automated CI across both ERPNext v15 and ERPNext v16.**
 
-| Component | ERPNext v14 (LTS) | ERPNext v15 (Stable) | ERPNext v16 (Latest) | Notes |
-|---|:---:|:---:|:---:|---|
-| **Python Runtime** | 3.10+ | 3.10 - 3.11 | 3.10 - 3.12 | Standard Python type hinting & clean imports |
-| **DocType Schemas** | Compatible | Compatible | Compatible | Standard Frappe JSON schema (v3/v4) |
-| **Document Hooks (`doc_events`)** | Supported | Supported | Supported | `validate`, `on_submit`, `on_cancel` standard lifecycle |
-| **Frappe ORM & Database** | Supported | Supported | Supported | Zero raw SQL injection; uses `frappe.get_doc` & `frappe.qb` |
-| **Client Script Hooks** | Supported | Supported | Supported | Standard `frappe.ui.form.on` and Desk Page API |
-| **REST API & Multi-Site Sync** | Supported | Supported | Supported | Standard Token Auth (`Authorization: token key:secret`) |
-| **Database Migrations** | Zero Conflict | Zero Conflict | Zero Conflict | Idempotent `after_migrate` hooks check field existence |
+| Component | ERPNext v15 (Stable) | ERPNext v16 (Latest) | Notes |
+|---|:---:|:---:|---|
+| **Python Runtime (CI Tested)** | 3.11 | 3.14 | Standard Python type hinting & clean imports |
+| **DocType Schemas** | Compatible | Compatible | Standard Frappe JSON schema |
+| **Document Hooks (`doc_events`)** | Supported | Supported | `validate`, `on_submit`, `before_cancel`, `on_cancel`, `on_trash` |
+| **Frappe ORM & Database** | Supported | Supported | Standard `frappe.get_doc`, `frappe.db`, and safe parameterized queries |
+| **Client Script Hooks** | Supported | Supported | Standard `frappe.ui.form.on` and Desk Page API (zero prototype overrides) |
+| **REST API & Multi-Site Sync** | Supported | Supported | Standard Token Auth (`Authorization: token key:secret`) + HMAC-SHA256 |
+| **Database Migrations** | Zero Conflict | Zero Conflict | Idempotent `after_migrate` checks field existence dynamically |
 
 ### Why It Runs Flawlessly Across Both v15 and v16:
-1. **Zero Core Monkey-Patching**: The app does NOT tamper with private internal Frappe classes. All business logic executes through standard, public extension hooks (`doc_events`, `scheduler_events`, and custom Desk Pages).
-2. **Safe Migration Safeguards**: Custom fields are injected via an idempotent `after_migrate` routine that checks `frappe.db.exists("Custom Field", ...)` before insertion. Running `bench migrate` on v14, v15, or v16 will never crash or overwrite existing fixtures.
+1. **Zero Core Monkey-Patching**: The app does NOT tamper with or override core Frappe classes or prototypes (`safe_eval`, `Layout`, `GridRow`, etc.). All business logic executes through standard, public extension hooks (`doc_events`, `scheduler_events`, `on_session_creation`, and custom Desk Pages).
+2. **Safe Migration Safeguards**: Custom fields are injected via an idempotent `after_migrate` routine that checks `frappe.db.exists("Custom Field", ...)` before insertion. Running `bench migrate` on v15 or v16 will never crash or overwrite existing customizations.
 3. **Pure Python Standard Library Cryptography**: Payload integrity verification uses standard `hmac`, `hashlib`, and `urllib` without volatile native C-extensions.
 4. **Universal Desk UI**: Form extensions and the Interactive Desk Console utilize vanilla Frappe standard components compatible with both Frappe 15 and Frappe 16 Desk engines.
 
@@ -108,26 +108,11 @@ Automatically creates, submits, or cancels reciprocal mirror documents in real-t
 
 ---
 
-## 🎨 Official Brand Assets & Marketplace Package
-
-The repository includes high-resolution SVG and PNG branding assets optimized for Frappe Desk, Frappe Cloud, and Frappe Marketplace:
-
-- **App Icon (SVG)**: `inter_company_transactions/public/images/inter_company_icon.svg`
-- **App Icon 512x512 (PNG)**: `inter_company_transactions/public/images/inter_company_icon_512.png`
-- **Horizontal Logo (SVG)**: `inter_company_transactions/public/images/inter_company_logo.svg`
-- **Horizontal Logo (PNG)**: `inter_company_transactions/public/images/inter_company_logo.png`
-- **Marketplace Hero Banner 1280x640 (SVG)**: `inter_company_transactions/public/images/marketplace_banner.svg`
-- **Marketplace Hero Banner 1280x640 (PNG)**: `inter_company_transactions/public/images/marketplace_banner.png`
-- **Official Marketplace Guide**: `MARKETPLACE.md`
-- **Printable 12-Page User Manual**: `public/Inter_Company_Transactions_User_Guide.pdf`
-
----
-
 ## 🚀 Installation & Quickstart
 
 ### 1. Install via Bench
 ```bash
-bench get-app https://github.com/rahilali/inter_company_transactions.git
+bench get-app https://github.com/ejazahmad989/inter_company_transactions.git
 bench --site [your-site-name] install-app inter_company_transactions
 bench --site [your-site-name] migrate
 ```
@@ -148,7 +133,7 @@ Create a Sales Order in Company A for the mapped intercompany customer. The syst
 # Run unit tests
 bench --site [your-site-name] run-tests --app inter_company_transactions
 
-# Run automated 6-point marketplace readiness & safety audit
+# Run automated 8-point marketplace readiness & safety audit
 bench --site [your-site-name] execute inter_company_transactions.commands.verify_marketplace_readiness
 ```
 
@@ -160,7 +145,6 @@ bench --site [your-site-name] uninstall-app inter_company_transactions
 
 ---
 
-
 ## 🌐 Multi-Language Support
 Out-of-the-box translation support included for:
 - English (`en`)
@@ -171,6 +155,6 @@ Out-of-the-box translation support included for:
 ---
 
 ## 📄 License & Publisher
-- **Author:** Rahil Ali (`rahilali3311@gmail.com`)
+- **Publisher:** Ejaz Tech (`ejazahmad989@gmail.com`) & Rahil Ali (`rahilali3311@gmail.com`)
 - **License:** MIT License (Commercial & Marketplace Ready)
-- **Documentation:** Full guide available in `USER_GUIDE.md` and `Inter_Company_Transactions_User_Guide.pdf`.
+- **Documentation:** Complete setup and operations guide available in [`USER_GUIDE.md`](USER_GUIDE.md) and inside ERPNext Desk via the User Guide PDF download.
