@@ -451,8 +451,6 @@ def quick_setup_intercompany_pair(main_company, counterparty_company, preset="fu
 		link_doc.insert()
 		link_name = link_doc.name
 
-	frappe.db.commit()
-
 	return {
 		"success": True,
 		"link_name": link_name,
