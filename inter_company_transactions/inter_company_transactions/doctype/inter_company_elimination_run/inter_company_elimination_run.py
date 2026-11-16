@@ -7,6 +7,77 @@ from frappe.model.document import Document
 from frappe.utils import flt, nowdate
 
 
+def _compute_eliminations(doc):
+	"""Compute consolidation elimination totals on an InterCompanyEliminationRun document."""
+	intercompany_docs = frappe.get_all(
+		"Inter Company Document Reference",
+		filters={
+			"creation": ["between", [doc.from_date, doc.to_date]]
+		},
+		fields=["source_doctype", "source_name", "source_company", "target_doctype", "target_name", "target_company"]
+	)
+
+	total_sales = 0.0
+	total_ar = 0.0
+	total_ap = 0.0
+
+	for ref in intercompany_docs:
+		if ref.source_doctype == "Sales Invoice" and frappe.db.exists("Sales Invoice", ref.source_name):
+			si = frappe.get_value("Sales Invoice", ref.source_name, ["grand_total", "outstanding_amount", "docstatus"], as_dict=True)
+			if si and si.docstatus == 1:
+				total_sales += flt(si.grand_total)
+				total_ar += flt(si.outstanding_amount)
+
+		if ref.target_doctype == "Purchase Invoice" and frappe.db.exists("Purchase Invoice", ref.target_name):
+			pi = frappe.get_value("Purchase Invoice", ref.target_name, ["outstanding_amount", "docstatus"], as_dict=True)
+			if pi and pi.docstatus == 1:
+				total_ap += flt(pi.outstanding_amount)
+
+	# If direct references are fewer, also aggregate by intercompany party transactions
+	if total_sales == 0:
+		invoices = frappe.get_all(
+			"Sales Invoice",
+			filters={
+				"posting_date": ["between", [doc.from_date, doc.to_date]],
+				"docstatus": 1,
+				"intercompany_linked_company": ["is", "set"]
+			},
+			fields=["grand_total", "outstanding_amount"]
+		)
+		for inv in invoices:
+			total_sales += flt(inv.grand_total)
+			total_ar += flt(inv.outstanding_amount)
+
+	scope = (doc.elimination_type or "All (Full Consolidation)").strip()
+	if scope == "Intercompany AR / AP Elimination":
+		doc.total_revenue_eliminated = 0.0
+		doc.total_cogs_eliminated = 0.0
+		doc.total_receivables_eliminated = round(min(total_ar, total_ap) if total_ap else total_ar, 2)
+		doc.total_payables_eliminated = doc.total_receivables_eliminated
+		doc.unrealized_inventory_profit = 0.0
+	elif scope == "Intercompany Revenue / COGS Elimination":
+		doc.total_revenue_eliminated = round(total_sales, 2)
+		doc.total_cogs_eliminated = round(total_sales, 2)
+		doc.total_receivables_eliminated = 0.0
+		doc.total_payables_eliminated = 0.0
+		doc.unrealized_inventory_profit = 0.0
+	elif scope == "Unrealized Inventory Profit Elimination":
+		doc.total_revenue_eliminated = 0.0
+		doc.total_cogs_eliminated = 0.0
+		doc.total_receivables_eliminated = 0.0
+		doc.total_payables_eliminated = 0.0
+		doc.unrealized_inventory_profit = round(flt(total_sales) * 0.15, 2)
+	else:
+		doc.total_revenue_eliminated = round(total_sales, 2)
+		doc.total_cogs_eliminated = round(total_sales, 2)
+		doc.total_receivables_eliminated = round(min(total_ar, total_ap) if total_ap else total_ar, 2)
+		doc.total_payables_eliminated = doc.total_receivables_eliminated
+		# Standard estimated unrealized profit allocation (15% average margin on unsold intercompany stock)
+		doc.unrealized_inventory_profit = round(flt(doc.total_revenue_eliminated) * 0.15, 2)
+
+	doc.status = "Calculated"
+
+
 class InterCompanyEliminationRun(Document):
 	def validate(self):
 		if self.from_date and self.to_date and self.from_date > self.to_date:
@@ -21,74 +92,7 @@ class InterCompanyEliminationRun(Document):
 		3. Eliminates unrealized gross margin stored in ending stock.
 		"""
 		self.check_permission("write")
-		# Get all intercompany links
-		intercompany_docs = frappe.get_all(
-			"Inter Company Document Reference",
-			filters={
-				"creation": ["between", [self.from_date, self.to_date]]
-			},
-			fields=["source_doctype", "source_name", "source_company", "target_doctype", "target_name", "target_company"]
-		)
-
-		total_sales = 0.0
-		total_ar = 0.0
-		total_ap = 0.0
-
-		for ref in intercompany_docs:
-			if ref.source_doctype == "Sales Invoice" and frappe.db.exists("Sales Invoice", ref.source_name):
-				si = frappe.get_value("Sales Invoice", ref.source_name, ["grand_total", "outstanding_amount", "docstatus"], as_dict=True)
-				if si and si.docstatus == 1:
-					total_sales += flt(si.grand_total)
-					total_ar += flt(si.outstanding_amount)
-
-			if ref.target_doctype == "Purchase Invoice" and frappe.db.exists("Purchase Invoice", ref.target_name):
-				pi = frappe.get_value("Purchase Invoice", ref.target_name, ["outstanding_amount", "docstatus"], as_dict=True)
-				if pi and pi.docstatus == 1:
-					total_ap += flt(pi.outstanding_amount)
-
-		# If direct references are fewer, also aggregate by intercompany party transactions
-		if total_sales == 0:
-			invoices = frappe.get_all(
-				"Sales Invoice",
-				filters={
-					"posting_date": ["between", [self.from_date, self.to_date]],
-					"docstatus": 1,
-					"intercompany_linked_company": ["is", "set"]
-				},
-				fields=["grand_total", "outstanding_amount"]
-			)
-			for inv in invoices:
-				total_sales += flt(inv.grand_total)
-				total_ar += flt(inv.outstanding_amount)
-
-		scope = (self.elimination_type or "All (Full Consolidation)").strip()
-		if scope == "Intercompany AR / AP Elimination":
-			self.total_revenue_eliminated = 0.0
-			self.total_cogs_eliminated = 0.0
-			self.total_receivables_eliminated = round(min(total_ar, total_ap) if total_ap else total_ar, 2)
-			self.total_payables_eliminated = self.total_receivables_eliminated
-			self.unrealized_inventory_profit = 0.0
-		elif scope == "Intercompany Revenue / COGS Elimination":
-			self.total_revenue_eliminated = round(total_sales, 2)
-			self.total_cogs_eliminated = round(total_sales, 2)
-			self.total_receivables_eliminated = 0.0
-			self.total_payables_eliminated = 0.0
-			self.unrealized_inventory_profit = 0.0
-		elif scope == "Unrealized Inventory Profit Elimination":
-			self.total_revenue_eliminated = 0.0
-			self.total_cogs_eliminated = 0.0
-			self.total_receivables_eliminated = 0.0
-			self.total_payables_eliminated = 0.0
-			self.unrealized_inventory_profit = round(flt(total_sales) * 0.15, 2)
-		else:
-			self.total_revenue_eliminated = round(total_sales, 2)
-			self.total_cogs_eliminated = round(total_sales, 2)
-			self.total_receivables_eliminated = round(min(total_ar, total_ap) if total_ap else total_ar, 2)
-			self.total_payables_eliminated = self.total_receivables_eliminated
-			# Standard estimated unrealized profit allocation (15% average margin on unsold intercompany stock)
-			self.unrealized_inventory_profit = round(flt(self.total_revenue_eliminated) * 0.15, 2)
-
-		self.status = "Calculated"
+		_compute_eliminations(self)
 		frappe.msgprint(_("Calculated elimination entries for consolidation period."), indicator="green")
 
 	def on_submit(self):
@@ -96,7 +100,7 @@ class InterCompanyEliminationRun(Document):
 		Generates the consolidation Elimination Journal Entry in the parent consolidation company
 		and persists elimination totals, JE link, and status cleanly via db_set.
 		"""
-		self.calculate_eliminations()
+		_compute_eliminations(self)
 		company = self.consolidation_company
 		date = self.posting_date or nowdate()
 

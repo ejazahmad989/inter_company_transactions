@@ -156,3 +156,4 @@ doc_events = {
         "on_trash": f"{_ICT_BASE}.cleanup_intercompany_links_on_trash",
     }
 }
+

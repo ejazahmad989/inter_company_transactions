@@ -7,6 +7,107 @@ from frappe.model.document import Document
 from frappe.utils import flt, nowdate
 
 
+def _compute_netting(doc):
+	"""Compute multilateral netting positions and settlements for an InterCompanyNettingCycle document."""
+	company_stats = {}
+	for row in doc.participating_companies:
+		company_stats[row.company] = {
+			"gross_payables": 0.0,
+			"gross_receivables": 0.0,
+			"net_balance": 0.0
+		}
+
+	has_invoices = bool(doc.invoices)
+	if has_invoices:
+		for inv in (doc.invoices or []):
+			amt = flt(inv.settled_amount or inv.outstanding_amount)
+			if inv.invoice_type == "Sales Invoice":
+				if inv.company in company_stats:
+					company_stats[inv.company]["gross_receivables"] += amt
+				if inv.partner_company in company_stats:
+					company_stats[inv.partner_company]["gross_payables"] += amt
+			elif inv.invoice_type == "Purchase Invoice":
+				if inv.company in company_stats:
+					company_stats[inv.company]["gross_payables"] += amt
+				if inv.partner_company in company_stats:
+					company_stats[inv.partner_company]["gross_receivables"] += amt
+	else:
+		# Allow manual participating_companies net_balance / gross inputs directly
+		for row in doc.participating_companies:
+			net_val = flt(getattr(row, "net_balance", 0))
+			gross_rec = flt(getattr(row, "gross_receivables", 0))
+			gross_pay = flt(getattr(row, "gross_payables", 0))
+			if gross_rec > 0 or gross_pay > 0:
+				company_stats[row.company]["gross_receivables"] = gross_rec
+				company_stats[row.company]["gross_payables"] = gross_pay
+			elif net_val > 0:
+				company_stats[row.company]["gross_receivables"] = net_val
+			elif net_val < 0:
+				company_stats[row.company]["gross_payables"] = abs(net_val)
+
+	total_payables = 0.0
+	total_receivables = 0.0
+
+	for row in doc.participating_companies:
+		stats = company_stats.get(row.company, {})
+		row.gross_payables = stats.get("gross_payables", 0.0)
+		row.gross_receivables = stats.get("gross_receivables", 0.0)
+		row.net_balance = row.gross_receivables - row.gross_payables
+		total_payables += row.gross_payables
+		total_receivables += row.gross_receivables
+
+		if row.net_balance > 0.01:
+			row.settlement_position = "Net Creditor"
+		elif row.net_balance < -0.01:
+			row.settlement_position = "Net Debtor"
+		else:
+			row.settlement_position = "Balanced"
+
+	doc.total_gross_payables = total_payables
+	doc.total_gross_receivables = total_receivables
+
+	# Multilateral Settlement Solver (Greedy Knapsack Matching)
+	debtors = []  # owes money: net_balance < 0
+	creditors = []  # owed money: net_balance > 0
+
+	for row in doc.participating_companies:
+		if row.net_balance < -0.01:
+			debtors.append({"company": row.company, "amount": abs(row.net_balance)})
+		elif row.net_balance > 0.01:
+			creditors.append({"company": row.company, "amount": row.net_balance})
+
+	doc.net_settlements = []
+	d_idx = 0
+	c_idx = 0
+	total_net = 0.0
+
+	while d_idx < len(debtors) and c_idx < len(creditors):
+		debtor = debtors[d_idx]
+		creditor = creditors[c_idx]
+
+		settle_amt = min(debtor["amount"], creditor["amount"])
+		if settle_amt > 0.01:
+			company_currency = frappe.get_cached_value("Company", debtor["company"], "default_currency")
+			doc.append("net_settlements", {
+				"paying_company": debtor["company"],
+				"receiving_company": creditor["company"],
+				"amount": round(settle_amt, 2),
+				"currency": company_currency,
+				"status": "Pending"
+			})
+			total_net += settle_amt
+			debtor["amount"] -= settle_amt
+			creditor["amount"] -= settle_amt
+
+		if debtor["amount"] <= 0.01:
+			d_idx += 1
+		if creditor["amount"] <= 0.01:
+			c_idx += 1
+
+	doc.total_net_settled = round(total_net, 2)
+	doc.status = "Calculated"
+
+
 class InterCompanyNettingCycle(Document):
 	def validate(self):
 		if not self.participating_companies:
@@ -104,7 +205,7 @@ class InterCompanyNettingCycle(Document):
 						"settled_amount": inv.outstanding_amount
 					})
 
-		self.calculate_netting()
+		_compute_netting(self)
 		frappe.msgprint(_("Fetched {0} open inter-company invoices.").format(len(self.invoices)), indicator="green")
 
 	@frappe.whitelist()
@@ -115,103 +216,7 @@ class InterCompanyNettingCycle(Document):
 		then resolves debtor-creditor settlements minimizing bank transactions.
 		"""
 		self.check_permission("write")
-		company_stats = {}
-		for row in self.participating_companies:
-			company_stats[row.company] = {
-				"gross_payables": 0.0,
-				"gross_receivables": 0.0,
-				"net_balance": 0.0
-			}
-
-		has_invoices = bool(self.invoices)
-		if has_invoices:
-			for inv in (self.invoices or []):
-				amt = flt(inv.settled_amount or inv.outstanding_amount)
-				if inv.invoice_type == "Sales Invoice":
-					if inv.company in company_stats:
-						company_stats[inv.company]["gross_receivables"] += amt
-					if inv.partner_company in company_stats:
-						company_stats[inv.partner_company]["gross_payables"] += amt
-				elif inv.invoice_type == "Purchase Invoice":
-					if inv.company in company_stats:
-						company_stats[inv.company]["gross_payables"] += amt
-					if inv.partner_company in company_stats:
-						company_stats[inv.partner_company]["gross_receivables"] += amt
-		else:
-			# Allow manual participating_companies net_balance / gross inputs directly
-			for row in self.participating_companies:
-				net_val = flt(getattr(row, "net_balance", 0))
-				gross_rec = flt(getattr(row, "gross_receivables", 0))
-				gross_pay = flt(getattr(row, "gross_payables", 0))
-				if gross_rec > 0 or gross_pay > 0:
-					company_stats[row.company]["gross_receivables"] = gross_rec
-					company_stats[row.company]["gross_payables"] = gross_pay
-				elif net_val > 0:
-					company_stats[row.company]["gross_receivables"] = net_val
-				elif net_val < 0:
-					company_stats[row.company]["gross_payables"] = abs(net_val)
-
-		total_payables = 0.0
-		total_receivables = 0.0
-
-		for row in self.participating_companies:
-			stats = company_stats.get(row.company, {})
-			row.gross_payables = stats.get("gross_payables", 0.0)
-			row.gross_receivables = stats.get("gross_receivables", 0.0)
-			row.net_balance = row.gross_receivables - row.gross_payables
-			total_payables += row.gross_payables
-			total_receivables += row.gross_receivables
-
-			if row.net_balance > 0.01:
-				row.settlement_position = "Net Creditor"
-			elif row.net_balance < -0.01:
-				row.settlement_position = "Net Debtor"
-			else:
-				row.settlement_position = "Balanced"
-
-		self.total_gross_payables = total_payables
-		self.total_gross_receivables = total_receivables
-
-		# Multilateral Settlement Solver (Greedy Knapsack Matching)
-		debtors = []  # owes money: net_balance < 0
-		creditors = [] # owed money: net_balance > 0
-
-		for row in self.participating_companies:
-			if row.net_balance < -0.01:
-				debtors.append({"company": row.company, "amount": abs(row.net_balance)})
-			elif row.net_balance > 0.01:
-				creditors.append({"company": row.company, "amount": row.net_balance})
-
-		self.net_settlements = []
-		d_idx = 0
-		c_idx = 0
-		total_net = 0.0
-
-		while d_idx < len(debtors) and c_idx < len(creditors):
-			debtor = debtors[d_idx]
-			creditor = creditors[c_idx]
-
-			settle_amt = min(debtor["amount"], creditor["amount"])
-			if settle_amt > 0.01:
-				company_currency = frappe.get_cached_value("Company", debtor["company"], "default_currency")
-				self.append("net_settlements", {
-					"paying_company": debtor["company"],
-					"receiving_company": creditor["company"],
-					"amount": round(settle_amt, 2),
-					"currency": company_currency,
-					"status": "Pending"
-				})
-				total_net += settle_amt
-				debtor["amount"] -= settle_amt
-				creditor["amount"] -= settle_amt
-
-			if debtor["amount"] <= 0.01:
-				d_idx += 1
-			if creditor["amount"] <= 0.01:
-				c_idx += 1
-
-		self.total_net_settled = round(total_net, 2)
-		self.status = "Calculated"
+		_compute_netting(self)
 
 	def on_submit(self):
 		"""
@@ -221,10 +226,9 @@ class InterCompanyNettingCycle(Document):
 		"""
 		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
 			get_or_create_intercompany_clearing_account,
-			resolve_party_target_company,
 		)
 
-		self.calculate_netting()
+		_compute_netting(self)
 		date = self.settlement_date or nowdate()
 
 		self.db_set({

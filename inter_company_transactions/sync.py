@@ -292,7 +292,6 @@ def update_remote_site_status(company_name, status, error_message=None):
 		if updated:
 			settings.flags.ignore_permissions = True
 			settings.save(ignore_permissions=True)
-			frappe.db.commit()
 	except Exception:
 		pass
 
@@ -332,7 +331,6 @@ def log_remote_sync_failure(doc, target_company, site_url, payload_json, error_m
 		err_log.payload_snapshot = payload_json
 		err_log.flags.ignore_permissions = True
 		err_log.insert(ignore_permissions=True)
-		frappe.db.commit()
 	except Exception as e:
 		frappe.logger().error(f"Failed to log remote sync error: {e!s}")
 
@@ -435,6 +433,9 @@ def receive_remote_transaction(payload=None):
 	target_doctype = target_doctype_map.get(source_doctype)
 	if not target_doctype:
 		frappe.throw(_("Unsupported source DocType for intercompany sync: {0}").format(source_doctype))
+
+	# Verify the authenticated API user has create permission on the target DocType
+	frappe.has_permission(target_doctype, "create", throw=True)
 
 	# Construct Mirrored Document
 	target_doc = frappe.new_doc(target_doctype)
@@ -561,6 +562,8 @@ def receive_remote_transaction(payload=None):
 	target_doc.intercompany_linked_company = source_company
 	target_doc.intercompany_target_company = source_company
 
+	# Cross-company mirror drafts allow target company completion (warehouses/cost centers)
+	# before final submission; create permission was verified above.
 	target_doc.flags.ignore_permissions = True
 	target_doc.flags.ignore_mandatory = True
 
@@ -593,8 +596,6 @@ def receive_remote_transaction(payload=None):
 					frappe.db.rollback(save_point="ict_remote_submit")
 				except Exception:
 					pass
-
-	frappe.db.commit()
 
 	return {
 		"success": True,
@@ -680,7 +681,6 @@ def resolve_counterparty_for_remote_source(source_company, target_doctype, targe
 		new_party.flags.ignore_permissions = True
 		new_party.flags.ignore_mandatory = True
 		new_party.insert(ignore_permissions=True)
-		frappe.db.commit()
 		return new_party.name
 	except Exception:
 		# 4. Safe fallback only if party creation fails
@@ -786,14 +786,14 @@ def cancel_remote_transaction(payload=None):
 
 	target_doc = frappe.get_doc(ref.target_doctype, ref.target_name)
 	if target_doc.docstatus == 1:
+		frappe.has_permission(ref.target_doctype, "cancel", ref.target_name, throw=True)
 		target_doc.flags.ignore_permissions = True
 		target_doc.flags.intercompany_auto_cancel = True
 		target_doc.cancel()
-		frappe.db.commit()
 		return {"success": True, "cancelled": f"{ref.target_doctype} {ref.target_name}"}
 	elif target_doc.docstatus == 0:
+		frappe.has_permission(ref.target_doctype, "delete", ref.target_name, throw=True)
 		target_doc.delete()
-		frappe.db.commit()
 		return {"success": True, "deleted_draft": f"{ref.target_doctype} {ref.target_name}"}
 
 	return {"success": True, "message": "Already cancelled"}

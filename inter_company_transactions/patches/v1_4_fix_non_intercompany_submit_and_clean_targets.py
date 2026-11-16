@@ -48,12 +48,15 @@ def execute():
 	for dt in doctypes:
 		try:
 			if frappe.db.table_exists(dt) and frappe.db.has_column(dt, "intercompany_target_company") and frappe.db.has_column(dt, "company"):
-				frappe.db.sql(f"""
-					UPDATE `tab{dt}`
-					SET `intercompany_target_company` = ''
-					WHERE `docstatus` = 0
-					  AND (`intercompany_target_company` = `company` OR `is_intercompany` = 0)
-				""")
+				draft_docs = frappe.get_all(
+					dt,
+					filters={"docstatus": 0, "intercompany_target_company": ["is", "set"]},
+					fields=["name", "company", "is_intercompany", "intercompany_target_company"],
+					ignore_permissions=True,
+				)
+				for row in draft_docs or []:
+					if not row.get("is_intercompany") or row.get("intercompany_target_company") == row.get("company"):
+						frappe.db.set_value(dt, row.get("name"), "intercompany_target_company", "", update_modified=False)
 		except Exception as e:
 			frappe.logger().warning(f"[ICT Patch v1.4] Warning cleaning up {dt}: {e}")
 

@@ -17,16 +17,10 @@ def before_uninstall():
     except Exception:
         pass
 
-    # Delete all Custom Fields created by or belonging to this app
     cleanup_custom_fields()
-
-    # Delete any Property Setters created by the app
     cleanup_property_setters()
-
-    # Remove any ICT Custom DocPerms
     cleanup_custom_docperms()
 
-    frappe.db.commit()
     frappe.clear_cache()
     print("Pre-uninstall cleanup for Inter Company Transactions completed successfully.")
 
@@ -42,11 +36,8 @@ def after_uninstall():
         run_full_healing(verbose=True)
     except Exception:
         pass
-    frappe.db.commit()
     frappe.clear_cache()
     print("Post-uninstall tasks completed. ERPNext site is clean.")
-
-
 
 
 def cleanup_custom_fields():
@@ -69,26 +60,12 @@ def cleanup_custom_fields():
     ]
 
     try:
-        # Delete all Custom Fields owned by this module
-        frappe.db.sql("""
-            DELETE FROM `tabCustom Field`
-            WHERE `module` = 'Inter Company Transactions'
-        """)
-
-        # Delete specific ICT fieldnames safely (without touching unrelated apps)
-        placeholders = ", ".join(["%s"] * len(ict_fields))
-        frappe.db.sql(f"""
-            DELETE FROM `tabCustom Field`
-            WHERE `fieldname` IN ({placeholders})
-        """, tuple(ict_fields))
-
-        # Clean legacy custom_company only on tree doctypes where ICT previously created it
-        frappe.db.sql("""
-            DELETE FROM `tabCustom Field`
-            WHERE `dt` IN ('Customer Group', 'Supplier Group', 'Item Group')
-              AND `fieldname` = 'custom_company'
-        """)
-
+        frappe.db.delete("Custom Field", {"module": "Inter Company Transactions"})
+        frappe.db.delete("Custom Field", {"fieldname": ["in", ict_fields]})
+        frappe.db.delete(
+            "Custom Field",
+            {"dt": ["in", ["Customer Group", "Supplier Group", "Item Group"]], "fieldname": "custom_company"},
+        )
         print("Cleaned up all Inter Company Transactions Custom Fields.")
     except Exception as e:
         print(f"Notice during custom fields cleanup: {e}")
@@ -99,15 +76,19 @@ def cleanup_property_setters():
     if not (hasattr(frappe, "db") and frappe.db and frappe.db.table_exists("Property Setter")):
         return
 
-    try:
-        frappe.db.sql("""
-            DELETE FROM `tabProperty Setter`
-            WHERE `module` = 'Inter Company Transactions'
-               OR `property` LIKE '%intercompany%'
-               OR `field_name` IN ('is_intercompany', 'intercompany_target_company', 'intercompany_linked_doc_doctype', 'intercompany_linked_doc_name', 'intercompany_linked_company')
-        """)
-        print("Cleaned up Inter Company Transactions Property Setters.")
+    ict_fieldnames = [
+        "is_intercompany",
+        "intercompany_target_company",
+        "intercompany_linked_doc_doctype",
+        "intercompany_linked_doc_name",
+        "intercompany_linked_company",
+    ]
 
+    try:
+        frappe.db.delete("Property Setter", {"module": "Inter Company Transactions"})
+        frappe.db.delete("Property Setter", {"property": ["like", "%intercompany%"]})
+        frappe.db.delete("Property Setter", {"field_name": ["in", ict_fieldnames]})
+        print("Cleaned up Inter Company Transactions Property Setters.")
     except Exception as e:
         print(f"Notice during property setters cleanup: {e}")
 
@@ -139,11 +120,7 @@ def cleanup_custom_docperms():
     ]
 
     try:
-        placeholders = ", ".join(["%s"] * len(ict_doctypes))
-        frappe.db.sql(f"""
-            DELETE FROM `tabCustom DocPerm`
-            WHERE `parent` IN ({placeholders})
-        """, tuple(ict_doctypes))
+        frappe.db.delete("Custom DocPerm", {"parent": ["in", ict_doctypes]})
     except Exception as e:
         print(f"Notice during custom docperms cleanup: {e}")
 
@@ -151,93 +128,6 @@ def cleanup_custom_docperms():
 def repair_all_depends_on_expressions():
     """
     Scans and permanently repairs any damaged depends_on expressions in MariaDB.
-    Specifically fixes '__islocalanddoc' -> '__islocal && doc' so ERPNext Item,
-    Customer, and Supplier forms never crash with 'Invalid depends_on expression'.
     """
-    if not (hasattr(frappe, "db") and frappe.db):
-        return
-
-    tables = ["tabDocField", "tabCustom Field", "tabProperty Setter"]
-    for tbl in tables:
-        if not frappe.db.table_exists(tbl):
-            continue
-
-        cols_to_check = []
-        if tbl == "tabProperty Setter":
-            if frappe.db.has_column(tbl, "value"):
-                cols_to_check.append("value")
-        else:
-            for c in ["depends_on", "mandatory_depends_on", "read_only_depends_on"]:
-                if frappe.db.has_column(tbl, c):
-                    cols_to_check.append(c)
-
-        for col in cols_to_check:
-            try:
-                # 1. Fix __islocalanddoc -> __islocal && doc
-                frappe.db.sql(f"""
-                    UPDATE `{tbl}`
-                    SET `{col}` = REPLACE(`{col}`, '__islocalanddoc', '__islocal && doc')
-                    WHERE `{col}` LIKE '%__islocalanddoc%'
-                """)
-                frappe.db.sql(f"""
-                    UPDATE `{tbl}`
-                    SET `{col}` = REPLACE(`{col}`, '__islocal anddoc', '__islocal && doc')
-                    WHERE `{col}` LIKE '%__islocal anddoc%'
-                """)
-                frappe.db.sql(f"""
-                    UPDATE `{tbl}`
-                    SET `{col}` = REPLACE(`{col}`, '__islocaland doc', '__islocal && doc')
-                    WHERE `{col}` LIKE '%__islocaland doc%'
-                """)
-
-                # 2. Fix __islocaland -> __islocal &&
-                frappe.db.sql(f"""
-                    UPDATE `{tbl}`
-                    SET `{col}` = REPLACE(`{col}`, '__islocaland', '__islocal && ')
-                    WHERE `{col}` LIKE '%__islocaland%'
-                """)
-
-                # 3. Fix anddoc. -> && doc.
-                frappe.db.sql(f"""
-                    UPDATE `{tbl}`
-                    SET `{col}` = REPLACE(`{col}`, 'anddoc.', ' && doc.')
-                    WHERE `{col}` LIKE '%anddoc.%'
-                """)
-                frappe.db.sql(f"""
-                    UPDATE `{tbl}`
-                    SET `{col}` = REPLACE(`{col}`, 'and!doc.', ' && !doc.')
-                    WHERE `{col}` LIKE '%and!doc.%'
-                """)
-                frappe.db.sql(f"""
-                    UPDATE `{tbl}`
-                    SET `{col}` = REPLACE(`{col}`, 'and !doc.', ' && !doc.')
-                    WHERE `{col}` LIKE '%and !doc.%'
-                """)
-                frappe.db.sql(f"""
-                    UPDATE `{tbl}`
-                    SET `{col}` = REPLACE(`{col}`, 'and!in_list(', ' && !in_list(')
-                    WHERE `{col}` LIKE '%and!in_list(%'
-                """)
-
-
-                # 4. Fix glued or / and operators
-                frappe.db.sql(f"""
-                    UPDATE `{tbl}`
-                    SET `{col}` = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(`{col}`,
-                        '1or(', '1 || ('),
-                        '0or(', '0 || ('),
-                        ')or(', ') || ('),
-                        '1and(', '1 && ('),
-                        '0and(', '0 && (')
-                    WHERE `{col}` IS NOT NULL AND (
-                        `{col}` LIKE '%1or(%' OR
-                        `{col}` LIKE '%0or(%' OR
-                        `{col}` LIKE '%)or(%' OR
-                        `{col}` LIKE '%1and(%' OR
-                        `{col}` LIKE '%0and(%'
-                    )
-                """)
-            except Exception:
-                pass
-
-    frappe.db.commit()
+    from inter_company_transactions.diagnose_and_heal import repair_database_text
+    repair_database_text(lambda *args, **kwargs: None)

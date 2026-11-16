@@ -171,7 +171,19 @@
       "print": 1,
       "read": 1,
       "report": 0,
-      "role": "All",
+      "role": "Inter Company User",
+      "share": 0,
+      "write": 1
+    },
+    {
+      "create": 1,
+      "delete": 0,
+      "email": 0,
+      "export": 0,
+      "print": 0,
+      "read": 1,
+      "report": 0,
+      "role": "Accounts User",
       "share": 0,
       "write": 1
     }

@@ -1,9 +1,7 @@
 # Copyright (c) 2026, Inter Company Transactions and contributors
 # For license information, please see license.txt
 
-import glob
-import json
-import os
+import re
 import frappe
 
 
@@ -19,28 +17,23 @@ def run_full_healing(verbose=True):
 	4. Fixes Tree View dirty 'Save' button locks on Customer Group, Supplier Group, and Item Group:
 	   - Purges all custom fields and intrusive property setters on Tree DocTypes.
 	   - Purges obsolete custom fields from Customer, Supplier, Item, and Warehouse.
-	5. Force-reloads standard DocTypes to flush metadata cache, commits, and clears Redis / Desk cache.
+	5. Force-reloads standard DocTypes to flush metadata cache and clears Redis / Desk cache.
 	"""
 	log = print if verbose else (lambda *args, **kwargs: None)
 	log("=== STARTING FULL DATABASE & DOCTYPE SELF-HEALING ===")
 
-	# 1. Repair database expressions
 	repaired_db_count = repair_database_text(log)
 	log(f"[1/5] Repaired corrupted expressions in database: {repaired_db_count} occurrences updated.")
 
-	# 2. Skip modifying external app disk files (marketplace safety)
 	repaired_files = repair_disk_json_files(log)
-	log(f"[2/5] Verified disk schema safety (0 external disk files modified).")
+	log("[2/5] Verified disk schema safety (0 external disk files modified).")
 
-	# 3. Restore master permissions (Customer, Supplier, Item)
 	restored_perms = restore_master_permissions(log)
 	log(f"[3/5] Restored master permissions (Add/Delete buttons): {restored_perms}")
 
-	# 4. Cleanup Tree and Master DocTypes
 	cleaned_fields = cleanup_trees_and_masters(log)
 	log(f"[4/5] Cleaned Tree and Master custom fields/property setters: {cleaned_fields}")
 
-	# 5. Reload doctypes and flush cache
 	reload_and_flush(log)
 	log("[5/5] Reloaded standard DocTypes and cleared site cache.")
 
@@ -50,23 +43,23 @@ def run_full_healing(verbose=True):
 		"repaired_db_count": repaired_db_count,
 		"repaired_files": repaired_files,
 		"restored_perms": restored_perms,
-		"cleaned_fields": cleaned_fields
+		"cleaned_fields": cleaned_fields,
 	}
 
 
 def repair_database_text(log):
-	"""Scan and replace corrupted expressions across all relevant MariaDB tables"""
+	"""Scan and replace corrupted expressions across all relevant MariaDB tables using ORM queries."""
 	if not (hasattr(frappe, "db") and frappe.db):
 		return 0
 
 	total_updates = 0
-	tables = [
-		("tabDocField", ["depends_on", "mandatory_depends_on", "read_only_depends_on", "options", "default"]),
-		("tabCustom Field", ["depends_on", "mandatory_depends_on", "read_only_depends_on", "options", "default"]),
-		("tabProperty Setter", ["value"]),
-		("tabClient Script", ["script"]),
-		("tabCustom Script", ["script"]),
-		("tabDocType", ["description"])
+	doctypes_and_cols = [
+		("DocField", ["depends_on", "mandatory_depends_on", "read_only_depends_on", "options", "default"]),
+		("Custom Field", ["depends_on", "mandatory_depends_on", "read_only_depends_on", "options", "default"]),
+		("Property Setter", ["value"]),
+		("Client Script", ["script"]),
+		("Custom Script", ["script"]),
+		("DocType", ["description"]),
 	]
 
 	replacements = [
@@ -82,53 +75,52 @@ def repair_database_text(log):
 		("0or(", "0 || ("),
 		(")or(", ") || ("),
 		("1and(", "1 && ("),
-		("0and(", "0 && (")
+		("0and(", "0 && ("),
 	]
 
-	import re
-
-	for tbl, cols in tables:
-		if not frappe.db.table_exists(tbl):
+	for dt, cols in doctypes_and_cols:
+		if not frappe.db.table_exists(dt):
 			continue
 		for col in cols:
-			if not frappe.db.has_column(tbl, col):
+			if not frappe.db.has_column(dt, col):
 				continue
 			for old_val, new_val in replacements:
 				try:
-					rows = frappe.db.sql(f"""
-						SELECT count(*) FROM `{tbl}` WHERE `{col}` LIKE %s
-					""", (f"%{old_val}%",))[0][0]
-					if rows > 0:
-						frappe.db.sql(f"""
-							UPDATE `{tbl}`
-							SET `{col}` = REPLACE(`{col}`, %s, %s)
-							WHERE `{col}` LIKE %s
-						""", (old_val, new_val, f"%{old_val}%"))
-						total_updates += rows
-						log(f"  Fixed {rows} rows in {tbl}.{col} for '{old_val}' -> '{new_val}'")
+					rows = frappe.get_all(
+						dt,
+						filters={col: ["like", f"%{old_val}%"]},
+						fields=["name", col],
+						ignore_permissions=True,
+					)
+					for row in rows or []:
+						orig = row.get(col) or ""
+						fixed = orig.replace(old_val, new_val)
+						if fixed != orig:
+							frappe.db.set_value(dt, row.get("name"), col, fixed, update_modified=False)
+							total_updates += 1
 				except Exception as e:
-					log(f"  Notice updating {tbl}.{col}: {e}")
+					log(f"  Notice updating {dt}.{col}: {e}")
 
 			# Also fix arbitrary glued identifier+and!/or! (e.g. doc.reference_typeand!in_list)
 			try:
-				if frappe.db.has_column(tbl, "name"):
-					glued_rows = frappe.db.sql(
-						f"SELECT name, `{col}` AS val FROM `{tbl}` WHERE `{col}` LIKE %s OR `{col}` LIKE %s",
-						("%and!%", "%or!%"),
-						as_dict=True,
+				if frappe.db.has_column(dt, "name"):
+					glued_rows = frappe.get_all(
+						dt,
+						or_filters=[[col, "like", "%and!%"], [col, "like", "%or!%"]],
+						fields=["name", col],
+						ignore_permissions=True,
 					)
-					for gr in (glued_rows or []):
-						orig = gr.get("val") or ""
+					for gr in glued_rows or []:
+						orig = gr.get(col) or ""
 						fixed = re.sub(r"([a-zA-Z0-9_\)])and!(?!=)", r"\1 && !", orig)
 						fixed = re.sub(r"([a-zA-Z0-9_\)])or!(?!=)", r"\1 || !", fixed)
 						if fixed != orig:
-							frappe.db.sql(f"UPDATE `{tbl}` SET `{col}` = %s WHERE name = %s", (fixed, gr.get("name")))
+							frappe.db.set_value(dt, gr.get("name"), col, fixed, update_modified=False)
 							total_updates += 1
-							log(f"  Fixed glued operator in {tbl}.{col} ({gr.get('name')})")
+							log(f"  Fixed glued operator in {dt}.{col} ({gr.get('name')})")
 			except Exception as e:
-				log(f"  Notice fixing glued operator in {tbl}.{col}: {e}")
+				log(f"  Notice fixing glued operator in {dt}.{col}: {e}")
 
-	frappe.db.commit()
 	return total_updates
 
 
@@ -150,49 +142,49 @@ def restore_master_permissions(log):
 		return "db_unavailable"
 
 	master_doctypes = ["Customer", "Supplier", "Item", "Customer Group", "Supplier Group", "Item Group"]
-	placeholders = ", ".join(["%s"] * len(master_doctypes))
+	admin_roles = ["System Manager", "Administrator"]
 
-	# 1. Repair restrictive Custom DocPerm rows ONLY for System Manager / Administrator
-	if frappe.db.table_exists("Custom DocPerm"):
+	for perm_dt in ("Custom DocPerm", "DocPerm"):
+		if not frappe.db.table_exists(perm_dt):
+			continue
 		try:
-			frappe.db.sql(f"""
-				UPDATE `tabCustom DocPerm`
-				SET `create` = 1, `delete` = 1, `write` = 1, `read` = 1
-				WHERE `parent` IN ({placeholders})
-				  AND `role` IN ('System Manager', 'Administrator')
-				  AND (`create` = 0 OR `delete` = 0 OR `write` = 0 OR `read` = 0)
-			""", tuple(master_doctypes))
-			log("  Verified System Manager & Administrator create/delete rights in Custom DocPerm.")
+			rows = frappe.get_all(
+				perm_dt,
+				filters={"parent": ["in", master_doctypes], "role": ["in", admin_roles]},
+				fields=["name", "create", "delete", "write", "read"],
+				ignore_permissions=True,
+			)
+			for row in rows or []:
+				if not (row.get("create") and row.get("delete") and row.get("write") and row.get("read")):
+					frappe.db.set_value(
+						perm_dt,
+						row.get("name"),
+						{"create": 1, "delete": 1, "write": 1, "read": 1},
+						update_modified=False,
+					)
+			log(f"  Verified System Manager & Administrator create/delete rights in {perm_dt}.")
 		except Exception as e:
-			log(f"  Notice during Custom DocPerm check: {e}")
+			log(f"  Notice during {perm_dt} check: {e}")
 
-	# 2. Guarantee standard DocPerm has create: 1, delete: 1 for manager roles
-	if frappe.db.table_exists("DocPerm"):
-		try:
-			frappe.db.sql(f"""
-				UPDATE `tabDocPerm`
-				SET `create` = 1, `delete` = 1, `write` = 1, `read` = 1
-				WHERE `parent` IN ({placeholders})
-				  AND `role` IN ('System Manager', 'Administrator')
-				  AND (`create` = 0 OR `delete` = 0 OR `write` = 0 OR `read` = 0)
-			""", tuple(master_doctypes))
-			log("  Verified System Manager & Administrator permissions in DocPerm.")
-		except Exception as e:
-			log(f"  Notice updating DocPerm: {e}")
-
-	# 3. Ensure tabDocType is not flagged read_only or restricted
 	if frappe.db.table_exists("DocType"):
 		try:
-			frappe.db.sql(f"""
-				UPDATE `tabDocType`
-				SET `read_only` = 0, `in_create` = 0
-				WHERE `name` IN ({placeholders})
-				  AND (`read_only` = 1 OR `in_create` = 1)
-			""", tuple(master_doctypes))
+			rows = frappe.get_all(
+				"DocType",
+				filters={"name": ["in", master_doctypes]},
+				fields=["name", "read_only", "in_create"],
+				ignore_permissions=True,
+			)
+			for row in rows or []:
+				if row.get("read_only") or row.get("in_create"):
+					frappe.db.set_value(
+						"DocType",
+						row.get("name"),
+						{"read_only": 0, "in_create": 0},
+						update_modified=False,
+					)
 		except Exception as e:
 			log(f"  Notice updating DocType read_only: {e}")
 
-	frappe.db.commit()
 	return "admin_roles_verified"
 
 
@@ -204,16 +196,11 @@ def cleanup_trees_and_masters(log):
 	if not (hasattr(frappe, "db") and frappe.db):
 		return 0
 
-	# 1. Custom Fields cleanup (scoped strictly to ICT module / obsolete ICT fieldnames)
 	if frappe.db.table_exists("Custom Field"):
 		try:
 			tree_dts = ["Customer Group", "Supplier Group", "Item Group"]
-			tree_ph = ", ".join(["%s"] * len(tree_dts))
-			frappe.db.sql(f"""
-				DELETE FROM `tabCustom Field`
-				WHERE `dt` IN ({tree_ph})
-				  AND (`module` = 'Inter Company Transactions' OR `fieldname` = 'custom_company')
-			""", tuple(tree_dts))
+			frappe.db.delete("Custom Field", {"dt": ["in", tree_dts], "module": "Inter Company Transactions"})
+			frappe.db.delete("Custom Field", {"dt": ["in", tree_dts], "fieldname": "custom_company"})
 
 			obsolete_master_fields = [
 				("Customer", "ic_customer_group"),
@@ -224,41 +211,35 @@ def cleanup_trees_and_masters(log):
 				("Warehouse", "ic_warehouse"),
 			]
 			for m_dt, m_fn in obsolete_master_fields:
-				frappe.db.sql("""
-					DELETE FROM `tabCustom Field`
-					WHERE `dt` = %s AND `fieldname` = %s
-				""", (m_dt, m_fn))
+				frappe.db.delete("Custom Field", {"dt": m_dt, "fieldname": m_fn})
 
-			# Also clean any lingering Custom Fields on masters explicitly owned by this module
-			frappe.db.sql("""
-				DELETE FROM `tabCustom Field`
-				WHERE `dt` IN ('Customer', 'Supplier', 'Item', 'Warehouse', 'Customer Group', 'Supplier Group', 'Item Group')
-				  AND `module` = 'Inter Company Transactions'
-			""")
+			all_master_dts = [
+				"Customer", "Supplier", "Item", "Warehouse",
+				"Customer Group", "Supplier Group", "Item Group",
+			]
+			frappe.db.delete("Custom Field", {"dt": ["in", all_master_dts], "module": "Inter Company Transactions"})
 			log("  Removed obsolete ICT custom fields from Tree and Master DocTypes.")
 		except Exception as e:
 			log(f"  Notice during custom field cleanup: {e}")
 
-	# 2. Property Setters cleanup (scoped strictly to ICT module / ICT properties)
 	if frappe.db.table_exists("Property Setter"):
 		try:
-			frappe.db.sql("""
-				DELETE FROM `tabProperty Setter`
-				WHERE `module` = 'Inter Company Transactions'
-				   OR `property` LIKE '%intercompany%'
-			""")
+			frappe.db.delete("Property Setter", {"module": "Inter Company Transactions"})
+			frappe.db.delete("Property Setter", {"property": ["like", "%intercompany%"]})
 			log("  Cleaned up Inter Company Transactions property setters.")
 		except Exception as e:
 			log(f"  Notice during property setter cleanup: {e}")
 
-	frappe.db.commit()
 	return "trees_and_masters_cleaned"
-
 
 
 def reload_and_flush(log):
 	"""Reload doctypes to refresh in-memory schema and flush cache"""
-	doctypes_to_reload = ["Item", "Customer", "Supplier", "Customer Group", "Supplier Group", "Item Group", "Journal Entry", "Journal Entry Account"]
+	doctypes_to_reload = [
+		"Item", "Customer", "Supplier",
+		"Customer Group", "Supplier Group", "Item Group",
+		"Journal Entry", "Journal Entry Account",
+	]
 	for dt in doctypes_to_reload:
 		try:
 			if frappe.db.exists("DocType", dt):
@@ -267,5 +248,4 @@ def reload_and_flush(log):
 		except Exception as e:
 			log(f"  Notice reloading {dt}: {e}")
 
-	frappe.db.commit()
 	frappe.clear_cache()

@@ -4,9 +4,11 @@ Generate a professional PDF version of the Inter-Company Transactions User Guide
 This script builds a multi-page PDF using standard Python without external dependencies.
 """
 
+import io
 import os
 import sys
 import textwrap
+from pathlib import Path
 
 
 def create_pdf(output_path=None):
@@ -17,8 +19,7 @@ def create_pdf(output_path=None):
     if not os.path.exists(md_path):
         md_path = os.path.join(script_dir, "..", "USER_GUIDE.md")
 
-    with open(md_path, encoding="utf-8") as f:
-        lines = f.readlines()
+    lines = Path(md_path).read_text(encoding="utf-8").splitlines(True)
 
     # Determine default output path
     if not output_path:
@@ -234,23 +235,25 @@ def create_pdf(output_path=None):
     pdf_objs.sort(key=lambda x: x[0])
 
     # Write PDF file with accurate xref table
-    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
-    with open(output_path, "wb") as f:
-        f.write(b"%PDF-1.4\n")
-        offsets = {}
-        for obj_id, obj_body in pdf_objs:
-            offsets[obj_id] = f.tell()
-            f.write(f"{obj_id} 0 obj\n{obj_body}\nendobj\n".encode('latin-1'))
+    out_file = Path(output_path).resolve()
+    out_file.parent.mkdir(parents=True, exist_ok=True)
+    buf = io.BytesIO()
+    buf.write(b"%PDF-1.4\n")
+    offsets = {}
+    for obj_id, obj_body in pdf_objs:
+        offsets[obj_id] = buf.tell()
+        buf.write(f"{obj_id} 0 obj\n{obj_body}\nendobj\n".encode('latin-1'))
 
-        xref_offset = f.tell()
-        total_objs = len(pdf_objs) + 1
-        f.write(f"xref\n0 {total_objs}\n".encode('latin-1'))
-        f.write(b"0000000000 65535 f \n")
-        for obj_id in range(1, total_objs):
-            pos = offsets.get(obj_id, 0)
-            f.write(f"{pos:010d} 00000 n \n".encode('latin-1'))
+    xref_offset = buf.tell()
+    total_objs = len(pdf_objs) + 1
+    buf.write(f"xref\n0 {total_objs}\n".encode('latin-1'))
+    buf.write(b"0000000000 65535 f \n")
+    for obj_id in range(1, total_objs):
+        pos = offsets.get(obj_id, 0)
+        buf.write(f"{pos:010d} 00000 n \n".encode('latin-1'))
 
-        f.write(f"trailer\n<< /Size {total_objs} /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF\n".encode('latin-1'))
+    buf.write(f"trailer\n<< /Size {total_objs} /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF\n".encode('latin-1'))
+    out_file.write_bytes(buf.getvalue())
 
     print(f"Successfully generated User Guide PDF at {output_path} ({os.path.getsize(output_path)} bytes, {total_pages} pages)")
     return output_path

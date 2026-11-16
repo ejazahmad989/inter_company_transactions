@@ -12,7 +12,6 @@ from inter_company_transactions.inter_company_transactions.doctype.intercompany_
 	get_default_warehouse,
 )
 
-
 IGNORE_TEST_RECORD_DEPENDENCIES = [
 	"Company",
 	"Customer",

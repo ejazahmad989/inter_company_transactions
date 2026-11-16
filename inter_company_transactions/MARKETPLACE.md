@@ -20,13 +20,13 @@
 | **Publisher** | Ejaz Tech (`E Tech`) |
 | **Publisher Contact** | `ejazahmad989@gmail.com` (Support / Testing: `rahilali3311@gmail.com`) |
 | **Category** | Accounting & Finance / Supply Chain / Enterprise Management |
-| **Supported Frappe Versions** | **Frappe v14, Frappe v15, Frappe v16 (Verified)** |
-| **Supported ERPNext Versions** | **ERPNext v14, ERPNext v15, ERPNext v16 (Latest)** |
+| **Supported Frappe Versions** | **Frappe v15, Frappe v16 (CI Verified)** |
+| **Supported ERPNext Versions** | **ERPNext v15, ERPNext v16 (CI Verified)** |
 | **App Version** | `1.0.0` (Production Stable) |
 | **License** | MIT (Open Source — required for Frappe Cloud Marketplace) |
 | **Repository URL** | `https://github.com/ejazahmad989/inter_company_transactions` |
-| **Documentation** | Included (`USER_GUIDE.md` & `Inter_Company_Transactions_User_Guide.pdf`) |
-| **App Icon** | `inter_company_transactions/public/images/inter_company_icon.svg` |
+| **Documentation** | Included (`USER_GUIDE.md` & `inter_company_transactions/public/Inter_Company_Transactions_User_Guide.pdf`) |
+| **App Icon** | `inter_company_transactions/public/images/inter_company_icon_512.png` |
 | **Hero Banner** | `inter_company_transactions/public/images/marketplace_banner.png` |
 
 ---
@@ -34,14 +34,14 @@
 ## 2. Version Support: ERPNext 15 & ERPNext 16 Compatibility
 
 ### **Is this app only for ERPNext 15, or will it work on ERPNext 16 too?**
-**It works on BOTH ERPNext 15 AND ERPNext 16!** It also maintains full backward compatibility with ERPNext 14 (LTS).
+**It works on BOTH ERPNext 15 AND ERPNext 16!** Automated CI tests fresh install, unit tests, uninstallation, and reinstall across both `version-15` (Python 3.11) and `version-16` (Python 3.14).
 
 ### Architecture Highlights for v15 & v16 Compatibility:
-- **Zero Core Tampering:** The app adheres to pure Frappe public extension conventions using `doc_events` on standard document lifecycle phases (`validate`, `on_submit`, `on_cancel`).
-- **Python Runtime:** Fully compliant with Python 3.10, 3.11, and 3.12 without legacy dependencies or deprecated packages.
-- **Unified DocType Schema:** DocType definitions use standard Frappe JSON specifications supported uniformly across Frappe 14, 15, and 16.
-- **Idempotent Bench Migrations:** `after_migrate` patches dynamically inspect schema state before creating custom fields, eliminating fixture conflicts during version upgrades.
-- **REST Multi-Site Federation:** Token-based authentication (`Authorization: token api_key:api_secret`) and JSON payloads operate identically across all modern Frappe releases.
+- **Zero Core Tampering or Monkey-Patching:** The app uses standard, public Frappe extension hooks (`doc_events`, `scheduler_events`, `on_session_creation`) with zero overrides of core Python functions or JS prototypes.
+- **Python Runtime:** Tested in CI on Python 3.11 (`version-15`) and Python 3.14 (`version-16`) with standard library dependencies only.
+- **Unified DocType Schema:** DocType definitions use standard Frappe JSON specifications supported uniformly across Frappe 15 and 16.
+- **Idempotent Bench Migrations:** `after_migrate` checks schema state before creating custom fields, eliminating fixture conflicts during upgrades.
+- **REST Multi-Site Federation:** Token-based authentication (`Authorization: token api_key:api_secret`) and HMAC-SHA256 verification operate identically across Frappe 15 and 16.
 
 ---
 
@@ -113,25 +113,27 @@ Seamless bidirectional mirroring for every operational document:
 | Plan | Price Model | Target Audience | What's Included |
 |---|---|---|---|
 | **Monthly Subscription** | **$49 / month / site** | Multi-company groups, holding entities | Complete intercompany engine, all 15 doctypes, 2-way bilateral trading, automated `TMP-<ABBR>` Bank accounts |
-| **Annual Subscription** | **$490 / year / site** (2 Months Free) | Annual subscribers saving $98/year | All features, continuous updates for ERPNext v14, v15 & v16, email support |
+| **Annual Subscription** | **$490 / year / site** (2 Months Free) | Annual subscribers saving $98/year | All features, continuous updates for ERPNext v15 & v16, email support |
 | **Enterprise Support Retainer** | **$299 / month** | Large conglomerates & holding groups | Federated Multi-Site Sync, custom ERP integrations, priority engineering SLA |
 
 ---
 
-## 6. Frappe Marketplace Submission Checklist
+## 6. Frappe Marketplace Submission Checklist & Background/Security Disclosures
 
-Before submitting to Frappe Marketplace:
+### Background Scheduler & Remote Credential Disclosure
+- **Hourly Retry Job (`scheduler_events["hourly"]`)**: Runs `inter_company_transactions.inter_company_transactions.doctype.inter_company_error_log.inter_company_error_log.auto_retry_pending_errors` once per hour to automatically retry queued `Inter Company Error Log` entries marked `Pending Retry`.
+- **Remote-Site Credentials (`Inter Company Remote Site`)**: Optional multi-site federation stores remote connection details (`site_url`, `api_key`, and encrypted Password fields `api_secret` and `hmac_secret`) in `Inter Company Remote Site` and signs outbound payloads with HMAC-SHA256 (`X-Intercompany-Signature`).
+- **Cross-Company Draft Isolation**: Creating mirrored draft vouchers in a sister company uses `ignore_permissions=True` and `ignore_mandatory=True` *only* after source submission is authorized and linked in `Intercompany Transaction Link`, allowing target accountants to review local warehouses and cost centers before submitting.
 
-- [x] **App Packaging & Python 3.10+ Compatibility:** Modern `pyproject.toml` and clean `setup.py`.
-- [x] **Version Certified for ERPNext 14, 15 & 16:** Tested and validated on all three editions.
-- [x] **Bench Dependency Standards:** `requirements.txt` does not conflict with bench-managed `frappe` or `erpnext`.
+### Pre-Submission Checklist:
+
+- [x] **App Packaging (`pyproject.toml` / Flit):** Modern PEP 621 `pyproject.toml` (`flit_core`) with Python 3.11 & 3.14 classifiers and zero conflicting `setup.py` or pip requirements.
+- [x] **CI-Tested for ERPNext v15 & v16:** GitHub Actions runs install, `verify_marketplace_readiness`, unit tests, uninstall, and reinstall on both `version-15` and `version-16`.
 - [x] **High-Resolution Branding Assets:** 512x512 app icon (SVG & PNG), horizontal logo, and 1280x640 showcase banner.
-- [x] **Hooks Configuration:** Metadata (`app_name`, `app_publisher`, `app_logo_url`, `app_icon`, `app_version = "1.0.0"`, `required_apps = ["erpnext"]`), `notification_config`, and `scheduler_events` declared.
-- [x] **Federated Remote Multi-Site Sync:** Robust cross-instance push/cancel REST API engine with idempotency and offline auto-retry.
+- [x] **Hooks Configuration:** Metadata (`app_name`, `app_publisher`, `app_logo_url`, `app_icon`, `app_version = "1.0.0"`, `required_apps = ["erpnext"]`), `on_session_creation`, `notification_config`, and `scheduler_events` declared (`before_request` removed).
+- [x] **Federated Remote Multi-Site Sync:** Robust cross-instance push/cancel REST API engine with permission verification, idempotency, and hourly offline auto-retry.
 - [x] **In-GUI Network & Firewall Diagnostic Tool:** Automated port and socket diagnostics with copy-pasteable firewall commands.
-- [x] **Migration Idempotency:** `after_install` and `after_migrate` hooks safely check existence before creating records, avoiding duplicate keys or schema corruption.
-- [x] **Safe depends_on Handling:** Client-side evaluators patched to prevent any JavaScript crashes on complex custom expressions.
+- [x] **Migration Idempotency:** `after_install`, single-file patches, and `after_migrate` safely check existence and sanitize metadata expressions in MariaDB without modifying core runtime classes.
 - [x] **Multi-Language Translations:** Standard CSV translation bundles included for Spanish (`es`), French (`fr`), and Arabic (`ar`).
 - [x] **Automated Tests:** Comprehensive unit test suite with 100% passing tests.
-- [x] **Documentation & Assets:** Full User Guide markdown, PDF user guide, and installation instructions included in repo.
-- [x] **Zero-Residual Uninstallation:** Certified `before_uninstall` and `after_uninstall` hooks that wipe all custom artifacts on uninstall.
+- [x] **Zero-Residual Uninstallation:** Certified `before_uninstall` and `after_uninstall` hooks verified in CI.

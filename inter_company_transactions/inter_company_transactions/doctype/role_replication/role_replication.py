@@ -91,7 +91,6 @@ class RoleReplication(Document):
 			except Exception as e:
 				frappe.logger().error(f"Error replicating perm for {parent_doctype} to {new_role}: {e!s}")
 
-		frappe.db.commit()
 		frappe.clear_cache()
 		frappe.msgprint(
 			_("Role '<b>{0}</b>' created and replicated <b>{1}</b> permissions from '<b>{2}</b>' successfully.").format(

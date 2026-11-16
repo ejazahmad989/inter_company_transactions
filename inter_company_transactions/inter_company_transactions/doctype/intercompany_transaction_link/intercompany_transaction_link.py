@@ -1358,27 +1358,48 @@ def scan_linked_company_defaults(main_company, other_company):
         return result
 
     def _find_internal_party(owner_co, counterparty_co, party_dt):
-        flag_col = "is_internal_customer" if party_dt == "Customer" else "is_internal_supplier"
         if not frappe.db.table_exists(party_dt):
             return None
-        rows = frappe.db.sql(
-            f"""
-            SELECT p.name
-            FROM `tab{party_dt}` p
-            WHERE (p.disabled IS NULL OR p.disabled = 0)
-              AND p.`{flag_col}` = 1
-              AND p.represents_company = %s
-            ORDER BY
-              EXISTS (
-                SELECT 1 FROM `tabAllowed To Transact With` att
-                WHERE att.parent = p.name AND att.parenttype = %s AND att.company = %s
-              ) DESC,
-              p.modified DESC
-            LIMIT 1
-            """,
-            (counterparty_co, party_dt, owner_co),
-            as_dict=True,
-        )
+        if party_dt == "Customer":
+            rows = frappe.db.sql(
+                """
+                SELECT p.name
+                FROM `tabCustomer` p
+                WHERE (p.disabled IS NULL OR p.disabled = 0)
+                  AND p.`is_internal_customer` = 1
+                  AND p.represents_company = %s
+                ORDER BY
+                  EXISTS (
+                    SELECT 1 FROM `tabAllowed To Transact With` att
+                    WHERE att.parent = p.name AND att.parenttype = %s AND att.company = %s
+                  ) DESC,
+                  p.modified DESC
+                LIMIT 1
+                """,
+                (counterparty_co, party_dt, owner_co),
+                as_dict=True,
+            )
+        elif party_dt == "Supplier":
+            rows = frappe.db.sql(
+                """
+                SELECT p.name
+                FROM `tabSupplier` p
+                WHERE (p.disabled IS NULL OR p.disabled = 0)
+                  AND p.`is_internal_supplier` = 1
+                  AND p.represents_company = %s
+                ORDER BY
+                  EXISTS (
+                    SELECT 1 FROM `tabAllowed To Transact With` att
+                    WHERE att.parent = p.name AND att.parenttype = %s AND att.company = %s
+                  ) DESC,
+                  p.modified DESC
+                LIMIT 1
+                """,
+                (counterparty_co, party_dt, owner_co),
+                as_dict=True,
+            )
+        else:
+            return None
         return rows[0].name if rows else None
 
     result["main_company_customer"] = _find_internal_party(main_company, other_company, "Customer")
@@ -1408,9 +1429,7 @@ def intercompany_party_query(doctype, txt, searchfield, start, page_len, filters
     filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
     owner_company = (filters.get("company") or "").strip()
     rep_company = (filters.get("represents_company") or "").strip()
-    name_col = "customer_name" if doctype == "Customer" else "supplier_name"
 
-    conditions = ["(p.disabled IS NULL OR p.disabled = 0)"]
     params = {
         "txt": f"%{txt or ''}%",
         "start": cint(start),
@@ -1431,66 +1450,154 @@ def intercompany_party_query(doctype, txt, searchfield, start, page_len, filters
         hasattr(frappe, "db") and frappe.db and frappe.db.table_exists("Allowed To Transact With")
     )
 
-    if owner_company:
-        # Exclude internal parties that represent the owner company itself
-        conditions.append("(p.represents_company IS NULL OR p.represents_company = '' OR p.represents_company != %(owner_company)s)")
-
-        ownership_clauses = []
-        if has_company_col:
-            ownership_clauses.append("p.company = %(owner_company)s")
-        if has_att:
-            ownership_clauses.append(
-                "EXISTS (SELECT 1 FROM `tabAllowed To Transact With` att "
-                "WHERE att.parent = p.name AND att.parenttype = %(dt)s AND att.company = %(owner_company)s)"
+    if not owner_company:
+        if doctype == "Customer":
+            return frappe.db.sql(
+                """
+                SELECT p.name, p.`customer_name`, p.represents_company
+                FROM `tabCustomer` p
+                WHERE (p.disabled IS NULL OR p.disabled = 0)
+                  AND (p.name LIKE %(txt)s OR p.`customer_name` LIKE %(txt)s)
+                ORDER BY
+                    (%(rep_company)s != '' AND p.represents_company = %(rep_company)s) DESC,
+                    (%(rep_company)s != '' AND (p.name LIKE %(rep_like)s OR p.`customer_name` LIKE %(rep_like)s)) DESC,
+                    p.modified DESC,
+                    p.name ASC
+                LIMIT %(start)s, %(page_len)s
+                """,
+                params,
             )
-        if has_party_account:
-            ownership_clauses.append(
-                "EXISTS (SELECT 1 FROM `tabParty Account` pa "
-                "WHERE pa.parent = p.name AND pa.parenttype = %(dt)s AND pa.company = %(owner_company)s)"
-            )
-
-        # Also allow unrestricted global parties (neither restricted to another company via Allowed To Transact With nor custom-tagged to another company)
-        unrestricted_checks = []
-        if has_company_col:
-            unrestricted_checks.append("(p.company IS NULL OR p.company = '')")
-        if has_att:
-            unrestricted_checks.append(
-                "NOT EXISTS (SELECT 1 FROM `tabAllowed To Transact With` att_other "
-                "WHERE att_other.parent = p.name AND att_other.parenttype = %(dt)s)"
-            )
-        if unrestricted_checks:
-            ownership_clauses.append("(" + " AND ".join(unrestricted_checks) + ")")
-
-        if ownership_clauses:
-            conditions.append("(" + " OR ".join(ownership_clauses) + ")")
-
-    conditions.append(f"(p.name LIKE %(txt)s OR p.`{name_col}` LIKE %(txt)s)")
-    where_clause = " AND ".join(conditions)
-
-    order_parts = []
-    if rep_company:
-        order_parts.append("(p.represents_company = %(rep_company)s) DESC")
-        order_parts.append(f"(p.name LIKE %(rep_like)s OR p.`{name_col}` LIKE %(rep_like)s) DESC")
-    if owner_company and has_company_col:
-        order_parts.append("(p.company = %(owner_company)s) DESC")
-    if owner_company and has_party_account:
-        order_parts.append(
-            "EXISTS (SELECT 1 FROM `tabParty Account` pa2 "
-            "WHERE pa2.parent = p.name AND pa2.parenttype = %(dt)s AND pa2.company = %(owner_company)s) DESC"
+        return frappe.db.sql(
+            """
+            SELECT p.name, p.`supplier_name`, p.represents_company
+            FROM `tabSupplier` p
+            WHERE (p.disabled IS NULL OR p.disabled = 0)
+              AND (p.name LIKE %(txt)s OR p.`supplier_name` LIKE %(txt)s)
+            ORDER BY
+                (%(rep_company)s != '' AND p.represents_company = %(rep_company)s) DESC,
+                (%(rep_company)s != '' AND (p.name LIKE %(rep_like)s OR p.`supplier_name` LIKE %(rep_like)s)) DESC,
+                p.modified DESC,
+                p.name ASC
+            LIMIT %(start)s, %(page_len)s
+            """,
+            params,
         )
-    order_parts.extend(["p.modified DESC", "p.name ASC"])
-    order_clause = ", ".join(order_parts)
 
-    return frappe.db.sql(
-        f"""
-        SELECT p.name, p.`{name_col}`, p.represents_company
-        FROM `tab{doctype}` p
-        WHERE {where_clause}
-        ORDER BY {order_clause}
-        LIMIT %(start)s, %(page_len)s
-        """,
-        params,
+    if has_att and has_party_account:
+        if doctype == "Customer":
+            if has_company_col:
+                return frappe.db.sql(
+                    """
+                    SELECT p.name, p.`customer_name`, p.represents_company
+                    FROM `tabCustomer` p
+                    WHERE (p.disabled IS NULL OR p.disabled = 0)
+                      AND (p.represents_company IS NULL OR p.represents_company = '' OR p.represents_company != %(owner_company)s)
+                      AND (
+                        p.company = %(owner_company)s
+                        OR EXISTS (SELECT 1 FROM `tabAllowed To Transact With` att WHERE att.parent = p.name AND att.parenttype = %(dt)s AND att.company = %(owner_company)s)
+                        OR EXISTS (SELECT 1 FROM `tabParty Account` pa WHERE pa.parent = p.name AND pa.parenttype = %(dt)s AND pa.company = %(owner_company)s)
+                        OR ((p.company IS NULL OR p.company = '') AND NOT EXISTS (SELECT 1 FROM `tabAllowed To Transact With` att_other WHERE att_other.parent = p.name AND att_other.parenttype = %(dt)s))
+                      )
+                      AND (p.name LIKE %(txt)s OR p.`customer_name` LIKE %(txt)s)
+                    ORDER BY
+                        (%(rep_company)s != '' AND p.represents_company = %(rep_company)s) DESC,
+                        (%(rep_company)s != '' AND (p.name LIKE %(rep_like)s OR p.`customer_name` LIKE %(rep_like)s)) DESC,
+                        (p.company = %(owner_company)s) DESC,
+                        EXISTS (SELECT 1 FROM `tabParty Account` pa2 WHERE pa2.parent = p.name AND pa2.parenttype = %(dt)s AND pa2.company = %(owner_company)s) DESC,
+                        p.modified DESC,
+                        p.name ASC
+                    LIMIT %(start)s, %(page_len)s
+                    """,
+                    params,
+                )
+            return frappe.db.sql(
+                """
+                SELECT p.name, p.`customer_name`, p.represents_company
+                FROM `tabCustomer` p
+                WHERE (p.disabled IS NULL OR p.disabled = 0)
+                  AND (p.represents_company IS NULL OR p.represents_company = '' OR p.represents_company != %(owner_company)s)
+                  AND (
+                    EXISTS (SELECT 1 FROM `tabAllowed To Transact With` att WHERE att.parent = p.name AND att.parenttype = %(dt)s AND att.company = %(owner_company)s)
+                    OR EXISTS (SELECT 1 FROM `tabParty Account` pa WHERE pa.parent = p.name AND pa.parenttype = %(dt)s AND pa.company = %(owner_company)s)
+                    OR NOT EXISTS (SELECT 1 FROM `tabAllowed To Transact With` att_other WHERE att_other.parent = p.name AND att_other.parenttype = %(dt)s)
+                  )
+                  AND (p.name LIKE %(txt)s OR p.`customer_name` LIKE %(txt)s)
+                ORDER BY
+                    (%(rep_company)s != '' AND p.represents_company = %(rep_company)s) DESC,
+                    (%(rep_company)s != '' AND (p.name LIKE %(rep_like)s OR p.`customer_name` LIKE %(rep_like)s)) DESC,
+                    EXISTS (SELECT 1 FROM `tabParty Account` pa2 WHERE pa2.parent = p.name AND pa2.parenttype = %(dt)s AND pa2.company = %(owner_company)s) DESC,
+                    p.modified DESC,
+                    p.name ASC
+                LIMIT %(start)s, %(page_len)s
+                """,
+                params,
+            )
+
+        if has_company_col:
+            return frappe.db.sql(
+                """
+                SELECT p.name, p.`supplier_name`, p.represents_company
+                FROM `tabSupplier` p
+                WHERE (p.disabled IS NULL OR p.disabled = 0)
+                  AND (p.represents_company IS NULL OR p.represents_company = '' OR p.represents_company != %(owner_company)s)
+                  AND (
+                    p.company = %(owner_company)s
+                    OR EXISTS (SELECT 1 FROM `tabAllowed To Transact With` att WHERE att.parent = p.name AND att.parenttype = %(dt)s AND att.company = %(owner_company)s)
+                    OR EXISTS (SELECT 1 FROM `tabParty Account` pa WHERE pa.parent = p.name AND pa.parenttype = %(dt)s AND pa.company = %(owner_company)s)
+                    OR ((p.company IS NULL OR p.company = '') AND NOT EXISTS (SELECT 1 FROM `tabAllowed To Transact With` att_other WHERE att_other.parent = p.name AND att_other.parenttype = %(dt)s))
+                  )
+                  AND (p.name LIKE %(txt)s OR p.`supplier_name` LIKE %(txt)s)
+                ORDER BY
+                    (%(rep_company)s != '' AND p.represents_company = %(rep_company)s) DESC,
+                    (%(rep_company)s != '' AND (p.name LIKE %(rep_like)s OR p.`supplier_name` LIKE %(rep_like)s)) DESC,
+                    (p.company = %(owner_company)s) DESC,
+                    EXISTS (SELECT 1 FROM `tabParty Account` pa2 WHERE pa2.parent = p.name AND pa2.parenttype = %(dt)s AND pa2.company = %(owner_company)s) DESC,
+                    p.modified DESC,
+                    p.name ASC
+                LIMIT %(start)s, %(page_len)s
+                """,
+                params,
+            )
+        return frappe.db.sql(
+            """
+            SELECT p.name, p.`supplier_name`, p.represents_company
+            FROM `tabSupplier` p
+            WHERE (p.disabled IS NULL OR p.disabled = 0)
+              AND (p.represents_company IS NULL OR p.represents_company = '' OR p.represents_company != %(owner_company)s)
+              AND (
+                EXISTS (SELECT 1 FROM `tabAllowed To Transact With` att WHERE att.parent = p.name AND att.parenttype = %(dt)s AND att.company = %(owner_company)s)
+                OR EXISTS (SELECT 1 FROM `tabParty Account` pa WHERE pa.parent = p.name AND pa.parenttype = %(dt)s AND pa.company = %(owner_company)s)
+                OR NOT EXISTS (SELECT 1 FROM `tabAllowed To Transact With` att_other WHERE att_other.parent = p.name AND att_other.parenttype = %(dt)s)
+              )
+              AND (p.name LIKE %(txt)s OR p.`supplier_name` LIKE %(txt)s)
+            ORDER BY
+                (%(rep_company)s != '' AND p.represents_company = %(rep_company)s) DESC,
+                (%(rep_company)s != '' AND (p.name LIKE %(rep_like)s OR p.`supplier_name` LIKE %(rep_like)s)) DESC,
+                EXISTS (SELECT 1 FROM `tabParty Account` pa2 WHERE pa2.parent = p.name AND pa2.parenttype = %(dt)s AND pa2.company = %(owner_company)s) DESC,
+                p.modified DESC,
+                p.name ASC
+            LIMIT %(start)s, %(page_len)s
+            """,
+            params,
+        )
+
+    # Fallback when optional ERPNext tables (Allowed To Transact With / Party Account) are absent
+    name_col = "customer_name" if doctype == "Customer" else "supplier_name"
+    rows = frappe.get_all(
+        doctype,
+        filters={"disabled": ["in", [0, None]]},
+        or_filters=[[doctype, "name", "like", params["txt"]], [doctype, name_col, "like", params["txt"]]],
+        fields=["name", name_col, "represents_company"],
+        order_by="modified desc, name asc",
+        start=params["start"],
+        page_length=params["page_len"],
+        ignore_permissions=True,
     )
+    return [
+        (r.get("name"), r.get(name_col), r.get("represents_company"))
+        for r in (rows or [])
+        if (r.get("represents_company") or "") != owner_company
+    ]
 
 
 @frappe.whitelist()
@@ -1506,27 +1613,38 @@ def intercompany_account_query(doctype, txt, searchfield, start, page_len, filte
     filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
     company = (filters.get("company") or "").strip()
 
-    conditions = [
-        "a.is_group = 0",
-        "(a.disabled IS NULL OR a.disabled = 0)",
-    ]
     params = {
         "txt": f"%{txt or ''}%",
         "start": cint(start),
         "page_len": cint(page_len) or 20,
     }
     if company:
-        conditions.append("a.company = %(company)s")
         params["company"] = company
-
-    conditions.append("(a.name LIKE %(txt)s OR a.account_name LIKE %(txt)s)")
-    where_clause = " AND ".join(conditions)
+        return frappe.db.sql(
+            """
+            SELECT a.name, a.account_type, a.account_currency
+            FROM `tabAccount` a
+            WHERE a.is_group = 0
+              AND (a.disabled IS NULL OR a.disabled = 0)
+              AND a.company = %(company)s
+              AND (a.name LIKE %(txt)s OR a.account_name LIKE %(txt)s)
+            ORDER BY
+                (a.account_name LIKE 'TMP%%') DESC,
+                (a.account_name LIKE '%%Intercompany%%') DESC,
+                (a.account_type IN ('Bank', 'Cash')) DESC,
+                a.name ASC
+            LIMIT %(start)s, %(page_len)s
+            """,
+            params,
+        )
 
     return frappe.db.sql(
-        f"""
+        """
         SELECT a.name, a.account_type, a.account_currency
         FROM `tabAccount` a
-        WHERE {where_clause}
+        WHERE a.is_group = 0
+          AND (a.disabled IS NULL OR a.disabled = 0)
+          AND (a.name LIKE %(txt)s OR a.account_name LIKE %(txt)s)
         ORDER BY
             (a.account_name LIKE 'TMP%%') DESC,
             (a.account_name LIKE '%%Intercompany%%') DESC,
@@ -3457,46 +3575,8 @@ def fix_legacy_custom_fields(force=False):
 
     try:
         # 1. Permanently repair corrupted depends_on expressions across DocField, Custom Field, and Property Setter
-        for tbl in ["tabDocField", "tabCustom Field", "tabProperty Setter"]:
-            if not frappe.db.table_exists(tbl):
-                continue
-            cols = ["value"] if tbl == "tabProperty Setter" else ["depends_on", "mandatory_depends_on", "read_only_depends_on"]
-            for col in cols:
-                if frappe.db.has_column(tbl, col):
-                    try:
-                        frappe.db.sql(f"""
-                            UPDATE `{tbl}`
-                            SET `{col}` = REPLACE(`{col}`, '__islocalanddoc', '__islocal && doc')
-                            WHERE `{col}` LIKE '%__islocalanddoc%'
-                        """)
-                        frappe.db.sql(f"""
-                            UPDATE `{tbl}`
-                            SET `{col}` = REPLACE(`{col}`, '__islocaland', '__islocal && ')
-                            WHERE `{col}` LIKE '%__islocaland%'
-                        """)
-                        frappe.db.sql(f"""
-                            UPDATE `{tbl}`
-                            SET `{col}` = REPLACE(`{col}`, 'anddoc.', ' && doc.')
-                            WHERE `{col}` LIKE '%anddoc.%'
-                        """)
-                        frappe.db.sql(f"""
-                            UPDATE `{tbl}`
-                            SET `{col}` = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(`{col}`,
-                                '1or(', '1 || ('),
-                                '0or(', '0 || ('),
-                                ')or(', ') || ('),
-                                '1and(', '1 && ('),
-                                '0and(', '0 && (')
-                            WHERE `{col}` IS NOT NULL AND (
-                                `{col}` LIKE '%1or(%' OR
-                                `{col}` LIKE '%0or(%' OR
-                                `{col}` LIKE '%)or(%' OR
-                                `{col}` LIKE '%1and(%' OR
-                                `{col}` LIKE '%0and(%'
-                            )
-                        """)
-                    except Exception:
-                        pass
+        from inter_company_transactions.diagnose_and_heal import repair_database_text
+        repair_database_text(lambda *args, **kwargs: None)
 
         # 2. Remove intrusive custom fields on Tree DocTypes and Master DocTypes
         if frappe.db.table_exists("Custom Field"):
@@ -3550,7 +3630,7 @@ def fix_legacy_custom_fields(force=False):
                     WHERE `fieldname` = 'intercompany_target_company'
                 """)
 
-        # Directly enforce DEFAULT 0 on MariaDB transaction tables and clean stale draft values
+        # Clean stale draft intercompany_target_company values via Frappe ORM
         tx_doctypes = [
             "Sales Order", "Purchase Order", "Sales Invoice", "Purchase Invoice",
             "Delivery Note", "Purchase Receipt", "Quotation", "Supplier Quotation",
@@ -3559,19 +3639,16 @@ def fix_legacy_custom_fields(force=False):
         ]
         for dt in tx_doctypes:
             try:
-                if frappe.db.table_exists(dt) and frappe.db.has_column(dt, "is_intercompany"):
-                    frappe.db.sql(f"ALTER TABLE `tab{dt}` ALTER COLUMN `is_intercompany` SET DEFAULT 0")
-            except Exception:
-                pass
-
-            try:
                 if frappe.db.table_exists(dt) and frappe.db.has_column(dt, "is_intercompany") and frappe.db.has_column(dt, "intercompany_target_company"):
-                    frappe.db.sql(f"""
-                        UPDATE `tab{dt}`
-                        SET `intercompany_target_company` = NULL
-                        WHERE `docstatus` = 0 AND (`is_intercompany` = 0 OR `is_intercompany` IS NULL)
-                          AND `intercompany_target_company` IS NOT NULL AND `intercompany_target_company` != ''
-                    """)
+                    stale_rows = frappe.get_all(
+                        dt,
+                        filters={"docstatus": 0, "intercompany_target_company": ["is", "set"]},
+                        fields=["name", "is_intercompany"],
+                        ignore_permissions=True,
+                    )
+                    for row in stale_rows or []:
+                        if not cint(row.get("is_intercompany")):
+                            frappe.db.set_value(dt, row.get("name"), "intercompany_target_company", None, update_modified=False)
             except Exception:
                 pass
 
@@ -3789,8 +3866,8 @@ def download_user_guide_pdf():
             pass
 
     if os.path.exists(pdf_path):
-        with open(pdf_path, "rb") as f:
-            filecontent = f.read()
+        from pathlib import Path
+        filecontent = Path(pdf_path).read_bytes()
         frappe.response["filename"] = "Inter_Company_Transactions_User_Guide.pdf"
         frappe.response["filecontent"] = filecontent
         frappe.response["type"] = "download"
@@ -4342,4 +4419,5 @@ def backfill_sister_company_names():
                             f"Could not rename legacy link {link.name} to {target_name}: {e}",
                             "Intercompany Transaction Link Migration",
                         )
+
 

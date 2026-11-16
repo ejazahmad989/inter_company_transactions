@@ -47,7 +47,6 @@ def get_ict_notification_settings(user=None):
 		doc.flags.ignore_permissions = True
 		doc.flags.ignore_mandatory = True
 		doc.insert(ignore_permissions=True)
-		frappe.db.commit()
 		return doc
 	except Exception as e:
 		frappe.logger("inter_company_transactions").debug(f"Error getting ICT Notification Setting: {e}")

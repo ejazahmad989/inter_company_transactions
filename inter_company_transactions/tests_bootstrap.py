@@ -25,7 +25,8 @@ def before_tests():
 
 		erpnext_before_tests()
 		ensure_transit_warehouse_type()
-		frappe.db.commit()
+		# Test bootstrap runs outside standard test cases; commit preset fixtures before test runner rollback
+		frappe.db.commit()  # nosemgrep: before_tests setup must persist presets prior to test runner rollback scope
 		return
 	except ImportError:
 		pass
@@ -37,11 +38,16 @@ def before_tests():
 		bootstrap = BootStrapTestData.__new__(BootStrapTestData)
 		bootstrap.make_presets()
 		ensure_transit_warehouse_type()
-		frappe.db.commit()
+		# Test bootstrap runs outside standard test cases; commit preset fixtures before test runner rollback
+		frappe.db.commit()  # nosemgrep: before_tests setup must persist presets prior to test runner rollback scope
 		return
 	except Exception:
 		pass
 
 	ensure_transit_warehouse_type()
-	if frappe.db:
-		frappe.db.commit()
+	try:
+		if frappe.db:
+			# Test bootstrap runs outside standard test cases; commit preset fixtures once before tests start
+			frappe.db.commit()  # nosemgrep: before_tests setup must persist presets prior to test runner rollback scope
+	except Exception:
+		pass
