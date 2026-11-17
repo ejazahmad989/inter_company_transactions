@@ -108,6 +108,35 @@ Automatically creates, submits, or cancels reciprocal mirror documents in real-t
 
 ---
 
+## 📸 Application Screenshots
+
+### 1. Chart of Accounts & Intercompany Clearing Setup
+| MAIN Company COA | ABC Company COA | John Company COA |
+|---|---|---|
+| ![MAIN Chart of Accounts](../screenshots/main_coa.png) | ![ABC Chart of Accounts](../screenshots/abc_coa.png) | ![John Chart of Accounts](../screenshots/john_coa.png) |
+
+### 2. Intercompany Transaction Link & Matrix Configuration
+| Transaction Link Master | Main Company & Transit Warehouses | Other Company Settings | Supported Transaction Types (16 Pairs) |
+|---|---|---|---|
+| ![Intercompany Transaction Link](../screenshots/transaction_link.png) | ![Main Company Settings](../screenshots/transaction_link_A.png) | ![Other Company Settings](../screenshots/transaction_link_other_company_settings.png) | ![Transaction Types](../screenshots/transaction_link_Transaction_type.png) |
+
+### 3. Sales Order → Automated Mirrored Purchase Order
+| Source Sales Order (Auto-Detected) | Mirror Creation Notification | Mirrored Purchase Order (Locked Fields) |
+|---|---|---|
+| ![Source Sales Order](../screenshots/S-order-same_currency.png) | ![Sales Order Mirror Message](../screenshots/sales_order_msg.png) | ![Mirrored Purchase Order](../screenshots/p-order_mirror_entry_created.png) |
+
+### 4. Journal Entry Mirroring (Inverted Debit / Credit)
+| Source Journal Entry | Mirror Creation Notification | Mirrored Journal Entry |
+|---|---|---|
+| ![Source Journal Entry](../screenshots/journal_entry.png) | ![Journal Entry Mirror Message](../screenshots/journal_entry_msg.png) | ![Mirrored Journal Entry](../screenshots/journal_entry_mirror.png) |
+
+### 5. Payment Entry Mirroring (Receive ↔ Pay)
+| Source Payment Entry | Mirror Creation Notification | Mirrored Payment Entry |
+|---|---|---|
+| ![Source Payment Entry](../screenshots/payment_entry.png) | ![Payment Entry Mirror Message](../screenshots/payment_entry_msg.png) | ![Mirrored Payment Entry](../screenshots/payment_entry_mirror_entry.png) |
+
+---
+
 ## 🚀 Installation & Quickstart
 
 ### 1. Install via Bench

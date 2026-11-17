@@ -1,0 +1,15 @@
+{
+  "name": "inter-company-transactions",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Frappe ERPNext app — edited in AI Studio, run locally with bench",
+  "scripts": {
+    "dev": "node -e \"require('http').createServer((q,s)=>{s.writeHead(200);s.end('Frappe app source. Run with bench locally.');}).listen(3000,'0.0.0.0')\"",
+    "build": "echo skip",
+    "lint": "echo skip",
+    "start": "npm run dev"
+  },
+  "devDependencies": {
+    "typescript": "5.4.5"
+  }
+}

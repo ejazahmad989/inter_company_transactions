@@ -102,6 +102,17 @@ Seamless bidirectional mirroring for every operational document:
 - **Offline Resilience & Auto-Retry Worker:** Transactions queue in *Inter Company Error Log* (`Pending Retry`) and auto-retry hourly if remote servers are temporarily offline.
 - **In-GUI Network & Firewall Diagnostics:** One-click socket, DNS, SSL, and port connectivity test in the desk with automated Linux firewall commands (UFW, Firewalld, AWS Security Groups).
 
+### 4.7. Marketplace Screenshots Gallery (`/screenshots`)
+Recommended upload order for the Frappe Cloud Marketplace listing gallery:
+1. `screenshots/transaction_link.png` — Intercompany Transaction Link master configuration
+2. `screenshots/transaction_link_Transaction_type.png` — Bidirectional 16-pair Transaction Type matrix
+3. `screenshots/S-order-same_currency.png` — Auto-detected Intercompany Sales Order
+4. `screenshots/p-order_mirror_entry_created.png` — Locked mirrored Purchase Order draft in target company
+5. `screenshots/journal_entry_mirror.png` — Automated inverted Debit/Credit mirrored Journal Entry
+6. `screenshots/payment_entry_mirror_entry.png` — Automated mirrored Payment Entry (`Receive` ↔ `Pay`)
+
+All 16 workflow screenshots (including COA clearing accounts, row settings, and instant creation dialogs) are stored in [`screenshots/`](screenshots/).
+
 ---
 
 ## 5. Recommended Marketplace Pricing Strategy
