@@ -220,7 +220,7 @@ def get_console_dashboard_data():
 
 
 def _ensure_allowed_to_transact_with(party_name, party_doctype, allowed_company):
-	"""Ensure standard ERPNext allowed_to_transact_with child row is populated for v14/v15/v16 compatibility."""
+	"""Ensure standard ERPNext allowed_to_transact_with child row is populated for v15/v16 compatibility."""
 	if not (party_name and allowed_company and frappe.db.exists(party_doctype, party_name)):
 		return
 	try:

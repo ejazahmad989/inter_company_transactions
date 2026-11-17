@@ -611,7 +611,7 @@ def resolve_counterparty_for_remote_source(source_company, target_doctype, targe
 	Resolves or auto-provisions internal Customer/Supplier for the remote sister entity
 	using standard ERPNext fields (`is_internal_customer`/`is_internal_supplier`,
 	`represents_company`, and `allowed_to_transact_with`).
-	Compatible with ERPNext v14, v15, and v16.
+	Compatible with ERPNext v15 and v16.
 	"""
 	is_supplier = target_doctype in ["Purchase Order", "Purchase Invoice", "Purchase Receipt", "Supplier Quotation"]
 	party_doctype = "Supplier" if is_supplier else "Customer"

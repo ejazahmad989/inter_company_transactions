@@ -1,6 +1,6 @@
 # Inter-Company Transactions for ERPNext: Enterprise User Guide & Tutorial
 **Version:** 2.0 (Enterprise Edition)  
-**Compatibility:** Frappe Framework v14, v15 & v16 / ERPNext v14, v15 & v16 (Certified)  
+**Compatibility:** Frappe Framework v15 & v16 / ERPNext v15 & v16 (Certified)  
 **Author:** Ejaz Ahmed (ejazahmad989@gmail.com)  
 **Date:** September 2026  
 
@@ -613,25 +613,24 @@ By creating a designated **Inter Company Customer Group** and tagging it via the
 
 ---
 
-## 5. Multi-Version Compatibility: ERPNext v14, v15, and v16
+## 5. Multi-Version Compatibility: ERPNext v15 & v16
 
-### Why this single app runs seamlessly on ERPNext 14, 15, and 16
+### Why this single app runs seamlessly on ERPNext v15 and v16
 ```
 +------------------------------------------------------------------------------------+
-|               COMPATIBILITY MATRIX: ERPNEXT v14, v15 & v16 CERTIFIED               |
+|                 COMPATIBILITY MATRIX: ERPNEXT v15 & v16 CERTIFIED                  |
 |                                                                                    |
 |  Platform Edition  | Python Versions       | Frappe Version | ERPNext Status       |
 |  ------------------+-----------------------+----------------+--------------------  |
-|  ERPNext v14       | Python 3.10 / 3.11    | Frappe v14.x   | Fully Compatible     |
 |  ERPNext v15       | Python 3.10/3.11/3.12 | Frappe v15.x   | Fully Compatible     |
-|  ERPNext v16       | Python 3.12 / 3.13    | Frappe v16.x   | Certified Ready      |
+|  ERPNext v16       | Python 3.12 / 3.13+   | Frappe v16.x   | Certified Ready      |
 +------------------------------------------------------------------------------------+
 ```
 
 #### Technical Guarantees for Marketplace Buyers:
-1. **Universal ORM & Document API:** The app exclusively uses Frappe's universal ORM functions (`frappe.get_doc`, `frappe.new_doc`, `frappe.db.get_value`, `frappe.db.exists`). These core APIs are 100% stable and identical across Frappe v14, v15, and v16.
-2. **Python Compatibility (`>= 3.10`):** The Python codebase uses modern clean syntax compliant with Python 3.10, 3.11, 3.12, and 3.13. No deprecated Python standard modules (like `imp`, `pipes`, or removed `cgi` utilities) are used.
-3. **Collision-Free Migration:** Custom fields are created dynamically with programmatic duplicate-checking rather than rigid SQL dumps. Upgrades from v14 to v15 or v16 will never break database constraints.
+1. **Universal ORM & Document API:** The app exclusively uses Frappe's universal ORM functions (`frappe.get_doc`, `frappe.new_doc`, `frappe.db.get_value`, `frappe.db.exists`). These core APIs are 100% stable and identical across Frappe v15 and v16.
+2. **Python Compatibility (`>= 3.10`):** The Python codebase uses modern clean syntax compliant with Python 3.10, 3.11, 3.12, and 3.13+. No deprecated Python standard modules (like `imp`, `pipes`, or removed `cgi` utilities) are used.
+3. **Collision-Free Migration:** Custom fields are created dynamically with programmatic duplicate-checking rather than rigid SQL dumps. Upgrades from v15 to v16 will never break database constraints.
 4. **Modern Build System:** Uses standard `flit_core >=3.4` in `pyproject.toml`, which is the official Frappe packaging standard for Frappe Cloud and bench deployments.
 
 

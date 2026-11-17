@@ -2848,7 +2848,7 @@ def create_supplier_quotation(quotation, mapping, linked_company, direction, set
 
 
 def get_intercompany_warehouse(company):
-    """Get inter-company / transit warehouse for a company (v14/v15/v16 schema safe)."""
+    """Get inter-company / transit warehouse for a company (v15/v16 schema safe)."""
     warehouse = None
     if hasattr(frappe, "db") and frappe.db and frappe.db.has_column("Warehouse", "is_intercompany_warehouse"):
         warehouse = frappe.db.get_value(

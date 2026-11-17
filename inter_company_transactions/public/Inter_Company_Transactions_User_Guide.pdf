@@ -18,7 +18,7 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 7 0 R /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> >>
 endobj
 7 0 obj
-<< /Length 4621 >>
+<< /Length 4667 >>
 stream
 q
 0.12 0.23 0.53 rg
@@ -32,52 +32,52 @@ BT /F1 9 Tf 520 28 Td (Page 1 of 14) Tj ET
 0 0 0 rg
 0.12 0.23 0.53 rg BT /F2 13 Tf 40 705 Td (Inter-Company Transactions for ERPNext: Enterprise User Guide & Tutorial) Tj ET 0 0 0 rg
 BT /F1 8.5 Tf 40 681 Td (**Version:** 2.0 \(Enterprise Edition\)) Tj ET
-BT /F1 8.5 Tf 40 669.5 Td (**Compatibility:** Frappe Framework v14, v15 & v16 / ERPNext v14, v15 & v16) Tj ET
-BT /F1 8.5 Tf 40 658.0 Td (\(Certified\)) Tj ET
-BT /F1 8.5 Tf 40 646.5 Td (**Author:** Ejaz Ahmed \(ejazahmad989@gmail.com\)) Tj ET
-BT /F1 8.5 Tf 40 635.0 Td (**Date:** September 2026) Tj ET
-0.85 0.85 0.85 RG 40 617.5 m 572 617.5 l S 0 0 0 rg
-0.15 0.3 0.6 rg BT /F2 11 Tf 40 599.5 Td (Table of Contents) Tj ET 0 0 0 rg
-BT /F1 8.5 Tf 40 579.5 Td (1. [Introduction & Architectural Overview]\(#1-introduction--architectural-overview\)) Tj ET
-BT /F1 8.5 Tf 40 568.0 Td (2. [Quick-Start Tutorial \(1-Click Setup Wizard\)]\(#2-quick-start-tutorial-1-click-) Tj ET
-BT /F1 8.5 Tf 40 556.5 Td (setup-wizard\)) Tj ET
-BT /F1 8.5 Tf 40 545.0 Td (3. [Deep Dive into Core DocTypes & Configurations]\(#3-deep-dive-into-core-doctypes--) Tj ET
-BT /F1 8.5 Tf 40 533.5 Td (configurations\)) Tj ET
-BT /F1 8.5 Tf 65 522.0 Td (- [3.1 Intercompany Transaction Link]\(#31-intercompany-transaction-link\)) Tj ET
-BT /F1 8.5 Tf 65 510.5 Td (- [3.2 Inter Company Settings]\(#32-inter-company-settings\)) Tj ET
-BT /F1 8.5 Tf 65 499.0 Td (- [3.3 Transfer Pricing Policy \(OECD Compliance\)]\(#33-transfer-pricing-policy-) Tj ET
-BT /F1 8.5 Tf 65 487.5 Td (  oecd-compliance\)) Tj ET
-BT /F1 8.5 Tf 65 476.0 Td (- [3.4 Inter Company Netting Cycle]\(#34-inter-company-netting-cycle\)) Tj ET
-BT /F1 8.5 Tf 65 464.5 Td (- [3.5 Inter Company Elimination Run]\(#35-inter-company-elimination-run\)) Tj ET
-BT /F1 8.5 Tf 65 453.0 Td (- [3.6 Inter Company Dispute]\(#36-inter-company-dispute\)) Tj ET
-BT /F1 8.5 Tf 65 441.5 Td (- [3.7 Inter Company Remote Site \(Cross-Site Federation\)]\(#37-inter-company-) Tj ET
-BT /F1 8.5 Tf 65 430.0 Td (  remote-site-cross-site-federation\)) Tj ET
-BT /F1 8.5 Tf 40 418.5 Td (4. [Step-by-Step Practical Examples]\(#4-step-by-step-practical-examples\)) Tj ET
-BT /F1 8.5 Tf 65 407.0 Td (- [Example A: Order-to-Cash & Procure-to-Pay Mirroring]\(#example-a-order-to-) Tj ET
-BT /F1 8.5 Tf 65 395.5 Td (  cash--procure-to-pay-mirroring\)) Tj ET
-BT /F1 8.5 Tf 65 384.0 Td (- [Example B: Transfer Pricing Margin Calculation]\(#example-b-transfer-) Tj ET
-BT /F1 8.5 Tf 65 372.5 Td (  pricing-margin-calculation\)) Tj ET
-BT /F1 8.5 Tf 65 361.0 Td (- [Example C: Multilateral Netting & Settlement Calculation]\(#example-c-) Tj ET
-BT /F1 8.5 Tf 65 349.5 Td (  multilateral-netting--settlement-calculation\)) Tj ET
-BT /F1 8.5 Tf 65 338.0 Td (- [Example D: Raising and Resolving a Billing Dispute]\(#example-d-raising-and-) Tj ET
-BT /F1 8.5 Tf 65 326.5 Td (  resolving-a-billing-dispute\)) Tj ET
-BT /F1 8.5 Tf 40 315.0 Td (5. [Reporting & Executive Audit Tools]\(#5-reporting--executive-audit-tools\)) Tj ET
-BT /F1 8.5 Tf 40 303.5 Td (6. [Troubleshooting & Error Handling]\(#6-troubleshooting--error-handling\)) Tj ET
-0.85 0.85 0.85 RG 40 286.0 m 572 286.0 l S 0 0 0 rg
-0.15 0.3 0.6 rg BT /F2 11 Tf 40 268.0 Td (1. Introduction & Architectural Overview) Tj ET 0 0 0 rg
-BT /F1 8.5 Tf 40 242.0 Td (The **Inter-Company Transactions** app transforms ERPNext into a multi-entity) Tj ET
-BT /F1 8.5 Tf 40 230.5 Td (conglomerate platform. It solves four foundational challenges in group corporate) Tj ET
-BT /F1 8.5 Tf 40 219.0 Td (accounting:) Tj ET
-BT /F1 8.5 Tf 40 207.5 Td (1. **Double Data Entry:** When Entity A sells goods to Entity B, Entity B's purchase) Tj ET
-BT /F1 8.5 Tf 40 196.0 Td (order/receipt/invoice is created automatically.) Tj ET
-BT /F1 8.5 Tf 40 184.5 Td (2. **Transfer Pricing Non-Compliance:** Dynamically computes markups, resale prices,) Tj ET
-BT /F1 8.5 Tf 40 173.0 Td (and arm's-length benchmarks across tax jurisdictions.) Tj ET
-BT /F1 8.5 Tf 40 161.5 Td (3. **Liquidity Friction:** Consolidates multiple reciprocal invoices into single) Tj ET
-BT /F1 8.5 Tf 40 150.0 Td (minimal multilateral netting settlements.) Tj ET
-BT /F1 8.5 Tf 40 138.5 Td (4. **Group Financial Consolidation:** Eliminates internal double-counting of AR/AP,) Tj ET
-BT /F1 8.5 Tf 40 127.0 Td (sales, and COGS for parent holding companies.) Tj ET
-0.85 0.85 0.85 RG 40 109.5 m 572 109.5 l S 0 0 0 rg
-0.15 0.3 0.6 rg BT /F2 11 Tf 40 91.5 Td (2. Quick-Start Tutorial \(1-Click Setup Wizard\)) Tj ET 0 0 0 rg
+BT /F1 8.5 Tf 40 669.5 Td (**Compatibility:** Frappe Framework v15 & v16 / ERPNext v15 & v16 \(Certified\)) Tj ET
+BT /F1 8.5 Tf 40 658.0 Td (**Author:** Ejaz Ahmed \(ejazahmad989@gmail.com\)) Tj ET
+BT /F1 8.5 Tf 40 646.5 Td (**Date:** September 2026) Tj ET
+0.85 0.85 0.85 RG 40 629.0 m 572 629.0 l S 0 0 0 rg
+0.15 0.3 0.6 rg BT /F2 11 Tf 40 611.0 Td (Table of Contents) Tj ET 0 0 0 rg
+BT /F1 8.5 Tf 40 591.0 Td (1. [Introduction & Architectural Overview]\(#1-introduction--architectural-overview\)) Tj ET
+BT /F1 8.5 Tf 40 579.5 Td (2. [Quick-Start Tutorial \(1-Click Setup Wizard\)]\(#2-quick-start-tutorial-1-click-) Tj ET
+BT /F1 8.5 Tf 40 568.0 Td (setup-wizard\)) Tj ET
+BT /F1 8.5 Tf 40 556.5 Td (3. [Deep Dive into Core DocTypes & Configurations]\(#3-deep-dive-into-core-doctypes--) Tj ET
+BT /F1 8.5 Tf 40 545.0 Td (configurations\)) Tj ET
+BT /F1 8.5 Tf 65 533.5 Td (- [3.1 Intercompany Transaction Link]\(#31-intercompany-transaction-link\)) Tj ET
+BT /F1 8.5 Tf 65 522.0 Td (- [3.2 Inter Company Settings]\(#32-inter-company-settings\)) Tj ET
+BT /F1 8.5 Tf 65 510.5 Td (- [3.3 Transfer Pricing Policy \(OECD Compliance\)]\(#33-transfer-pricing-policy-) Tj ET
+BT /F1 8.5 Tf 65 499.0 Td (  oecd-compliance\)) Tj ET
+BT /F1 8.5 Tf 65 487.5 Td (- [3.4 Inter Company Netting Cycle]\(#34-inter-company-netting-cycle\)) Tj ET
+BT /F1 8.5 Tf 65 476.0 Td (- [3.5 Inter Company Elimination Run]\(#35-inter-company-elimination-run\)) Tj ET
+BT /F1 8.5 Tf 65 464.5 Td (- [3.6 Inter Company Dispute]\(#36-inter-company-dispute\)) Tj ET
+BT /F1 8.5 Tf 65 453.0 Td (- [3.7 Inter Company Remote Site \(Cross-Site Federation\)]\(#37-inter-company-) Tj ET
+BT /F1 8.5 Tf 65 441.5 Td (  remote-site-cross-site-federation\)) Tj ET
+BT /F1 8.5 Tf 40 430.0 Td (4. [Step-by-Step Practical Examples]\(#4-step-by-step-practical-examples\)) Tj ET
+BT /F1 8.5 Tf 65 418.5 Td (- [Example A: Order-to-Cash & Procure-to-Pay Mirroring]\(#example-a-order-to-) Tj ET
+BT /F1 8.5 Tf 65 407.0 Td (  cash--procure-to-pay-mirroring\)) Tj ET
+BT /F1 8.5 Tf 65 395.5 Td (- [Example B: Transfer Pricing Margin Calculation]\(#example-b-transfer-) Tj ET
+BT /F1 8.5 Tf 65 384.0 Td (  pricing-margin-calculation\)) Tj ET
+BT /F1 8.5 Tf 65 372.5 Td (- [Example C: Multilateral Netting & Settlement Calculation]\(#example-c-) Tj ET
+BT /F1 8.5 Tf 65 361.0 Td (  multilateral-netting--settlement-calculation\)) Tj ET
+BT /F1 8.5 Tf 65 349.5 Td (- [Example D: Raising and Resolving a Billing Dispute]\(#example-d-raising-and-) Tj ET
+BT /F1 8.5 Tf 65 338.0 Td (  resolving-a-billing-dispute\)) Tj ET
+BT /F1 8.5 Tf 40 326.5 Td (5. [Reporting & Executive Audit Tools]\(#5-reporting--executive-audit-tools\)) Tj ET
+BT /F1 8.5 Tf 40 315.0 Td (6. [Troubleshooting & Error Handling]\(#6-troubleshooting--error-handling\)) Tj ET
+0.85 0.85 0.85 RG 40 297.5 m 572 297.5 l S 0 0 0 rg
+0.15 0.3 0.6 rg BT /F2 11 Tf 40 279.5 Td (1. Introduction & Architectural Overview) Tj ET 0 0 0 rg
+BT /F1 8.5 Tf 40 253.5 Td (The **Inter-Company Transactions** app transforms ERPNext into a multi-entity) Tj ET
+BT /F1 8.5 Tf 40 242.0 Td (conglomerate platform. It solves four foundational challenges in group corporate) Tj ET
+BT /F1 8.5 Tf 40 230.5 Td (accounting:) Tj ET
+BT /F1 8.5 Tf 40 219.0 Td (1. **Double Data Entry:** When Entity A sells goods to Entity B, Entity B's purchase) Tj ET
+BT /F1 8.5 Tf 40 207.5 Td (order/receipt/invoice is created automatically.) Tj ET
+BT /F1 8.5 Tf 40 196.0 Td (2. **Transfer Pricing Non-Compliance:** Dynamically computes markups, resale prices,) Tj ET
+BT /F1 8.5 Tf 40 184.5 Td (and arm's-length benchmarks across tax jurisdictions.) Tj ET
+BT /F1 8.5 Tf 40 173.0 Td (3. **Liquidity Friction:** Consolidates multiple reciprocal invoices into single) Tj ET
+BT /F1 8.5 Tf 40 161.5 Td (minimal multilateral netting settlements.) Tj ET
+BT /F1 8.5 Tf 40 150.0 Td (4. **Group Financial Consolidation:** Eliminates internal double-counting of AR/AP,) Tj ET
+BT /F1 8.5 Tf 40 138.5 Td (sales, and COGS for parent holding companies.) Tj ET
+0.85 0.85 0.85 RG 40 121.0 m 572 121.0 l S 0 0 0 rg
+0.15 0.3 0.6 rg BT /F2 11 Tf 40 103.0 Td (2. Quick-Start Tutorial \(1-Click Setup Wizard\)) Tj ET 0 0 0 rg
+0.2 0.2 0.2 rg BT /F2 10 Tf 40 77.0 Td (Step 1: Open the Control Console) Tj ET 0 0 0 rg
 Q
 endstream
 endobj
@@ -85,7 +85,7 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 9 0 R /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> >>
 endobj
 9 0 obj
-<< /Length 5016 >>
+<< /Length 5018 >>
 stream
 q
 0.4 0.4 0.4 rg
@@ -96,59 +96,59 @@ BT /F1 9 Tf 40 760 Td (Inter-Company Transactions - Enterprise User Guide & Mult
 0.8 0.8 0.8 RG 40 40 m 572 40 l S
 BT /F1 9 Tf 520 28 Td (Page 2 of 14) Tj ET
 0 0 0 rg
-0.2 0.2 0.2 rg BT /F2 10 Tf 40 735 Td (Step 1: Open the Control Console) Tj ET 0 0 0 rg
-BT /F1 8.5 Tf 40 718 Td (In ERPNext Desk, navigate to **Workspace > Inter Company** or enter the route directly) Tj ET
-BT /F1 8.5 Tf 40 706.5 Td (in your browser:) Tj ET
-0.96 0.97 0.98 rg 40 689.5 532 9.5 re f
-0.15 0.2 0.35 rg BT /F3 7 Tf 44 691.0 Td (/app/inter-company-console) Tj ET 0 0 0 rg
-0.2 0.2 0.2 rg BT /F2 10 Tf 40 671.5 Td (Step 2: Launch the Wizard) Tj ET 0 0 0 rg
-BT /F1 8.5 Tf 40 654.5 Td (1. On the top right of the Inter-Company Control Console, click the **Quick Setup) Tj ET
-BT /F1 8.5 Tf 40 643.0 Td (Wizard** button.) Tj ET
-BT /F1 8.5 Tf 40 631.5 Td (2. Select:) Tj ET
-BT /F1 8.5 Tf 65 620.0 Td (- Main Company \(Entity A\)**: e.g., *Headquarters Inc.*) Tj ET
-BT /F1 8.5 Tf 65 608.5 Td (- Counterparty Company \(Entity B\)**: e.g., *Distribution Subsidiary Ltd.*) Tj ET
-BT /F1 8.5 Tf 40 597.0 Td (3. Click **Establish Connection**.) Tj ET
-0.2 0.2 0.2 rg BT /F2 10 Tf 40 579.5 Td (What happens automatically under the hood:) Tj ET 0 0 0 rg
-BT /F1 8.5 Tf 50 562.5 Td (\225 Creates an internal Customer in Entity A representing Entity B.) Tj ET
-BT /F1 8.5 Tf 50 550.5 Td (\225 Creates an internal Supplier in Entity A representing Entity B.) Tj ET
-BT /F1 8.5 Tf 50 538.5 Td (\225 Creates an internal Customer in Entity B representing Entity A.) Tj ET
-BT /F1 8.5 Tf 50 526.5 Td (\225 Creates an internal Supplier in Entity B representing Entity A.) Tj ET
-BT /F1 8.5 Tf 50 514.5 Td (\225 Creates an **Intercompany Transaction Link** record with 9 pre-configured) Tj ET
-BT /F1 8.5 Tf 50 502.5 Td (  bidirectional transaction rules:) Tj ET
-BT /F1 8.5 Tf 40 490.5 Td (  - `Sales Order <-> Purchase Order`) Tj ET
-BT /F1 8.5 Tf 40 479.0 Td (  - `Delivery Note <-> Purchase Receipt`) Tj ET
-BT /F1 8.5 Tf 40 467.5 Td (  - `Sales Invoice <-> Purchase Invoice`) Tj ET
-BT /F1 8.5 Tf 40 456.0 Td (  - `Material Request <-> Purchase Order / Sales Order`) Tj ET
-BT /F1 8.5 Tf 40 444.5 Td (  - `Quotation <-> Supplier Quotation`) Tj ET
-BT /F1 8.5 Tf 40 433.0 Td (  - `Journal Entry <-> Journal Entry`) Tj ET
-0.85 0.85 0.85 RG 40 415.5 m 572 415.5 l S 0 0 0 rg
-0.15 0.3 0.6 rg BT /F2 11 Tf 40 397.5 Td (3. Deep Dive into Core DocTypes & Configurations) Tj ET 0 0 0 rg
-0.2 0.2 0.2 rg BT /F2 10 Tf 40 371.5 Td (3.1 Intercompany Transaction Link) Tj ET 0 0 0 rg
-BT /F1 8.5 Tf 50 354.5 Td (\225 **Location:** `Inter Company > Intercompany Transaction Link`) Tj ET
-BT /F1 8.5 Tf 50 342.5 Td (\225 **Purpose:** The primary routing engine defining which sister companies trade) Tj ET
-BT /F1 8.5 Tf 50 330.5 Td (  with each other.) Tj ET
-BT /F1 8.5 Tf 50 318.5 Td (\225 **Key Fields:**) Tj ET
-BT /F1 8.5 Tf 40 306.5 Td (  - `Main Company`: The initiating parent or sister company.) Tj ET
-BT /F1 8.5 Tf 40 295.0 Td (  - `Enabled`: Master switch for transaction triggering.) Tj ET
-BT /F1 8.5 Tf 40 283.5 Td (  - `Auto Create Internal Parties`: Automatically builds missing customer/supplier) Tj ET
-BT /F1 8.5 Tf 40 272.0 Td (records if checked.) Tj ET
-BT /F1 8.5 Tf 40 260.5 Td (  - `Companies Table`: Child table listing counterparty entities, their specific) Tj ET
-BT /F1 8.5 Tf 40 249.0 Td (Internal Customer ID, and Internal Supplier ID.) Tj ET
-BT /F1 8.5 Tf 40 237.5 Td (  - `Transaction Types Table`: Defines specific document routing pairs, whether target) Tj ET
-BT /F1 8.5 Tf 40 226.0 Td (docs are created as Draft or automatically Submitted, and custom account overrides.) Tj ET
-0.25 0.25 0.25 rg BT /F2 9.5 Tf 40 208.5 Td (3.1.0 Transaction Form Behavior: "Is Intercompany" & Dynamic Sister Company Selection) Tj ET 0 0 0 rg
-BT /F1 8.5 Tf 40 193.5 Td (In normal operations, almost all daily transactions \(Payment Entry, Journal Entry,) Tj ET
-BT /F1 8.5 Tf 40 182.0 Td (Sales Invoices, etc.\) belong strictly to the local company. To prevent accidental) Tj ET
-BT /F1 8.5 Tf 40 170.5 Td (mirror creation:) Tj ET
-BT /F1 8.5 Tf 40 159.0 Td (1. **Unchecked by Default \(`is_intercompany = 0`\)**:) Tj ET
-BT /F1 8.5 Tf 65 147.5 Td (- Every transaction form has the **Is Intercompany** checkbox unticked.) Tj ET
-BT /F1 8.5 Tf 65 136.0 Td (- The **Intercompany Target Company** field is rendered **read-only** and) Tj ET
-BT /F1 8.5 Tf 65 124.5 Td (  automatically defaults to the source company name \(e.g. *Acme Manufacturing) Tj ET
-BT /F1 8.5 Tf 65 113.0 Td (  Ltd*\).) Tj ET
-BT /F1 8.5 Tf 65 101.5 Td (- Upon save or submission, it is treated strictly as an internal transaction;) Tj ET
-BT /F1 8.5 Tf 65 90.0 Td (  no mirror voucher is generated in sister companies.) Tj ET
-BT /F1 8.5 Tf 40 78.5 Td (2. **Checked Mode \(`is_intercompany = 1`\)**:) Tj ET
-BT /F1 8.5 Tf 65 67.0 Td (- When user ticks **Is Intercompany**, the **Intercompany Target Company**) Tj ET
+BT /F1 8.5 Tf 40 735 Td (In ERPNext Desk, navigate to **Workspace > Inter Company** or enter the route directly) Tj ET
+BT /F1 8.5 Tf 40 723.5 Td (in your browser:) Tj ET
+0.96 0.97 0.98 rg 40 706.5 532 9.5 re f
+0.15 0.2 0.35 rg BT /F3 7 Tf 44 708.0 Td (/app/inter-company-console) Tj ET 0 0 0 rg
+0.2 0.2 0.2 rg BT /F2 10 Tf 40 688.5 Td (Step 2: Launch the Wizard) Tj ET 0 0 0 rg
+BT /F1 8.5 Tf 40 671.5 Td (1. On the top right of the Inter-Company Control Console, click the **Quick Setup) Tj ET
+BT /F1 8.5 Tf 40 660.0 Td (Wizard** button.) Tj ET
+BT /F1 8.5 Tf 40 648.5 Td (2. Select:) Tj ET
+BT /F1 8.5 Tf 65 637.0 Td (- Main Company \(Entity A\)**: e.g., *Headquarters Inc.*) Tj ET
+BT /F1 8.5 Tf 65 625.5 Td (- Counterparty Company \(Entity B\)**: e.g., *Distribution Subsidiary Ltd.*) Tj ET
+BT /F1 8.5 Tf 40 614.0 Td (3. Click **Establish Connection**.) Tj ET
+0.2 0.2 0.2 rg BT /F2 10 Tf 40 596.5 Td (What happens automatically under the hood:) Tj ET 0 0 0 rg
+BT /F1 8.5 Tf 50 579.5 Td (\225 Creates an internal Customer in Entity A representing Entity B.) Tj ET
+BT /F1 8.5 Tf 50 567.5 Td (\225 Creates an internal Supplier in Entity A representing Entity B.) Tj ET
+BT /F1 8.5 Tf 50 555.5 Td (\225 Creates an internal Customer in Entity B representing Entity A.) Tj ET
+BT /F1 8.5 Tf 50 543.5 Td (\225 Creates an internal Supplier in Entity B representing Entity A.) Tj ET
+BT /F1 8.5 Tf 50 531.5 Td (\225 Creates an **Intercompany Transaction Link** record with 9 pre-configured) Tj ET
+BT /F1 8.5 Tf 50 519.5 Td (  bidirectional transaction rules:) Tj ET
+BT /F1 8.5 Tf 40 507.5 Td (  - `Sales Order <-> Purchase Order`) Tj ET
+BT /F1 8.5 Tf 40 496.0 Td (  - `Delivery Note <-> Purchase Receipt`) Tj ET
+BT /F1 8.5 Tf 40 484.5 Td (  - `Sales Invoice <-> Purchase Invoice`) Tj ET
+BT /F1 8.5 Tf 40 473.0 Td (  - `Material Request <-> Purchase Order / Sales Order`) Tj ET
+BT /F1 8.5 Tf 40 461.5 Td (  - `Quotation <-> Supplier Quotation`) Tj ET
+BT /F1 8.5 Tf 40 450.0 Td (  - `Journal Entry <-> Journal Entry`) Tj ET
+0.85 0.85 0.85 RG 40 432.5 m 572 432.5 l S 0 0 0 rg
+0.15 0.3 0.6 rg BT /F2 11 Tf 40 414.5 Td (3. Deep Dive into Core DocTypes & Configurations) Tj ET 0 0 0 rg
+0.2 0.2 0.2 rg BT /F2 10 Tf 40 388.5 Td (3.1 Intercompany Transaction Link) Tj ET 0 0 0 rg
+BT /F1 8.5 Tf 50 371.5 Td (\225 **Location:** `Inter Company > Intercompany Transaction Link`) Tj ET
+BT /F1 8.5 Tf 50 359.5 Td (\225 **Purpose:** The primary routing engine defining which sister companies trade) Tj ET
+BT /F1 8.5 Tf 50 347.5 Td (  with each other.) Tj ET
+BT /F1 8.5 Tf 50 335.5 Td (\225 **Key Fields:**) Tj ET
+BT /F1 8.5 Tf 40 323.5 Td (  - `Main Company`: The initiating parent or sister company.) Tj ET
+BT /F1 8.5 Tf 40 312.0 Td (  - `Enabled`: Master switch for transaction triggering.) Tj ET
+BT /F1 8.5 Tf 40 300.5 Td (  - `Auto Create Internal Parties`: Automatically builds missing customer/supplier) Tj ET
+BT /F1 8.5 Tf 40 289.0 Td (records if checked.) Tj ET
+BT /F1 8.5 Tf 40 277.5 Td (  - `Companies Table`: Child table listing counterparty entities, their specific) Tj ET
+BT /F1 8.5 Tf 40 266.0 Td (Internal Customer ID, and Internal Supplier ID.) Tj ET
+BT /F1 8.5 Tf 40 254.5 Td (  - `Transaction Types Table`: Defines specific document routing pairs, whether target) Tj ET
+BT /F1 8.5 Tf 40 243.0 Td (docs are created as Draft or automatically Submitted, and custom account overrides.) Tj ET
+0.25 0.25 0.25 rg BT /F2 9.5 Tf 40 225.5 Td (3.1.0 Transaction Form Behavior: "Is Intercompany" & Dynamic Sister Company Selection) Tj ET 0 0 0 rg
+BT /F1 8.5 Tf 40 210.5 Td (In normal operations, almost all daily transactions \(Payment Entry, Journal Entry,) Tj ET
+BT /F1 8.5 Tf 40 199.0 Td (Sales Invoices, etc.\) belong strictly to the local company. To prevent accidental) Tj ET
+BT /F1 8.5 Tf 40 187.5 Td (mirror creation:) Tj ET
+BT /F1 8.5 Tf 40 176.0 Td (1. **Unchecked by Default \(`is_intercompany = 0`\)**:) Tj ET
+BT /F1 8.5 Tf 65 164.5 Td (- Every transaction form has the **Is Intercompany** checkbox unticked.) Tj ET
+BT /F1 8.5 Tf 65 153.0 Td (- The **Intercompany Target Company** field is rendered **read-only** and) Tj ET
+BT /F1 8.5 Tf 65 141.5 Td (  automatically defaults to the source company name \(e.g. *Acme Manufacturing) Tj ET
+BT /F1 8.5 Tf 65 130.0 Td (  Ltd*\).) Tj ET
+BT /F1 8.5 Tf 65 118.5 Td (- Upon save or submission, it is treated strictly as an internal transaction;) Tj ET
+BT /F1 8.5 Tf 65 107.0 Td (  no mirror voucher is generated in sister companies.) Tj ET
+BT /F1 8.5 Tf 40 95.5 Td (2. **Checked Mode \(`is_intercompany = 1`\)**:) Tj ET
+BT /F1 8.5 Tf 65 84.0 Td (- When user ticks **Is Intercompany**, the **Intercompany Target Company**) Tj ET
+BT /F1 8.5 Tf 65 72.5 Td (  field immediately becomes **editable and mandatory**.) Tj ET
 Q
 endstream
 endobj
@@ -156,7 +156,7 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 11 0 R /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> >>
 endobj
 11 0 obj
-<< /Length 6071 >>
+<< /Length 6094 >>
 stream
 q
 0.4 0.4 0.4 rg
@@ -167,63 +167,63 @@ BT /F1 9 Tf 40 760 Td (Inter-Company Transactions - Enterprise User Guide & Mult
 0.8 0.8 0.8 RG 40 40 m 572 40 l S
 BT /F1 9 Tf 520 28 Td (Page 3 of 14) Tj ET
 0 0 0 rg
-BT /F1 8.5 Tf 65 735 Td (  field immediately becomes **editable and mandatory**.) Tj ET
-BT /F1 8.5 Tf 65 723.5 Td (- If it was populated with the source company, it automatically clears so the) Tj ET
-BT /F1 8.5 Tf 65 712.0 Td (  user can select the target sister company.) Tj ET
-BT /F1 8.5 Tf 65 700.5 Td (- The field lookup dynamically excludes the current company, preventing) Tj ET
-BT /F1 8.5 Tf 65 689.0 Td (  circular or self-directed intercompany errors.) Tj ET
-BT /F1 8.5 Tf 65 677.5 Td (- If unticked, it resets to read-only with the current company name.) Tj ET
-BT /F1 8.5 Tf 65 666.0 Td (- Upon submission, the engine creates the reciprocal mirror entry in the) Tj ET
-BT /F1 8.5 Tf 65 654.5 Td (  chosen target company.) Tj ET
-BT /F1 8.5 Tf 40 637.0 Td (3. **Intelligent Dynamic Party Detection \(Zero Manual Ticking Required\)**:) Tj ET
-BT /F1 8.5 Tf 65 625.5 Td (- When you select a **Customer** in *Sales Invoice*, *Sales Order*, *Delivery) Tj ET
-BT /F1 8.5 Tf 65 614.0 Td (  Note*, or *Quotation*, the system checks if the customer is configured in) Tj ET
-BT /F1 8.5 Tf 65 602.5 Td (  `Intercompany Transaction Link`.) Tj ET
-BT /F1 8.5 Tf 65 591.0 Td (- When you select a **Supplier** in *Purchase Invoice*, *Purchase Order*,) Tj ET
-BT /F1 8.5 Tf 65 579.5 Td (  *Purchase Receipt*, or *Supplier Quotation*, the system checks if the) Tj ET
-BT /F1 8.5 Tf 65 568.0 Td (  supplier is configured in `Intercompany Transaction Link`.) Tj ET
-BT /F1 8.5 Tf 65 556.5 Td (- In **Payment Entry**, when choosing `party_type` \(Customer/Supplier\) and) Tj ET
-BT /F1 8.5 Tf 65 545.0 Td (  selecting `party`, the engine immediately evaluates the party mapping.) Tj ET
-BT /F1 8.5 Tf 65 533.5 Td (- In **Journal Entry**, when you add an account line with Debtors/Creditors) Tj ET
-BT /F1 8.5 Tf 65 522.0 Td (  and choose the `party` \(Customer or Supplier\), the system instantly sets) Tj ET
-BT /F1 8.5 Tf 65 510.5 Td (  `intercompany_target_company` on that row, ticks header `Is Intercompany`,) Tj ET
-BT /F1 8.5 Tf 65 499.0 Td (  and selects the linked sister company.) Tj ET
-BT /F1 8.5 Tf 65 487.5 Td (- If the party is changed to a regular third party, the system automatically) Tj ET
-BT /F1 8.5 Tf 65 476.0 Td (  unchecks `Is Intercompany` and restores the standard internal company mode.) Tj ET
-0.25 0.25 0.25 rg BT /F2 9.5 Tf 40 458.5 Td (3.1.1 Comprehensive Matrix of Supported Mirror Transactions \(What It CAN Do\)) Tj ET 0 0 0 rg
-BT /F1 8.5 Tf 40 443.5 Td (The engine supports real-time, automated document mirroring across all standard trade) Tj ET
-BT /F1 8.5 Tf 40 432.0 Td (and accounting workflows in ERPNext:) Tj ET
-BT /F1 8.5 Tf 40 414.5 Td (| # | Initiating \(Source\) DocType | Target \(Mirror\) DocType | Direction | Business) Tj ET
-BT /F1 8.5 Tf 40 403.0 Td (Process & Behavior |) Tj ET
-BT /F1 8.5 Tf 40 391.5 Td (|---|---|---|---|---|) Tj ET
-BT /F1 8.5 Tf 40 380.0 Td (| 1 | **Sales Order** | **Purchase Order** | Bi-directional | Customer order in) Tj ET
-BT /F1 8.5 Tf 40 368.5 Td (selling company generates reciprocal vendor order in buying company with identical) Tj ET
-BT /F1 8.5 Tf 40 357.0 Td (items, quantities, pricing, and required dates. |) Tj ET
-BT /F1 8.5 Tf 40 345.5 Td (| 2 | **Purchase Order** | **Sales Order** | Bi-directional | Procurement order in) Tj ET
-BT /F1 8.5 Tf 40 334.0 Td (subsidiary generates fulfillment order in parent/sister manufacturing entity. |) Tj ET
-BT /F1 8.5 Tf 40 322.5 Td (| 3 | **Delivery Note** | **Purchase Receipt** | Bi-directional | Dispatch of goods) Tj ET
-BT /F1 8.5 Tf 40 311.0 Td (from seller automatically creates incoming Goods Receipt at destination warehouse) Tj ET
-BT /F1 8.5 Tf 40 299.5 Td (\(reduces in-transit latency\). |) Tj ET
-BT /F1 8.5 Tf 40 288.0 Td (| 4 | **Purchase Receipt** | **Delivery Note** | Bi-directional | Receiving goods at) Tj ET
-BT /F1 8.5 Tf 40 276.5 Td (destination can trigger delivery note completion at source entity. |) Tj ET
-BT /F1 8.5 Tf 40 265.0 Td (| 5 | **Sales Invoice** | **Purchase Invoice** | Bi-directional | Commercial billing) Tj ET
-BT /F1 8.5 Tf 40 253.5 Td (in seller creates reciprocal accounts payable invoice with identical line item) Tj ET
-BT /F1 8.5 Tf 40 242.0 Td (breakdown, taxes, and intercompany tags. |) Tj ET
-BT /F1 8.5 Tf 40 230.5 Td (| 6 | **Purchase Invoice** | **Sales Invoice** | Bi-directional | Supplier invoice in) Tj ET
-BT /F1 8.5 Tf 40 219.0 Td (buying company creates reciprocal accounts receivable billing in sister company. |) Tj ET
-BT /F1 8.5 Tf 40 207.5 Td (| 7 | **Quotation** | **Supplier Quotation** | Bi-directional | Internal sales) Tj ET
-BT /F1 8.5 Tf 40 196.0 Td (estimate generates vendor quotation for purchasing approvals. |) Tj ET
-BT /F1 8.5 Tf 40 184.5 Td (| 8 | **Supplier Quotation** | **Quotation** | Bi-directional | Vendor quote from) Tj ET
-BT /F1 8.5 Tf 40 173.0 Td (sister company creates sales quotation. |) Tj ET
-BT /F1 8.5 Tf 40 161.5 Td (| 9 | **Material Request** | **Sales Order / Purchase Order** | Forward | Stock) Tj ET
-BT /F1 8.5 Tf 40 150.0 Td (replenishment requisition in a branch automatically initiates order creation in the) Tj ET
-BT /F1 8.5 Tf 40 138.5 Td (central warehouse company. |) Tj ET
-BT /F1 8.5 Tf 40 127.0 Td (| 10 | **Request for Quotation** | **Supplier Quotation** | Bi-directional | Formal) Tj ET
-BT /F1 8.5 Tf 40 115.5 Td (procurement inquiry creates supplier quote in sister sales department. |) Tj ET
-BT /F1 8.5 Tf 40 104.0 Td (| 11 | **Stock Entry** | **Stock Entry** | Bi-directional | *Material Issue* in) Tj ET
-BT /F1 8.5 Tf 40 92.5 Td (Company A triggers an automated *Material Receipt* in Company B at the designated) Tj ET
-BT /F1 8.5 Tf 40 81.0 Td (transfer valuation rate. |) Tj ET
-BT /F1 8.5 Tf 40 69.5 Td (| 12 | **Journal Entry** | **Journal Entry** | Bi-directional | Cross-entity fund) Tj ET
+BT /F1 8.5 Tf 65 735 Td (- If it was populated with the source company, it automatically clears so the) Tj ET
+BT /F1 8.5 Tf 65 723.5 Td (  user can select the target sister company.) Tj ET
+BT /F1 8.5 Tf 65 712.0 Td (- The field lookup dynamically excludes the current company, preventing) Tj ET
+BT /F1 8.5 Tf 65 700.5 Td (  circular or self-directed intercompany errors.) Tj ET
+BT /F1 8.5 Tf 65 689.0 Td (- If unticked, it resets to read-only with the current company name.) Tj ET
+BT /F1 8.5 Tf 65 677.5 Td (- Upon submission, the engine creates the reciprocal mirror entry in the) Tj ET
+BT /F1 8.5 Tf 65 666.0 Td (  chosen target company.) Tj ET
+BT /F1 8.5 Tf 40 648.5 Td (3. **Intelligent Dynamic Party Detection \(Zero Manual Ticking Required\)**:) Tj ET
+BT /F1 8.5 Tf 65 637.0 Td (- When you select a **Customer** in *Sales Invoice*, *Sales Order*, *Delivery) Tj ET
+BT /F1 8.5 Tf 65 625.5 Td (  Note*, or *Quotation*, the system checks if the customer is configured in) Tj ET
+BT /F1 8.5 Tf 65 614.0 Td (  `Intercompany Transaction Link`.) Tj ET
+BT /F1 8.5 Tf 65 602.5 Td (- When you select a **Supplier** in *Purchase Invoice*, *Purchase Order*,) Tj ET
+BT /F1 8.5 Tf 65 591.0 Td (  *Purchase Receipt*, or *Supplier Quotation*, the system checks if the) Tj ET
+BT /F1 8.5 Tf 65 579.5 Td (  supplier is configured in `Intercompany Transaction Link`.) Tj ET
+BT /F1 8.5 Tf 65 568.0 Td (- In **Payment Entry**, when choosing `party_type` \(Customer/Supplier\) and) Tj ET
+BT /F1 8.5 Tf 65 556.5 Td (  selecting `party`, the engine immediately evaluates the party mapping.) Tj ET
+BT /F1 8.5 Tf 65 545.0 Td (- In **Journal Entry**, when you add an account line with Debtors/Creditors) Tj ET
+BT /F1 8.5 Tf 65 533.5 Td (  and choose the `party` \(Customer or Supplier\), the system instantly sets) Tj ET
+BT /F1 8.5 Tf 65 522.0 Td (  `intercompany_target_company` on that row, ticks header `Is Intercompany`,) Tj ET
+BT /F1 8.5 Tf 65 510.5 Td (  and selects the linked sister company.) Tj ET
+BT /F1 8.5 Tf 65 499.0 Td (- If the party is changed to a regular third party, the system automatically) Tj ET
+BT /F1 8.5 Tf 65 487.5 Td (  unchecks `Is Intercompany` and restores the standard internal company mode.) Tj ET
+0.25 0.25 0.25 rg BT /F2 9.5 Tf 40 470.0 Td (3.1.1 Comprehensive Matrix of Supported Mirror Transactions \(What It CAN Do\)) Tj ET 0 0 0 rg
+BT /F1 8.5 Tf 40 455.0 Td (The engine supports real-time, automated document mirroring across all standard trade) Tj ET
+BT /F1 8.5 Tf 40 443.5 Td (and accounting workflows in ERPNext:) Tj ET
+BT /F1 8.5 Tf 40 426.0 Td (| # | Initiating \(Source\) DocType | Target \(Mirror\) DocType | Direction | Business) Tj ET
+BT /F1 8.5 Tf 40 414.5 Td (Process & Behavior |) Tj ET
+BT /F1 8.5 Tf 40 403.0 Td (|---|---|---|---|---|) Tj ET
+BT /F1 8.5 Tf 40 391.5 Td (| 1 | **Sales Order** | **Purchase Order** | Bi-directional | Customer order in) Tj ET
+BT /F1 8.5 Tf 40 380.0 Td (selling company generates reciprocal vendor order in buying company with identical) Tj ET
+BT /F1 8.5 Tf 40 368.5 Td (items, quantities, pricing, and required dates. |) Tj ET
+BT /F1 8.5 Tf 40 357.0 Td (| 2 | **Purchase Order** | **Sales Order** | Bi-directional | Procurement order in) Tj ET
+BT /F1 8.5 Tf 40 345.5 Td (subsidiary generates fulfillment order in parent/sister manufacturing entity. |) Tj ET
+BT /F1 8.5 Tf 40 334.0 Td (| 3 | **Delivery Note** | **Purchase Receipt** | Bi-directional | Dispatch of goods) Tj ET
+BT /F1 8.5 Tf 40 322.5 Td (from seller automatically creates incoming Goods Receipt at destination warehouse) Tj ET
+BT /F1 8.5 Tf 40 311.0 Td (\(reduces in-transit latency\). |) Tj ET
+BT /F1 8.5 Tf 40 299.5 Td (| 4 | **Purchase Receipt** | **Delivery Note** | Bi-directional | Receiving goods at) Tj ET
+BT /F1 8.5 Tf 40 288.0 Td (destination can trigger delivery note completion at source entity. |) Tj ET
+BT /F1 8.5 Tf 40 276.5 Td (| 5 | **Sales Invoice** | **Purchase Invoice** | Bi-directional | Commercial billing) Tj ET
+BT /F1 8.5 Tf 40 265.0 Td (in seller creates reciprocal accounts payable invoice with identical line item) Tj ET
+BT /F1 8.5 Tf 40 253.5 Td (breakdown, taxes, and intercompany tags. |) Tj ET
+BT /F1 8.5 Tf 40 242.0 Td (| 6 | **Purchase Invoice** | **Sales Invoice** | Bi-directional | Supplier invoice in) Tj ET
+BT /F1 8.5 Tf 40 230.5 Td (buying company creates reciprocal accounts receivable billing in sister company. |) Tj ET
+BT /F1 8.5 Tf 40 219.0 Td (| 7 | **Quotation** | **Supplier Quotation** | Bi-directional | Internal sales) Tj ET
+BT /F1 8.5 Tf 40 207.5 Td (estimate generates vendor quotation for purchasing approvals. |) Tj ET
+BT /F1 8.5 Tf 40 196.0 Td (| 8 | **Supplier Quotation** | **Quotation** | Bi-directional | Vendor quote from) Tj ET
+BT /F1 8.5 Tf 40 184.5 Td (sister company creates sales quotation. |) Tj ET
+BT /F1 8.5 Tf 40 173.0 Td (| 9 | **Material Request** | **Sales Order / Purchase Order** | Forward | Stock) Tj ET
+BT /F1 8.5 Tf 40 161.5 Td (replenishment requisition in a branch automatically initiates order creation in the) Tj ET
+BT /F1 8.5 Tf 40 150.0 Td (central warehouse company. |) Tj ET
+BT /F1 8.5 Tf 40 138.5 Td (| 10 | **Request for Quotation** | **Supplier Quotation** | Bi-directional | Formal) Tj ET
+BT /F1 8.5 Tf 40 127.0 Td (procurement inquiry creates supplier quote in sister sales department. |) Tj ET
+BT /F1 8.5 Tf 40 115.5 Td (| 11 | **Stock Entry** | **Stock Entry** | Bi-directional | *Material Issue* in) Tj ET
+BT /F1 8.5 Tf 40 104.0 Td (Company A triggers an automated *Material Receipt* in Company B at the designated) Tj ET
+BT /F1 8.5 Tf 40 92.5 Td (transfer valuation rate. |) Tj ET
+BT /F1 8.5 Tf 40 81.0 Td (| 12 | **Journal Entry** | **Journal Entry** | Bi-directional | Cross-entity fund) Tj ET
+BT /F1 8.5 Tf 40 69.5 Td (transfers or expense allocations automatically generate balancing voucher with) Tj ET
 Q
 endstream
 endobj
@@ -231,7 +231,7 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 13 0 R /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> >>
 endobj
 13 0 obj
-<< /Length 5453 >>
+<< /Length 5440 >>
 stream
 q
 0.4 0.4 0.4 rg
@@ -242,61 +242,61 @@ BT /F1 9 Tf 40 760 Td (Inter-Company Transactions - Enterprise User Guide & Mult
 0.8 0.8 0.8 RG 40 40 m 572 40 l S
 BT /F1 9 Tf 520 28 Td (Page 4 of 14) Tj ET
 0 0 0 rg
-BT /F1 8.5 Tf 40 735 Td (transfers or expense allocations automatically generate balancing voucher with) Tj ET
-BT /F1 8.5 Tf 40 723.5 Td (reversed debit/credit accounts. |) Tj ET
-BT /F1 8.5 Tf 40 712.0 Td (| 13 | **Payment Entry** | **Payment Entry** | Bi-directional | Payment made from) Tj ET
-BT /F1 8.5 Tf 40 700.5 Td (Company A to Company B creates a matching Receipt voucher in Company B linked to the) Tj ET
-BT /F1 8.5 Tf 40 689.0 Td (open intercompany invoice. |) Tj ET
-0.25 0.25 0.25 rg BT /F2 9.5 Tf 40 671.5 Td (3.1.2 Intelligent Auto-Switching in Intercompany Transaction Type) Tj ET 0 0 0 rg
-BT /F1 8.5 Tf 40 656.5 Td (When defining transaction pairings in `Intercompany Transaction Link` -> `Transaction) Tj ET
-BT /F1 8.5 Tf 40 645.0 Td (Types` child table or `Intercompany Transaction Type`:) Tj ET
-BT /F1 8.5 Tf 50 633.5 Td (\225 **Instant Auto-Switch**: Whenever you choose or change **Source Transaction) Tj ET
-BT /F1 8.5 Tf 50 621.5 Td (  Type**, the **Target Transaction Type** field automatically switches to its) Tj ET
-BT /F1 8.5 Tf 50 609.5 Td (  counterpart:) Tj ET
-BT /F1 8.5 Tf 40 597.5 Td (  - **Sales Order** &rarr; **Purchase Order**) Tj ET
-BT /F1 8.5 Tf 40 586.0 Td (  - **Purchase Order** &rarr; **Sales Order**) Tj ET
-BT /F1 8.5 Tf 40 574.5 Td (  - **Sales Invoice** &rarr; **Purchase Invoice**) Tj ET
-BT /F1 8.5 Tf 40 563.0 Td (  - **Purchase Invoice** &rarr; **Sales Invoice**) Tj ET
-BT /F1 8.5 Tf 40 551.5 Td (  - **Delivery Note** &rarr; **Purchase Receipt**) Tj ET
-BT /F1 8.5 Tf 40 540.0 Td (  - **Purchase Receipt** &rarr; **Delivery Note**) Tj ET
-BT /F1 8.5 Tf 40 528.5 Td (  - **Stock Entry** &rarr; **Stock Entry**) Tj ET
-BT /F1 8.5 Tf 40 517.0 Td (  - **Journal Entry** &rarr; **Journal Entry**) Tj ET
-BT /F1 8.5 Tf 40 505.5 Td (  - **Payment Entry** &rarr; **Payment Entry**) Tj ET
-BT /F1 8.5 Tf 40 494.0 Td (  - **Quotation** &rarr; **Supplier Quotation**) Tj ET
-BT /F1 8.5 Tf 40 482.5 Td (  - **Supplier Quotation** &rarr; **Quotation**) Tj ET
-BT /F1 8.5 Tf 40 471.0 Td (  - **Material Request** &rarr; **Purchase Order**) Tj ET
-BT /F1 8.5 Tf 40 459.5 Td (  - **Request for Quotation** &rarr; **Supplier Quotation**) Tj ET
-BT /F1 8.5 Tf 40 448.0 Td (  - **Subcontracting Order** &rarr; **Purchase Order**) Tj ET
-BT /F1 8.5 Tf 40 436.5 Td (  - **Landed Cost Voucher** &rarr; **Journal Entry**) Tj ET
-BT /F1 8.5 Tf 50 425.0 Td (\225 **Direction Default**: Direction automatically defaults to **Both** \(bi-) Tj ET
-BT /F1 8.5 Tf 50 413.0 Td (  directional sync\) if not specified.) Tj ET
-BT /F1 8.5 Tf 50 401.0 Td (\225 **Preload All Types Button**: You can also click **Populate All Transaction) Tj ET
-BT /F1 8.5 Tf 50 389.0 Td (  Types** in `Intercompany Transaction Link` to insert all standard combinations) Tj ET
-BT /F1 8.5 Tf 50 377.0 Td (  with one click.) Tj ET
-0.85 0.85 0.85 RG 40 359.0 m 572 359.0 l S 0 0 0 rg
-0.25 0.25 0.25 rg BT /F2 9.5 Tf 40 341.0 Td (3.1.2 Unsupported Cross-Entity Transactions \(What It CANNOT Do and WHY It Is a MUST\)) Tj ET 0 0 0 rg
-BT /F1 8.5 Tf 40 326.0 Td (In enterprise multi-company accounting, certain ERPNext DocTypes **cannot and must) Tj ET
-BT /F1 8.5 Tf 40 314.5 Td (not** be mirrored directly between separate legal entities. Attempting to mirror these) Tj ET
-BT /F1 8.5 Tf 40 303.0 Td (documents directly would violate statutory financial compliance, corporate tax laws,) Tj ET
-BT /F1 8.5 Tf 40 291.5 Td (and GAAP/IFRS standards:) Tj ET
-BT /F1 8.5 Tf 40 274.0 Td (1. **Landed Cost Voucher \(LCV\)**) Tj ET
-BT /F1 8.5 Tf 65 262.5 Td (- Why It Cannot Be Mirrored:* A Landed Cost Voucher is strictly an **internal) Tj ET
-BT /F1 8.5 Tf 65 251.0 Td (  inventory valuation adjustment tool** within a single legal entity. Its sole) Tj ET
-BT /F1 8.5 Tf 65 239.5 Td (  purpose is to capitalize freight, customs, or handling costs into the) Tj ET
-BT /F1 8.5 Tf 65 228.0 Td (  moving-average or FIFO valuation rate of an existing Purchase Receipt. It) Tj ET
-BT /F1 8.5 Tf 65 216.5 Td (  does **not** create legal debtor/creditor claims.) Tj ET
-BT /F1 8.5 Tf 65 205.0 Td (- What Is a MUST \(Statutory Compliance\):* If Sister Company A provides) Tj ET
-BT /F1 8.5 Tf 65 193.5 Td (  logistics, freight, or clearance services to Sister Company B:) Tj ET
-BT /F1 8.5 Tf 40 182.0 Td (     - Company A **MUST** issue a standard service **Sales Invoice** to Company B.) Tj ET
-BT /F1 8.5 Tf 40 170.5 Td (     - The engine mirrors this into a **Purchase Invoice** \(Freight & Handling\) in) Tj ET
-BT /F1 8.5 Tf 40 159.0 Td (Company B.) Tj ET
-BT /F1 8.5 Tf 40 147.5 Td (     - Company B can then optionally reference this Purchase Invoice inside its own) Tj ET
-BT /F1 8.5 Tf 40 136.0 Td (internal Landed Cost Voucher if it wishes to capitalize those freight costs into) Tj ET
-BT /F1 8.5 Tf 40 124.5 Td (inventory.) Tj ET
-BT /F1 8.5 Tf 40 107.0 Td (2. **Subcontracting Order**) Tj ET
-BT /F1 8.5 Tf 65 95.5 Td (- Why It Cannot Be Mirrored Directly:* A Subcontracting Order in ERPNext v15) Tj ET
-BT /F1 8.5 Tf 65 84.0 Td (  is bound to a single entity's internal Bill of Materials \(BOM\), supplied raw) Tj ET
-BT /F1 8.5 Tf 65 72.5 Td (  material tracking, and subcontracting receipt valuation algorithms. Sister) Tj ET
+BT /F1 8.5 Tf 40 735 Td (reversed debit/credit accounts. |) Tj ET
+BT /F1 8.5 Tf 40 723.5 Td (| 13 | **Payment Entry** | **Payment Entry** | Bi-directional | Payment made from) Tj ET
+BT /F1 8.5 Tf 40 712.0 Td (Company A to Company B creates a matching Receipt voucher in Company B linked to the) Tj ET
+BT /F1 8.5 Tf 40 700.5 Td (open intercompany invoice. |) Tj ET
+0.25 0.25 0.25 rg BT /F2 9.5 Tf 40 683.0 Td (3.1.2 Intelligent Auto-Switching in Intercompany Transaction Type) Tj ET 0 0 0 rg
+BT /F1 8.5 Tf 40 668.0 Td (When defining transaction pairings in `Intercompany Transaction Link` -> `Transaction) Tj ET
+BT /F1 8.5 Tf 40 656.5 Td (Types` child table or `Intercompany Transaction Type`:) Tj ET
+BT /F1 8.5 Tf 50 645.0 Td (\225 **Instant Auto-Switch**: Whenever you choose or change **Source Transaction) Tj ET
+BT /F1 8.5 Tf 50 633.0 Td (  Type**, the **Target Transaction Type** field automatically switches to its) Tj ET
+BT /F1 8.5 Tf 50 621.0 Td (  counterpart:) Tj ET
+BT /F1 8.5 Tf 40 609.0 Td (  - **Sales Order** &rarr; **Purchase Order**) Tj ET
+BT /F1 8.5 Tf 40 597.5 Td (  - **Purchase Order** &rarr; **Sales Order**) Tj ET
+BT /F1 8.5 Tf 40 586.0 Td (  - **Sales Invoice** &rarr; **Purchase Invoice**) Tj ET
+BT /F1 8.5 Tf 40 574.5 Td (  - **Purchase Invoice** &rarr; **Sales Invoice**) Tj ET
+BT /F1 8.5 Tf 40 563.0 Td (  - **Delivery Note** &rarr; **Purchase Receipt**) Tj ET
+BT /F1 8.5 Tf 40 551.5 Td (  - **Purchase Receipt** &rarr; **Delivery Note**) Tj ET
+BT /F1 8.5 Tf 40 540.0 Td (  - **Stock Entry** &rarr; **Stock Entry**) Tj ET
+BT /F1 8.5 Tf 40 528.5 Td (  - **Journal Entry** &rarr; **Journal Entry**) Tj ET
+BT /F1 8.5 Tf 40 517.0 Td (  - **Payment Entry** &rarr; **Payment Entry**) Tj ET
+BT /F1 8.5 Tf 40 505.5 Td (  - **Quotation** &rarr; **Supplier Quotation**) Tj ET
+BT /F1 8.5 Tf 40 494.0 Td (  - **Supplier Quotation** &rarr; **Quotation**) Tj ET
+BT /F1 8.5 Tf 40 482.5 Td (  - **Material Request** &rarr; **Purchase Order**) Tj ET
+BT /F1 8.5 Tf 40 471.0 Td (  - **Request for Quotation** &rarr; **Supplier Quotation**) Tj ET
+BT /F1 8.5 Tf 40 459.5 Td (  - **Subcontracting Order** &rarr; **Purchase Order**) Tj ET
+BT /F1 8.5 Tf 40 448.0 Td (  - **Landed Cost Voucher** &rarr; **Journal Entry**) Tj ET
+BT /F1 8.5 Tf 50 436.5 Td (\225 **Direction Default**: Direction automatically defaults to **Both** \(bi-) Tj ET
+BT /F1 8.5 Tf 50 424.5 Td (  directional sync\) if not specified.) Tj ET
+BT /F1 8.5 Tf 50 412.5 Td (\225 **Preload All Types Button**: You can also click **Populate All Transaction) Tj ET
+BT /F1 8.5 Tf 50 400.5 Td (  Types** in `Intercompany Transaction Link` to insert all standard combinations) Tj ET
+BT /F1 8.5 Tf 50 388.5 Td (  with one click.) Tj ET
+0.85 0.85 0.85 RG 40 370.5 m 572 370.5 l S 0 0 0 rg
+0.25 0.25 0.25 rg BT /F2 9.5 Tf 40 352.5 Td (3.1.2 Unsupported Cross-Entity Transactions \(What It CANNOT Do and WHY It Is a MUST\)) Tj ET 0 0 0 rg
+BT /F1 8.5 Tf 40 337.5 Td (In enterprise multi-company accounting, certain ERPNext DocTypes **cannot and must) Tj ET
+BT /F1 8.5 Tf 40 326.0 Td (not** be mirrored directly between separate legal entities. Attempting to mirror these) Tj ET
+BT /F1 8.5 Tf 40 314.5 Td (documents directly would violate statutory financial compliance, corporate tax laws,) Tj ET
+BT /F1 8.5 Tf 40 303.0 Td (and GAAP/IFRS standards:) Tj ET
+BT /F1 8.5 Tf 40 285.5 Td (1. **Landed Cost Voucher \(LCV\)**) Tj ET
+BT /F1 8.5 Tf 65 274.0 Td (- Why It Cannot Be Mirrored:* A Landed Cost Voucher is strictly an **internal) Tj ET
+BT /F1 8.5 Tf 65 262.5 Td (  inventory valuation adjustment tool** within a single legal entity. Its sole) Tj ET
+BT /F1 8.5 Tf 65 251.0 Td (  purpose is to capitalize freight, customs, or handling costs into the) Tj ET
+BT /F1 8.5 Tf 65 239.5 Td (  moving-average or FIFO valuation rate of an existing Purchase Receipt. It) Tj ET
+BT /F1 8.5 Tf 65 228.0 Td (  does **not** create legal debtor/creditor claims.) Tj ET
+BT /F1 8.5 Tf 65 216.5 Td (- What Is a MUST \(Statutory Compliance\):* If Sister Company A provides) Tj ET
+BT /F1 8.5 Tf 65 205.0 Td (  logistics, freight, or clearance services to Sister Company B:) Tj ET
+BT /F1 8.5 Tf 40 193.5 Td (     - Company A **MUST** issue a standard service **Sales Invoice** to Company B.) Tj ET
+BT /F1 8.5 Tf 40 182.0 Td (     - The engine mirrors this into a **Purchase Invoice** \(Freight & Handling\) in) Tj ET
+BT /F1 8.5 Tf 40 170.5 Td (Company B.) Tj ET
+BT /F1 8.5 Tf 40 159.0 Td (     - Company B can then optionally reference this Purchase Invoice inside its own) Tj ET
+BT /F1 8.5 Tf 40 147.5 Td (internal Landed Cost Voucher if it wishes to capitalize those freight costs into) Tj ET
+BT /F1 8.5 Tf 40 136.0 Td (inventory.) Tj ET
+BT /F1 8.5 Tf 40 118.5 Td (2. **Subcontracting Order**) Tj ET
+BT /F1 8.5 Tf 65 107.0 Td (- Why It Cannot Be Mirrored Directly:* A Subcontracting Order in ERPNext v15) Tj ET
+BT /F1 8.5 Tf 65 95.5 Td (  is bound to a single entity's internal Bill of Materials \(BOM\), supplied raw) Tj ET
+BT /F1 8.5 Tf 65 84.0 Td (  material tracking, and subcontracting receipt valuation algorithms. Sister) Tj ET
+BT /F1 8.5 Tf 65 72.5 Td (  entities operate independent inventory ledgers and separate tax) Tj ET
 Q
 endstream
 endobj
@@ -304,7 +304,7 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 15 0 R /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> >>
 endobj
 15 0 obj
-<< /Length 5248 >>
+<< /Length 5189 >>
 stream
 q
 0.4 0.4 0.4 rg
@@ -315,61 +315,61 @@ BT /F1 9 Tf 40 760 Td (Inter-Company Transactions - Enterprise User Guide & Mult
 0.8 0.8 0.8 RG 40 40 m 572 40 l S
 BT /F1 9 Tf 520 28 Td (Page 5 of 14) Tj ET
 0 0 0 rg
-BT /F1 8.5 Tf 65 735 Td (  entities operate independent inventory ledgers and separate tax) Tj ET
-BT /F1 8.5 Tf 65 723.5 Td (  jurisdictions.) Tj ET
-BT /F1 8.5 Tf 65 712.0 Td (- What Is a MUST:* Intercompany subcontracting must be conducted via:) Tj ET
-BT /F1 8.5 Tf 40 700.5 Td (     - Step 1: Subcontracting entity creates a standard **Purchase Order**) Tj ET
-BT /F1 8.5 Tf 40 689.0 Td (\(Subcontracted\) &rarr; mirrored to **Sales Order** \(Job Work\) in the manufacturing) Tj ET
-BT /F1 8.5 Tf 40 677.5 Td (sister company.) Tj ET
-BT /F1 8.5 Tf 40 666.0 Td (     - Step 2: Raw materials transferred using **Stock Entry** \(Material Transfer\)) Tj ET
-BT /F1 8.5 Tf 40 654.5 Td (&rarr; mirrored to **Stock Entry** \(Material Receipt\) in the manufacturer.) Tj ET
-BT /F1 8.5 Tf 40 643.0 Td (     - Step 3: Finished items delivered via **Delivery Note** &rarr; **Subcontracting) Tj ET
-BT /F1 8.5 Tf 40 631.5 Td (Receipt**.) Tj ET
-BT /F1 8.5 Tf 40 614.0 Td (3. **Fixed Asset Movements & Depreciation Entries**) Tj ET
-BT /F1 8.5 Tf 65 602.5 Td (- Why It Cannot Be Mirrored Directly:* Fixed assets are governed by entity-) Tj ET
-BT /F1 8.5 Tf 65 591.0 Td (  specific asset registers, tax depreciation schedules, and legal ownership) Tj ET
-BT /F1 8.5 Tf 65 579.5 Td (  titles. An automated transfer would corrupt statutory tax depreciation) Tj ET
-BT /F1 8.5 Tf 65 568.0 Td (  books.) Tj ET
-BT /F1 8.5 Tf 65 556.5 Td (- What Is a MUST:* Asset transfers between sister companies must be executed) Tj ET
-BT /F1 8.5 Tf 65 545.0 Td (  as an arm's-length asset sale:) Tj ET
-BT /F1 8.5 Tf 40 533.5 Td (     - Seller entity raises a **Sales Invoice** \(Asset Sale / Disposal\).) Tj ET
-BT /F1 8.5 Tf 40 522.0 Td (     - Buying entity books a **Purchase Invoice** with *Asset Category* assignment to) Tj ET
-BT /F1 8.5 Tf 40 510.5 Td (initialize the new statutory asset book.) Tj ET
-BT /F1 8.5 Tf 40 493.0 Td (4. **Payroll Entry & Salary Slips**) Tj ET
-BT /F1 8.5 Tf 65 481.5 Td (- Why It Cannot Be Mirrored:* Payroll is strictly subject to jurisdiction-) Tj ET
-BT /F1 8.5 Tf 65 470.0 Td (  specific labor laws, statutory withholding taxes, social security) Tj ET
-BT /F1 8.5 Tf 65 458.5 Td (  contributions, and local employment contracts.) Tj ET
-BT /F1 8.5 Tf 65 447.0 Td (- What Is a MUST:* When management or staff costs are shared across) Tj ET
-BT /F1 8.5 Tf 65 435.5 Td (  subsidiaries, the employing entity reallocates costs using an arm's-length) Tj ET
-BT /F1 8.5 Tf 65 424.0 Td (  **Management Services Agreement \(MSA\)**:) Tj ET
-BT /F1 8.5 Tf 40 412.5 Td (     - Employing entity bills the subsidiary via a **Sales Invoice \(Management) Tj ET
-BT /F1 8.5 Tf 40 401.0 Td (Services\)** or an **Intercompany Journal Entry \(Shared Expense Recharge\)**.) Tj ET
-0.85 0.85 0.85 RG 40 383.5 m 572 383.5 l S 0 0 0 rg
-0.2 0.2 0.2 rg BT /F2 10 Tf 40 365.5 Td (3.2 Inter Company Settings) Tj ET 0 0 0 rg
-BT /F1 8.5 Tf 50 348.5 Td (\225 **Location:** `Inter Company > Inter Company Settings`) Tj ET
-BT /F1 8.5 Tf 50 336.5 Td (\225 **Purpose:** Global environment configurations.) Tj ET
-BT /F1 8.5 Tf 50 324.5 Td (\225 **Key Settings:**) Tj ET
-BT /F1 8.5 Tf 40 312.5 Td (  - `Execution Mode`:) Tj ET
-BT /F1 8.5 Tf 65 301.0 Td (- Synchronous:* Targets created immediately on save/submit.) Tj ET
-BT /F1 8.5 Tf 65 289.5 Td (- Background \(Queue\):* Jobs enqueued via Redis queue for high-volume) Tj ET
-BT /F1 8.5 Tf 65 278.0 Td (  transactions.) Tj ET
-BT /F1 8.5 Tf 40 266.5 Td (  - `Deployment Mode`:) Tj ET
-BT /F1 8.5 Tf 65 255.0 Td (- Local Multi-Company \(Single Database\):* Both entities reside on the same) Tj ET
-BT /F1 8.5 Tf 65 243.5 Td (  bench site.) Tj ET
-BT /F1 8.5 Tf 65 232.0 Td (- Federated Cross-Site \(REST API\):* Entities operate on separate ERPNext) Tj ET
-BT /F1 8.5 Tf 65 220.5 Td (  instances across data centers.) Tj ET
-BT /F1 8.5 Tf 40 209.0 Td (  - `Default Transfer Rate Method`: Default pricing fallback \(`Source Document Rate`,) Tj ET
-BT /F1 8.5 Tf 40 197.5 Td (`Cost / Valuation Rate`, `Cost + Markup %`\).) Tj ET
-0.2 0.2 0.2 rg BT /F2 10 Tf 40 180.0 Td (3.3 Transfer Pricing Policy \(OECD Compliance\)) Tj ET 0 0 0 rg
-BT /F1 8.5 Tf 50 163.0 Td (\225 **Location:** `Inter Company > Transfer Pricing Policy`) Tj ET
-BT /F1 8.5 Tf 50 151.0 Td (\225 **Purpose:** Enforces OECD arm's-length transfer pricing rules between specific) Tj ET
-BT /F1 8.5 Tf 50 139.0 Td (  sister entity pairs.) Tj ET
-BT /F1 8.5 Tf 50 127.0 Td (\225 **Pricing Methods:**) Tj ET
-BT /F1 8.5 Tf 40 115.0 Td (  - **Cost Plus Markup %:** Takes source warehouse FIFO/moving average valuation rate) Tj ET
-BT /F1 8.5 Tf 40 103.5 Td (and adds a configured markup percentage \(e.g., Cost + 15%\).) Tj ET
-BT /F1 8.5 Tf 40 92.0 Td (  - **Resale Price Method:** Takes downstream retail selling price and deducts) Tj ET
-BT /F1 8.5 Tf 40 80.5 Td (distributor margin % \(e.g., Retail - 20%\).) Tj ET
-BT /F1 8.5 Tf 40 69.0 Td (  - **Comparable Uncontrolled Price \(CUP\):** Applies predefined market benchmark) Tj ET
+BT /F1 8.5 Tf 65 735 Td (  jurisdictions.) Tj ET
+BT /F1 8.5 Tf 65 723.5 Td (- What Is a MUST:* Intercompany subcontracting must be conducted via:) Tj ET
+BT /F1 8.5 Tf 40 712.0 Td (     - Step 1: Subcontracting entity creates a standard **Purchase Order**) Tj ET
+BT /F1 8.5 Tf 40 700.5 Td (\(Subcontracted\) &rarr; mirrored to **Sales Order** \(Job Work\) in the manufacturing) Tj ET
+BT /F1 8.5 Tf 40 689.0 Td (sister company.) Tj ET
+BT /F1 8.5 Tf 40 677.5 Td (     - Step 2: Raw materials transferred using **Stock Entry** \(Material Transfer\)) Tj ET
+BT /F1 8.5 Tf 40 666.0 Td (&rarr; mirrored to **Stock Entry** \(Material Receipt\) in the manufacturer.) Tj ET
+BT /F1 8.5 Tf 40 654.5 Td (     - Step 3: Finished items delivered via **Delivery Note** &rarr; **Subcontracting) Tj ET
+BT /F1 8.5 Tf 40 643.0 Td (Receipt**.) Tj ET
+BT /F1 8.5 Tf 40 625.5 Td (3. **Fixed Asset Movements & Depreciation Entries**) Tj ET
+BT /F1 8.5 Tf 65 614.0 Td (- Why It Cannot Be Mirrored Directly:* Fixed assets are governed by entity-) Tj ET
+BT /F1 8.5 Tf 65 602.5 Td (  specific asset registers, tax depreciation schedules, and legal ownership) Tj ET
+BT /F1 8.5 Tf 65 591.0 Td (  titles. An automated transfer would corrupt statutory tax depreciation) Tj ET
+BT /F1 8.5 Tf 65 579.5 Td (  books.) Tj ET
+BT /F1 8.5 Tf 65 568.0 Td (- What Is a MUST:* Asset transfers between sister companies must be executed) Tj ET
+BT /F1 8.5 Tf 65 556.5 Td (  as an arm's-length asset sale:) Tj ET
+BT /F1 8.5 Tf 40 545.0 Td (     - Seller entity raises a **Sales Invoice** \(Asset Sale / Disposal\).) Tj ET
+BT /F1 8.5 Tf 40 533.5 Td (     - Buying entity books a **Purchase Invoice** with *Asset Category* assignment to) Tj ET
+BT /F1 8.5 Tf 40 522.0 Td (initialize the new statutory asset book.) Tj ET
+BT /F1 8.5 Tf 40 504.5 Td (4. **Payroll Entry & Salary Slips**) Tj ET
+BT /F1 8.5 Tf 65 493.0 Td (- Why It Cannot Be Mirrored:* Payroll is strictly subject to jurisdiction-) Tj ET
+BT /F1 8.5 Tf 65 481.5 Td (  specific labor laws, statutory withholding taxes, social security) Tj ET
+BT /F1 8.5 Tf 65 470.0 Td (  contributions, and local employment contracts.) Tj ET
+BT /F1 8.5 Tf 65 458.5 Td (- What Is a MUST:* When management or staff costs are shared across) Tj ET
+BT /F1 8.5 Tf 65 447.0 Td (  subsidiaries, the employing entity reallocates costs using an arm's-length) Tj ET
+BT /F1 8.5 Tf 65 435.5 Td (  **Management Services Agreement \(MSA\)**:) Tj ET
+BT /F1 8.5 Tf 40 424.0 Td (     - Employing entity bills the subsidiary via a **Sales Invoice \(Management) Tj ET
+BT /F1 8.5 Tf 40 412.5 Td (Services\)** or an **Intercompany Journal Entry \(Shared Expense Recharge\)**.) Tj ET
+0.85 0.85 0.85 RG 40 395.0 m 572 395.0 l S 0 0 0 rg
+0.2 0.2 0.2 rg BT /F2 10 Tf 40 377.0 Td (3.2 Inter Company Settings) Tj ET 0 0 0 rg
+BT /F1 8.5 Tf 50 360.0 Td (\225 **Location:** `Inter Company > Inter Company Settings`) Tj ET
+BT /F1 8.5 Tf 50 348.0 Td (\225 **Purpose:** Global environment configurations.) Tj ET
+BT /F1 8.5 Tf 50 336.0 Td (\225 **Key Settings:**) Tj ET
+BT /F1 8.5 Tf 40 324.0 Td (  - `Execution Mode`:) Tj ET
+BT /F1 8.5 Tf 65 312.5 Td (- Synchronous:* Targets created immediately on save/submit.) Tj ET
+BT /F1 8.5 Tf 65 301.0 Td (- Background \(Queue\):* Jobs enqueued via Redis queue for high-volume) Tj ET
+BT /F1 8.5 Tf 65 289.5 Td (  transactions.) Tj ET
+BT /F1 8.5 Tf 40 278.0 Td (  - `Deployment Mode`:) Tj ET
+BT /F1 8.5 Tf 65 266.5 Td (- Local Multi-Company \(Single Database\):* Both entities reside on the same) Tj ET
+BT /F1 8.5 Tf 65 255.0 Td (  bench site.) Tj ET
+BT /F1 8.5 Tf 65 243.5 Td (- Federated Cross-Site \(REST API\):* Entities operate on separate ERPNext) Tj ET
+BT /F1 8.5 Tf 65 232.0 Td (  instances across data centers.) Tj ET
+BT /F1 8.5 Tf 40 220.5 Td (  - `Default Transfer Rate Method`: Default pricing fallback \(`Source Document Rate`,) Tj ET
+BT /F1 8.5 Tf 40 209.0 Td (`Cost / Valuation Rate`, `Cost + Markup %`\).) Tj ET
+0.2 0.2 0.2 rg BT /F2 10 Tf 40 191.5 Td (3.3 Transfer Pricing Policy \(OECD Compliance\)) Tj ET 0 0 0 rg
+BT /F1 8.5 Tf 50 174.5 Td (\225 **Location:** `Inter Company > Transfer Pricing Policy`) Tj ET
+BT /F1 8.5 Tf 50 162.5 Td (\225 **Purpose:** Enforces OECD arm's-length transfer pricing rules between specific) Tj ET
+BT /F1 8.5 Tf 50 150.5 Td (  sister entity pairs.) Tj ET
+BT /F1 8.5 Tf 50 138.5 Td (\225 **Pricing Methods:**) Tj ET
+BT /F1 8.5 Tf 40 126.5 Td (  - **Cost Plus Markup %:** Takes source warehouse FIFO/moving average valuation rate) Tj ET
+BT /F1 8.5 Tf 40 115.0 Td (and adds a configured markup percentage \(e.g., Cost + 15%\).) Tj ET
+BT /F1 8.5 Tf 40 103.5 Td (  - **Resale Price Method:** Takes downstream retail selling price and deducts) Tj ET
+BT /F1 8.5 Tf 40 92.0 Td (distributor margin % \(e.g., Retail - 20%\).) Tj ET
+BT /F1 8.5 Tf 40 80.5 Td (  - **Comparable Uncontrolled Price \(CUP\):** Applies predefined market benchmark) Tj ET
+BT /F1 8.5 Tf 40 69.0 Td (rates.) Tj ET
 Q
 endstream
 endobj
@@ -377,7 +377,7 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 17 0 R /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> >>
 endobj
 17 0 obj
-<< /Length 5363 >>
+<< /Length 5375 >>
 stream
 q
 0.4 0.4 0.4 rg
@@ -388,59 +388,59 @@ BT /F1 9 Tf 40 760 Td (Inter-Company Transactions - Enterprise User Guide & Mult
 0.8 0.8 0.8 RG 40 40 m 572 40 l S
 BT /F1 9 Tf 520 28 Td (Page 6 of 14) Tj ET
 0 0 0 rg
-BT /F1 8.5 Tf 40 735 Td (rates.) Tj ET
-BT /F1 8.5 Tf 40 723.5 Td (  - **Fixed Transfer Rate:** Fixed negotiated price contract per item.) Tj ET
-0.2 0.2 0.2 rg BT /F2 10 Tf 40 706.0 Td (3.4 Inter Company Netting Cycle) Tj ET 0 0 0 rg
-BT /F1 8.5 Tf 50 689.0 Td (\225 **Location:** `Inter Company > Inter Company Netting Cycle`) Tj ET
-BT /F1 8.5 Tf 50 677.0 Td (\225 **Purpose:** Multilateral settlement of cross-company debts.) Tj ET
-BT /F1 8.5 Tf 50 665.0 Td (\225 **Algorithm:**) Tj ET
-BT /F1 8.5 Tf 40 653.0 Td (  - Pulls all outstanding unpaid Sales and Purchase Invoices between participant) Tj ET
-BT /F1 8.5 Tf 40 641.5 Td (entities.) Tj ET
-BT /F1 8.5 Tf 40 630.0 Td (  - Calculates net debtor/creditor balances.) Tj ET
-BT /F1 8.5 Tf 40 618.5 Td (  - Executes a greedy optimization to settle all debts with the minimal number of bank) Tj ET
-BT /F1 8.5 Tf 40 607.0 Td (transfers.) Tj ET
-BT /F1 8.5 Tf 40 595.5 Td (  - Generates balancing clearing Journal Entries with one click.) Tj ET
-0.2 0.2 0.2 rg BT /F2 10 Tf 40 578.0 Td (3.5 Inter Company Elimination Run) Tj ET 0 0 0 rg
-BT /F1 8.5 Tf 50 561.0 Td (\225 **Location:** `Inter Company > Inter Company Elimination Run`) Tj ET
-BT /F1 8.5 Tf 50 549.0 Td (\225 **Purpose:** Period-end financial consolidation.) Tj ET
-BT /F1 8.5 Tf 50 537.0 Td (\225 **Capabilities:**) Tj ET
-BT /F1 8.5 Tf 40 525.0 Td (  - Scans reciprocal General Ledger balances between sister entities.) Tj ET
-BT /F1 8.5 Tf 40 513.5 Td (  - Neutralizes internal AR and AP balances.) Tj ET
-BT /F1 8.5 Tf 40 502.0 Td (  - Reverses internal Intercompany Revenue against Intercompany Cost of Goods Sold) Tj ET
-BT /F1 8.5 Tf 40 490.5 Td (\(COGS\).) Tj ET
-BT /F1 8.5 Tf 40 479.0 Td (  - Posts an Elimination Journal Entry to the Holding Company's consolidation account.) Tj ET
-0.2 0.2 0.2 rg BT /F2 10 Tf 40 461.5 Td (3.6 Inter Company Dispute) Tj ET 0 0 0 rg
-BT /F1 8.5 Tf 50 444.5 Td (\225 **Location:** `Inter Company > Inter Company Dispute`) Tj ET
-BT /F1 8.5 Tf 50 432.5 Td (\225 **Purpose:** Discrepancy management when sister entities disagree on billing) Tj ET
-BT /F1 8.5 Tf 50 420.5 Td (  rates, missing items, or damaged shipments.) Tj ET
-BT /F1 8.5 Tf 50 408.5 Td (\225 **Form Action:** Click **Inter Company > Raise Dispute** directly from any) Tj ET
-BT /F1 8.5 Tf 50 396.5 Td (  linked invoice or delivery note.) Tj ET
-BT /F1 8.5 Tf 50 384.5 Td (\225 **Resolution Engine:**) Tj ET
-BT /F1 8.5 Tf 40 372.5 Td (  - `Issue Credit Note`: Automatically posts a Return Sales Invoice.) Tj ET
-BT /F1 8.5 Tf 40 361.0 Td (  - `Issue Debit Note`: Automatically posts a Return Purchase Invoice.) Tj ET
-BT /F1 8.5 Tf 40 349.5 Td (  - `Journal Adjustment`: Posts balancing GL adjustment for rounding/rate differences.) Tj ET
-0.2 0.2 0.2 rg BT /F2 10 Tf 40 332.0 Td (3.7 Inter Company Remote Site \(Federated Multi-Site Synchronization\)) Tj ET 0 0 0 rg
-BT /F1 8.5 Tf 50 315.0 Td (\225 **Location:** `Inter Company > Inter Company Settings > Federated Remote ERPNext) Tj ET
-BT /F1 8.5 Tf 50 303.0 Td (  Sites`) Tj ET
-BT /F1 8.5 Tf 50 291.0 Td (\225 **Purpose:** Enables real-time, zero-touch transaction mirroring across) Tj ET
-BT /F1 8.5 Tf 50 279.0 Td (  separate, independent ERPNext instances hosted on distinct physical servers, VPS) Tj ET
-BT /F1 8.5 Tf 50 267.0 Td (  instances, or cloud environments \(e.g., AWS, DigitalOcean, Frappe Cloud\).) Tj ET
-0.25 0.25 0.25 rg BT /F2 9.5 Tf 40 249.0 Td (3.7.1 Architecture & Security Model) Tj ET 0 0 0 rg
-BT /F1 8.5 Tf 40 234.0 Td (1. **REST API Token Authentication:** Communicates via Frappe's standard REST API) Tj ET
-BT /F1 8.5 Tf 40 222.5 Td (using API Key and API Secret headers \(`Authorization: token api_key:api_secret`\).) Tj ET
-BT /F1 8.5 Tf 40 211.0 Td (2. **HMAC-SHA256 Payload Signatures:** Each outbound payload is hashed with a shared) Tj ET
-BT /F1 8.5 Tf 40 199.5 Td (HMAC secret. The receiving instance verifies the signature before processing to) Tj ET
-BT /F1 8.5 Tf 40 188.0 Td (guarantee authenticity.) Tj ET
-BT /F1 8.5 Tf 40 176.5 Td (3. **Idempotency Guarantee:** Every transaction includes an idempotency token) Tj ET
-BT /F1 8.5 Tf 40 165.0 Td (\(`{source_site}:{doctype}:{name}`\). If a network disruption triggers a retry, the) Tj ET
-BT /F1 8.5 Tf 40 153.5 Td (receiving instance recognizes the token and returns the existing mirrored document) Tj ET
-BT /F1 8.5 Tf 40 142.0 Td (without duplicating entries.) Tj ET
-BT /F1 8.5 Tf 40 130.5 Td (4. **Offline Resilience & Auto-Retry Worker:** If the remote instance is temporarily) Tj ET
-BT /F1 8.5 Tf 40 119.0 Td (offline or unreachable due to a firewall issue, the transaction is saved locally and) Tj ET
-BT /F1 8.5 Tf 40 107.5 Td (queued in *Inter Company Error Log* \(`Pending Retry`\). The hourly background scheduler) Tj ET
-BT /F1 8.5 Tf 40 96.0 Td (automatically retries pending syncs once connectivity is restored.) Tj ET
-BT /F1 8.5 Tf 40 84.5 Td (5. **Bi-Directional Cancellation:** When a source document is cancelled on Site A, a) Tj ET
-BT /F1 8.5 Tf 40 73.0 Td (signed cancellation request is dispatched to Site B to cleanly cancel or void the) Tj ET
+BT /F1 8.5 Tf 40 735 Td (  - **Fixed Transfer Rate:** Fixed negotiated price contract per item.) Tj ET
+0.2 0.2 0.2 rg BT /F2 10 Tf 40 717.5 Td (3.4 Inter Company Netting Cycle) Tj ET 0 0 0 rg
+BT /F1 8.5 Tf 50 700.5 Td (\225 **Location:** `Inter Company > Inter Company Netting Cycle`) Tj ET
+BT /F1 8.5 Tf 50 688.5 Td (\225 **Purpose:** Multilateral settlement of cross-company debts.) Tj ET
+BT /F1 8.5 Tf 50 676.5 Td (\225 **Algorithm:**) Tj ET
+BT /F1 8.5 Tf 40 664.5 Td (  - Pulls all outstanding unpaid Sales and Purchase Invoices between participant) Tj ET
+BT /F1 8.5 Tf 40 653.0 Td (entities.) Tj ET
+BT /F1 8.5 Tf 40 641.5 Td (  - Calculates net debtor/creditor balances.) Tj ET
+BT /F1 8.5 Tf 40 630.0 Td (  - Executes a greedy optimization to settle all debts with the minimal number of bank) Tj ET
+BT /F1 8.5 Tf 40 618.5 Td (transfers.) Tj ET
+BT /F1 8.5 Tf 40 607.0 Td (  - Generates balancing clearing Journal Entries with one click.) Tj ET
+0.2 0.2 0.2 rg BT /F2 10 Tf 40 589.5 Td (3.5 Inter Company Elimination Run) Tj ET 0 0 0 rg
+BT /F1 8.5 Tf 50 572.5 Td (\225 **Location:** `Inter Company > Inter Company Elimination Run`) Tj ET
+BT /F1 8.5 Tf 50 560.5 Td (\225 **Purpose:** Period-end financial consolidation.) Tj ET
+BT /F1 8.5 Tf 50 548.5 Td (\225 **Capabilities:**) Tj ET
+BT /F1 8.5 Tf 40 536.5 Td (  - Scans reciprocal General Ledger balances between sister entities.) Tj ET
+BT /F1 8.5 Tf 40 525.0 Td (  - Neutralizes internal AR and AP balances.) Tj ET
+BT /F1 8.5 Tf 40 513.5 Td (  - Reverses internal Intercompany Revenue against Intercompany Cost of Goods Sold) Tj ET
+BT /F1 8.5 Tf 40 502.0 Td (\(COGS\).) Tj ET
+BT /F1 8.5 Tf 40 490.5 Td (  - Posts an Elimination Journal Entry to the Holding Company's consolidation account.) Tj ET
+0.2 0.2 0.2 rg BT /F2 10 Tf 40 473.0 Td (3.6 Inter Company Dispute) Tj ET 0 0 0 rg
+BT /F1 8.5 Tf 50 456.0 Td (\225 **Location:** `Inter Company > Inter Company Dispute`) Tj ET
+BT /F1 8.5 Tf 50 444.0 Td (\225 **Purpose:** Discrepancy management when sister entities disagree on billing) Tj ET
+BT /F1 8.5 Tf 50 432.0 Td (  rates, missing items, or damaged shipments.) Tj ET
+BT /F1 8.5 Tf 50 420.0 Td (\225 **Form Action:** Click **Inter Company > Raise Dispute** directly from any) Tj ET
+BT /F1 8.5 Tf 50 408.0 Td (  linked invoice or delivery note.) Tj ET
+BT /F1 8.5 Tf 50 396.0 Td (\225 **Resolution Engine:**) Tj ET
+BT /F1 8.5 Tf 40 384.0 Td (  - `Issue Credit Note`: Automatically posts a Return Sales Invoice.) Tj ET
+BT /F1 8.5 Tf 40 372.5 Td (  - `Issue Debit Note`: Automatically posts a Return Purchase Invoice.) Tj ET
+BT /F1 8.5 Tf 40 361.0 Td (  - `Journal Adjustment`: Posts balancing GL adjustment for rounding/rate differences.) Tj ET
+0.2 0.2 0.2 rg BT /F2 10 Tf 40 343.5 Td (3.7 Inter Company Remote Site \(Federated Multi-Site Synchronization\)) Tj ET 0 0 0 rg
+BT /F1 8.5 Tf 50 326.5 Td (\225 **Location:** `Inter Company > Inter Company Settings > Federated Remote ERPNext) Tj ET
+BT /F1 8.5 Tf 50 314.5 Td (  Sites`) Tj ET
+BT /F1 8.5 Tf 50 302.5 Td (\225 **Purpose:** Enables real-time, zero-touch transaction mirroring across) Tj ET
+BT /F1 8.5 Tf 50 290.5 Td (  separate, independent ERPNext instances hosted on distinct physical servers, VPS) Tj ET
+BT /F1 8.5 Tf 50 278.5 Td (  instances, or cloud environments \(e.g., AWS, DigitalOcean, Frappe Cloud\).) Tj ET
+0.25 0.25 0.25 rg BT /F2 9.5 Tf 40 260.5 Td (3.7.1 Architecture & Security Model) Tj ET 0 0 0 rg
+BT /F1 8.5 Tf 40 245.5 Td (1. **REST API Token Authentication:** Communicates via Frappe's standard REST API) Tj ET
+BT /F1 8.5 Tf 40 234.0 Td (using API Key and API Secret headers \(`Authorization: token api_key:api_secret`\).) Tj ET
+BT /F1 8.5 Tf 40 222.5 Td (2. **HMAC-SHA256 Payload Signatures:** Each outbound payload is hashed with a shared) Tj ET
+BT /F1 8.5 Tf 40 211.0 Td (HMAC secret. The receiving instance verifies the signature before processing to) Tj ET
+BT /F1 8.5 Tf 40 199.5 Td (guarantee authenticity.) Tj ET
+BT /F1 8.5 Tf 40 188.0 Td (3. **Idempotency Guarantee:** Every transaction includes an idempotency token) Tj ET
+BT /F1 8.5 Tf 40 176.5 Td (\(`{source_site}:{doctype}:{name}`\). If a network disruption triggers a retry, the) Tj ET
+BT /F1 8.5 Tf 40 165.0 Td (receiving instance recognizes the token and returns the existing mirrored document) Tj ET
+BT /F1 8.5 Tf 40 153.5 Td (without duplicating entries.) Tj ET
+BT /F1 8.5 Tf 40 142.0 Td (4. **Offline Resilience & Auto-Retry Worker:** If the remote instance is temporarily) Tj ET
+BT /F1 8.5 Tf 40 130.5 Td (offline or unreachable due to a firewall issue, the transaction is saved locally and) Tj ET
+BT /F1 8.5 Tf 40 119.0 Td (queued in *Inter Company Error Log* \(`Pending Retry`\). The hourly background scheduler) Tj ET
+BT /F1 8.5 Tf 40 107.5 Td (automatically retries pending syncs once connectivity is restored.) Tj ET
+BT /F1 8.5 Tf 40 96.0 Td (5. **Bi-Directional Cancellation:** When a source document is cancelled on Site A, a) Tj ET
+BT /F1 8.5 Tf 40 84.5 Td (signed cancellation request is dispatched to Site B to cleanly cancel or void the) Tj ET
+BT /F1 8.5 Tf 40 73.0 Td (mirrored document.) Tj ET
 Q
 endstream
 endobj
@@ -448,7 +448,7 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 19 0 R /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> >>
 endobj
 19 0 obj
-<< /Length 4636 >>
+<< /Length 4817 >>
 stream
 q
 0.4 0.4 0.4 rg
@@ -459,58 +459,59 @@ BT /F1 9 Tf 40 760 Td (Inter-Company Transactions - Enterprise User Guide & Mult
 0.8 0.8 0.8 RG 40 40 m 572 40 l S
 BT /F1 9 Tf 520 28 Td (Page 7 of 14) Tj ET
 0 0 0 rg
-BT /F1 8.5 Tf 40 735 Td (mirrored document.) Tj ET
-0.25 0.25 0.25 rg BT /F2 9.5 Tf 40 717.5 Td (3.7.2 Network, Port & Firewall Configuration Guide) Tj ET 0 0 0 rg
-BT /F1 8.5 Tf 40 702.5 Td (For successful cross-instance communication, the sending and receiving servers must be) Tj ET
-BT /F1 8.5 Tf 40 691.0 Td (able to establish TCP connections:) Tj ET
-BT /F1 8.5 Tf 40 673.5 Td (| Port | Protocol | Purpose | Direction |) Tj ET
-BT /F1 8.5 Tf 40 662.0 Td (|---|---|---|---|) Tj ET
-BT /F1 8.5 Tf 40 650.5 Td (| **443** \(Recommended\) | HTTPS / TLS 1.3 | Encrypted REST API synchronization |) Tj ET
-BT /F1 8.5 Tf 40 639.0 Td (Inbound on destination server |) Tj ET
-BT /F1 8.5 Tf 40 627.5 Td (| **80** | HTTP | Plaintext web traffic & SSL challenges | Inbound on destination) Tj ET
-BT /F1 8.5 Tf 40 616.0 Td (server |) Tj ET
-BT /F1 8.5 Tf 40 604.5 Td (| **8000** | HTTP | Direct Bench developer port \(if not using NGINX\) | Inbound on) Tj ET
-BT /F1 8.5 Tf 40 593.0 Td (destination server |) Tj ET
-BT /F1 8.5 Tf 40 575.5 Td (**Firewall Rules Setup on the Remote Server:**) Tj ET
-BT /F1 8.5 Tf 50 564.0 Td (\225 **Ubuntu / Debian \(UFW\):**) Tj ET
-BT /F1 8.5 Tf 40 552.0 Td (  ```bash) Tj ET
-BT /F1 8.5 Tf 40 540.5 Td (  sudo ufw allow 443/tcp comment 'ERPNext Intercompany Sync') Tj ET
-BT /F1 8.5 Tf 40 529.0 Td (  sudo ufw reload) Tj ET
-BT /F1 8.5 Tf 40 517.5 Td (  ```) Tj ET
-BT /F1 8.5 Tf 40 506.0 Td (  *\(To restrict access strictly to the sending server IP: `sudo ufw allow from) Tj ET
-BT /F1 8.5 Tf 40 494.5 Td ([SENDING_IP] to any port 443 proto tcp`\)*) Tj ET
-BT /F1 8.5 Tf 50 477.0 Td (\225 **CentOS / RHEL / AlmaLinux \(Firewalld\):**) Tj ET
-BT /F1 8.5 Tf 40 465.0 Td (  ```bash) Tj ET
-BT /F1 8.5 Tf 40 453.5 Td (  sudo firewall-cmd --permanent --add-port=443/tcp) Tj ET
-BT /F1 8.5 Tf 40 442.0 Td (  sudo firewall-cmd --reload) Tj ET
-BT /F1 8.5 Tf 40 430.5 Td (  ```) Tj ET
-BT /F1 8.5 Tf 50 413.0 Td (\225 **AWS EC2 / DigitalOcean Cloud Firewalls:**) Tj ET
-BT /F1 8.5 Tf 40 401.0 Td (  Add an Inbound Rule allowing TCP port `443` from the sending server's public IP) Tj ET
-BT /F1 8.5 Tf 40 389.5 Td (address.) Tj ET
-0.25 0.25 0.25 rg BT /F2 9.5 Tf 40 372.0 Td (3.7.3 Built-in GUI Network & Firewall Diagnostic Tool) Tj ET 0 0 0 rg
-BT /F1 8.5 Tf 40 357.0 Td (You do not need server SSH access to test connectivity:) Tj ET
-BT /F1 8.5 Tf 40 345.5 Td (1. Navigate to **Inter Company Settings**.) Tj ET
-BT /F1 8.5 Tf 40 334.0 Td (2. Click **Actions > Diagnose Network & Firewall**.) Tj ET
-BT /F1 8.5 Tf 40 322.5 Td (3. Select your pre-configured Remote Site or enter any target URL.) Tj ET
-BT /F1 8.5 Tf 40 311.0 Td (4. Click **Run Diagnostic Test**.) Tj ET
-BT /F1 8.5 Tf 40 299.5 Td (5. The diagnostic engine tests 6 layers in real-time:) Tj ET
-BT /F1 8.5 Tf 65 288.0 Td (- URL & Protocol:** Validates HTTPS encryption.) Tj ET
-BT /F1 8.5 Tf 65 276.5 Td (- DNS Resolution:** Confirms the remote domain name resolves to an IP address.) Tj ET
-BT /F1 8.5 Tf 65 265.0 Td (- TCP Port Reachability:** Connects to port 443/80 and measures round-trip) Tj ET
-BT /F1 8.5 Tf 65 253.5 Td (  socket latency in milliseconds.) Tj ET
-BT /F1 8.5 Tf 65 242.0 Td (- SSL/TLS Handshake:** Verifies certificate validity.) Tj ET
-BT /F1 8.5 Tf 65 230.5 Td (- Frappe API Authentication:** Tests API Key and Secret against) Tj ET
-BT /F1 8.5 Tf 65 219.0 Td (  `/api/method/frappe.auth.get_logged_user`.) Tj ET
-BT /F1 8.5 Tf 65 207.5 Td (- App Version Handshake:** Verifies that `inter_company_transactions` is) Tj ET
-BT /F1 8.5 Tf 65 196.0 Td (  installed on the remote instance.) Tj ET
-BT /F1 8.5 Tf 40 184.5 Td (6. If any step fails \(e.g. firewall blocking port 443\), the dialog generates exact) Tj ET
-BT /F1 8.5 Tf 40 173.0 Td (copy-pasteable Linux commands to resolve the issue!) Tj ET
-0.2 0.2 0.2 rg BT /F2 10 Tf 40 149.5 Td (3.8 Inter Company Customer Group) Tj ET 0 0 0 rg
-BT /F1 8.5 Tf 50 132.5 Td (\225 **Location:** `Selling > Customer Group` and `Selling > Customer`) Tj ET
-BT /F1 8.5 Tf 50 120.5 Td (  \(`ic_customer_group`\)) Tj ET
-BT /F1 8.5 Tf 50 108.5 Td (\225 **Purpose:** Accounting isolation and automated elimination segregation.) Tj ET
-0.25 0.25 0.25 rg BT /F2 9.5 Tf 40 90.5 Td (3.8.1 Why Do We Need an "Inter Company Customer Group"?) Tj ET 0 0 0 rg
-BT /F1 8.5 Tf 40 75.5 Td (In standard ERP systems, sales to external third-party buyers and sales to sister) Tj ET
+0.25 0.25 0.25 rg BT /F2 9.5 Tf 40 735 Td (3.7.2 Network, Port & Firewall Configuration Guide) Tj ET 0 0 0 rg
+BT /F1 8.5 Tf 40 720 Td (For successful cross-instance communication, the sending and receiving servers must be) Tj ET
+BT /F1 8.5 Tf 40 708.5 Td (able to establish TCP connections:) Tj ET
+BT /F1 8.5 Tf 40 691.0 Td (| Port | Protocol | Purpose | Direction |) Tj ET
+BT /F1 8.5 Tf 40 679.5 Td (|---|---|---|---|) Tj ET
+BT /F1 8.5 Tf 40 668.0 Td (| **443** \(Recommended\) | HTTPS / TLS 1.3 | Encrypted REST API synchronization |) Tj ET
+BT /F1 8.5 Tf 40 656.5 Td (Inbound on destination server |) Tj ET
+BT /F1 8.5 Tf 40 645.0 Td (| **80** | HTTP | Plaintext web traffic & SSL challenges | Inbound on destination) Tj ET
+BT /F1 8.5 Tf 40 633.5 Td (server |) Tj ET
+BT /F1 8.5 Tf 40 622.0 Td (| **8000** | HTTP | Direct Bench developer port \(if not using NGINX\) | Inbound on) Tj ET
+BT /F1 8.5 Tf 40 610.5 Td (destination server |) Tj ET
+BT /F1 8.5 Tf 40 593.0 Td (**Firewall Rules Setup on the Remote Server:**) Tj ET
+BT /F1 8.5 Tf 50 581.5 Td (\225 **Ubuntu / Debian \(UFW\):**) Tj ET
+BT /F1 8.5 Tf 40 569.5 Td (  ```bash) Tj ET
+BT /F1 8.5 Tf 40 558.0 Td (  sudo ufw allow 443/tcp comment 'ERPNext Intercompany Sync') Tj ET
+BT /F1 8.5 Tf 40 546.5 Td (  sudo ufw reload) Tj ET
+BT /F1 8.5 Tf 40 535.0 Td (  ```) Tj ET
+BT /F1 8.5 Tf 40 523.5 Td (  *\(To restrict access strictly to the sending server IP: `sudo ufw allow from) Tj ET
+BT /F1 8.5 Tf 40 512.0 Td ([SENDING_IP] to any port 443 proto tcp`\)*) Tj ET
+BT /F1 8.5 Tf 50 494.5 Td (\225 **CentOS / RHEL / AlmaLinux \(Firewalld\):**) Tj ET
+BT /F1 8.5 Tf 40 482.5 Td (  ```bash) Tj ET
+BT /F1 8.5 Tf 40 471.0 Td (  sudo firewall-cmd --permanent --add-port=443/tcp) Tj ET
+BT /F1 8.5 Tf 40 459.5 Td (  sudo firewall-cmd --reload) Tj ET
+BT /F1 8.5 Tf 40 448.0 Td (  ```) Tj ET
+BT /F1 8.5 Tf 50 430.5 Td (\225 **AWS EC2 / DigitalOcean Cloud Firewalls:**) Tj ET
+BT /F1 8.5 Tf 40 418.5 Td (  Add an Inbound Rule allowing TCP port `443` from the sending server's public IP) Tj ET
+BT /F1 8.5 Tf 40 407.0 Td (address.) Tj ET
+0.25 0.25 0.25 rg BT /F2 9.5 Tf 40 389.5 Td (3.7.3 Built-in GUI Network & Firewall Diagnostic Tool) Tj ET 0 0 0 rg
+BT /F1 8.5 Tf 40 374.5 Td (You do not need server SSH access to test connectivity:) Tj ET
+BT /F1 8.5 Tf 40 363.0 Td (1. Navigate to **Inter Company Settings**.) Tj ET
+BT /F1 8.5 Tf 40 351.5 Td (2. Click **Actions > Diagnose Network & Firewall**.) Tj ET
+BT /F1 8.5 Tf 40 340.0 Td (3. Select your pre-configured Remote Site or enter any target URL.) Tj ET
+BT /F1 8.5 Tf 40 328.5 Td (4. Click **Run Diagnostic Test**.) Tj ET
+BT /F1 8.5 Tf 40 317.0 Td (5. The diagnostic engine tests 6 layers in real-time:) Tj ET
+BT /F1 8.5 Tf 65 305.5 Td (- URL & Protocol:** Validates HTTPS encryption.) Tj ET
+BT /F1 8.5 Tf 65 294.0 Td (- DNS Resolution:** Confirms the remote domain name resolves to an IP address.) Tj ET
+BT /F1 8.5 Tf 65 282.5 Td (- TCP Port Reachability:** Connects to port 443/80 and measures round-trip) Tj ET
+BT /F1 8.5 Tf 65 271.0 Td (  socket latency in milliseconds.) Tj ET
+BT /F1 8.5 Tf 65 259.5 Td (- SSL/TLS Handshake:** Verifies certificate validity.) Tj ET
+BT /F1 8.5 Tf 65 248.0 Td (- Frappe API Authentication:** Tests API Key and Secret against) Tj ET
+BT /F1 8.5 Tf 65 236.5 Td (  `/api/method/frappe.auth.get_logged_user`.) Tj ET
+BT /F1 8.5 Tf 65 225.0 Td (- App Version Handshake:** Verifies that `inter_company_transactions` is) Tj ET
+BT /F1 8.5 Tf 65 213.5 Td (  installed on the remote instance.) Tj ET
+BT /F1 8.5 Tf 40 202.0 Td (6. If any step fails \(e.g. firewall blocking port 443\), the dialog generates exact) Tj ET
+BT /F1 8.5 Tf 40 190.5 Td (copy-pasteable Linux commands to resolve the issue!) Tj ET
+0.2 0.2 0.2 rg BT /F2 10 Tf 40 167.0 Td (3.8 Inter Company Customer Group) Tj ET 0 0 0 rg
+BT /F1 8.5 Tf 50 150.0 Td (\225 **Location:** `Selling > Customer Group` and `Selling > Customer`) Tj ET
+BT /F1 8.5 Tf 50 138.0 Td (  \(`ic_customer_group`\)) Tj ET
+BT /F1 8.5 Tf 50 126.0 Td (\225 **Purpose:** Accounting isolation and automated elimination segregation.) Tj ET
+0.25 0.25 0.25 rg BT /F2 9.5 Tf 40 108.0 Td (3.8.1 Why Do We Need an "Inter Company Customer Group"?) Tj ET 0 0 0 rg
+BT /F1 8.5 Tf 40 93.0 Td (In standard ERP systems, sales to external third-party buyers and sales to sister) Tj ET
+BT /F1 8.5 Tf 40 81.5 Td (companies often get co-mingled in the same default *"All Customer Groups"* or general) Tj ET
+BT /F1 8.5 Tf 40 70.0 Td (Accounts Receivable \(Debtors\) accounts. This creates serious financial problems:) Tj ET
 Q
 endstream
 endobj
@@ -518,7 +519,7 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 21 0 R /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> >>
 endobj
 21 0 obj
-<< /Length 5252 >>
+<< /Length 5017 >>
 stream
 q
 0.4 0.4 0.4 rg
@@ -529,61 +530,59 @@ BT /F1 9 Tf 40 760 Td (Inter-Company Transactions - Enterprise User Guide & Mult
 0.8 0.8 0.8 RG 40 40 m 572 40 l S
 BT /F1 9 Tf 520 28 Td (Page 8 of 14) Tj ET
 0 0 0 rg
-BT /F1 8.5 Tf 40 735 Td (companies often get co-mingled in the same default *"All Customer Groups"* or general) Tj ET
-BT /F1 8.5 Tf 40 723.5 Td (Accounts Receivable \(Debtors\) accounts. This creates serious financial problems:) Tj ET
-BT /F1 8.5 Tf 40 712.0 Td (1. **Financial Statement Distortion:** External revenue looks falsely inflated on) Tj ET
-BT /F1 8.5 Tf 40 700.5 Td (management dashboards because internal stock transfers look like external commercial) Tj ET
-BT /F1 8.5 Tf 40 689.0 Td (sales.) Tj ET
-BT /F1 8.5 Tf 40 677.5 Td (2. **AR Aging Misrepresentation:** Overdue intercompany balances sit in the standard) Tj ET
-BT /F1 8.5 Tf 40 666.0 Td (Accounts Receivable aging report alongside external clients, distorting DSO \(Days) Tj ET
-BT /F1 8.5 Tf 40 654.5 Td (Sales Outstanding\) metrics.) Tj ET
-BT /F1 8.5 Tf 40 643.0 Td (3. **Complex Year-End Consolidation:** External auditors must spend days manually) Tj ET
-BT /F1 8.5 Tf 40 631.5 Td (sorting through thousands of invoices to extract internal transactions for) Tj ET
-BT /F1 8.5 Tf 40 620.0 Td (elimination.) Tj ET
-BT /F1 8.5 Tf 40 608.5 Td (4. **Credit Limits & Tax Policies:** External customers have strict credit limits and) Tj ET
-BT /F1 8.5 Tf 40 597.0 Td (standard sales tax \(VAT/GST\) rules. Sister companies require unlimited credit lines,) Tj ET
-BT /F1 8.5 Tf 40 585.5 Td (zero-rated internal transfer pricing, and specific Intercompany Clearing GL accounts.) Tj ET
-BT /F1 8.5 Tf 40 568.0 Td (By creating a designated **Inter Company Customer Group** and tagging it via the app's) Tj ET
-BT /F1 8.5 Tf 40 556.5 Td (custom field `ic_customer_group`, ERPNext automatically segregates internal debtors,) Tj ET
-BT /F1 8.5 Tf 40 545.0 Td (enables automated period-end elimination, and prevents internal orders from being) Tj ET
-BT /F1 8.5 Tf 40 533.5 Td (blocked by standard retail credit policies.) Tj ET
-0.25 0.25 0.25 rg BT /F2 9.5 Tf 40 516.0 Td (3.8.2 Practical Real-World Setup Example) Tj ET 0 0 0 rg
-BT /F1 8.5 Tf 40 501.0 Td (**Scenario:**) Tj ET
-BT /F1 8.5 Tf 50 489.5 Td (\225 **Parent Entity:** *Apex Global Industrial Ltd.* \(Manufacturing & R&D\)) Tj ET
-BT /F1 8.5 Tf 50 477.5 Td (\225 **Sister Subsidiary:** *Apex Middle East Distribution LLC* \(Regional Sales) Tj ET
-BT /F1 8.5 Tf 50 465.5 Td (  Office\)) Tj ET
-BT /F1 8.5 Tf 40 447.5 Td (**Step-by-Step Implementation:**) Tj ET
-BT /F1 8.5 Tf 40 436.0 Td (1. **Create the Inter Company Customer Group:**) Tj ET
-BT /F1 8.5 Tf 65 424.5 Td (- Go to **Selling > Customer Group > New**.) Tj ET
-BT /F1 8.5 Tf 65 413.0 Td (- `Customer Group Name`: **Inter Company Trading Group**) Tj ET
-BT /F1 8.5 Tf 65 401.5 Td (- `Parent Customer Group`: **All Customer Groups**) Tj ET
-BT /F1 8.5 Tf 65 390.0 Td (- `Is Group`: **No** \(Unchecked\)) Tj ET
-BT /F1 8.5 Tf 65 378.5 Td (- Save.) Tj ET
-BT /F1 8.5 Tf 40 361.0 Td (2. **Configure Dedicated Intercompany Clearing Accounts \(Recommended\):**) Tj ET
-BT /F1 8.5 Tf 65 349.5 Td (- In the newly created Customer Group form, expand the **Credit Limit and) Tj ET
-BT /F1 8.5 Tf 65 338.0 Td (  Default Accounts** table:) Tj ET
-BT /F1 8.5 Tf 40 326.5 Td (     - `Company`: *Apex Global Industrial Ltd.*) Tj ET
-BT /F1 8.5 Tf 40 315.0 Td (     - `Default Account`: `1310 - Intercompany Receivables - Apex ME` \(instead of) Tj ET
-BT /F1 8.5 Tf 40 303.5 Td (standard `1300 - Accounts Receivable Debtors`\)) Tj ET
-BT /F1 8.5 Tf 65 292.0 Td (- Save.) Tj ET
-BT /F1 8.5 Tf 40 274.5 Td (3. **Assign to Internal Customer:**) Tj ET
-BT /F1 8.5 Tf 65 263.0 Td (- Go to **Selling > Customer > New** \(or open existing internal customer\):) Tj ET
-BT /F1 8.5 Tf 40 251.5 Td (     - `Customer Name`: **Apex Middle East Distribution LLC \(Internal\)**) Tj ET
-BT /F1 8.5 Tf 40 240.0 Td (     - `Customer Group`: **Inter Company Trading Group**) Tj ET
-BT /F1 8.5 Tf 40 228.5 Td (     - Under *Inter Company Information*:) Tj ET
-BT /F1 8.5 Tf 40 217.0 Td (       - `Is Internal Customer`: **Checked**) Tj ET
-BT /F1 8.5 Tf 40 205.5 Td (       - `Represents Company`: **Apex Middle East Distribution LLC**) Tj ET
-BT /F1 8.5 Tf 40 194.0 Td (       - `Inter Company Customer Group` \(`ic_customer_group`\): **Inter Company Trading) Tj ET
-BT /F1 8.5 Tf 40 182.5 Td (Group**) Tj ET
-BT /F1 8.5 Tf 65 171.0 Td (- Save.) Tj ET
-BT /F1 8.5 Tf 40 153.5 Td (4. **Outcome in Trade & Reporting:**) Tj ET
-BT /F1 8.5 Tf 65 142.0 Td (- When *Apex Global* issues a $100,000 Sales Invoice to *Apex ME*, it posts to) Tj ET
-BT /F1 8.5 Tf 65 130.5 Td (  `1310 - Intercompany Receivables` rather than third-party trade receivables.) Tj ET
-BT /F1 8.5 Tf 65 119.0 Td (- On the **Inter Company Elimination Run**, selecting `Customer Group: Inter) Tj ET
-BT /F1 8.5 Tf 65 107.5 Td (  Company Trading Group` isolates 100% of inter-group invoices and generates) Tj ET
-BT /F1 8.5 Tf 65 96.0 Td (  the elimination journal entry with zero risk of touching external client) Tj ET
-BT /F1 8.5 Tf 65 84.5 Td (  balances.) Tj ET
-0.85 0.85 0.85 RG 40 67.0 m 572 67.0 l S 0 0 0 rg
+BT /F1 8.5 Tf 40 735 Td (1. **Financial Statement Distortion:** External revenue looks falsely inflated on) Tj ET
+BT /F1 8.5 Tf 40 723.5 Td (management dashboards because internal stock transfers look like external commercial) Tj ET
+BT /F1 8.5 Tf 40 712.0 Td (sales.) Tj ET
+BT /F1 8.5 Tf 40 700.5 Td (2. **AR Aging Misrepresentation:** Overdue intercompany balances sit in the standard) Tj ET
+BT /F1 8.5 Tf 40 689.0 Td (Accounts Receivable aging report alongside external clients, distorting DSO \(Days) Tj ET
+BT /F1 8.5 Tf 40 677.5 Td (Sales Outstanding\) metrics.) Tj ET
+BT /F1 8.5 Tf 40 666.0 Td (3. **Complex Year-End Consolidation:** External auditors must spend days manually) Tj ET
+BT /F1 8.5 Tf 40 654.5 Td (sorting through thousands of invoices to extract internal transactions for) Tj ET
+BT /F1 8.5 Tf 40 643.0 Td (elimination.) Tj ET
+BT /F1 8.5 Tf 40 631.5 Td (4. **Credit Limits & Tax Policies:** External customers have strict credit limits and) Tj ET
+BT /F1 8.5 Tf 40 620.0 Td (standard sales tax \(VAT/GST\) rules. Sister companies require unlimited credit lines,) Tj ET
+BT /F1 8.5 Tf 40 608.5 Td (zero-rated internal transfer pricing, and specific Intercompany Clearing GL accounts.) Tj ET
+BT /F1 8.5 Tf 40 591.0 Td (By creating a designated **Inter Company Customer Group** and tagging it via the app's) Tj ET
+BT /F1 8.5 Tf 40 579.5 Td (custom field `ic_customer_group`, ERPNext automatically segregates internal debtors,) Tj ET
+BT /F1 8.5 Tf 40 568.0 Td (enables automated period-end elimination, and prevents internal orders from being) Tj ET
+BT /F1 8.5 Tf 40 556.5 Td (blocked by standard retail credit policies.) Tj ET
+0.25 0.25 0.25 rg BT /F2 9.5 Tf 40 539.0 Td (3.8.2 Practical Real-World Setup Example) Tj ET 0 0 0 rg
+BT /F1 8.5 Tf 40 524.0 Td (**Scenario:**) Tj ET
+BT /F1 8.5 Tf 50 512.5 Td (\225 **Parent Entity:** *Apex Global Industrial Ltd.* \(Manufacturing & R&D\)) Tj ET
+BT /F1 8.5 Tf 50 500.5 Td (\225 **Sister Subsidiary:** *Apex Middle East Distribution LLC* \(Regional Sales) Tj ET
+BT /F1 8.5 Tf 50 488.5 Td (  Office\)) Tj ET
+BT /F1 8.5 Tf 40 470.5 Td (**Step-by-Step Implementation:**) Tj ET
+BT /F1 8.5 Tf 40 459.0 Td (1. **Create the Inter Company Customer Group:**) Tj ET
+BT /F1 8.5 Tf 65 447.5 Td (- Go to **Selling > Customer Group > New**.) Tj ET
+BT /F1 8.5 Tf 65 436.0 Td (- `Customer Group Name`: **Inter Company Trading Group**) Tj ET
+BT /F1 8.5 Tf 65 424.5 Td (- `Parent Customer Group`: **All Customer Groups**) Tj ET
+BT /F1 8.5 Tf 65 413.0 Td (- `Is Group`: **No** \(Unchecked\)) Tj ET
+BT /F1 8.5 Tf 65 401.5 Td (- Save.) Tj ET
+BT /F1 8.5 Tf 40 384.0 Td (2. **Configure Dedicated Intercompany Clearing Accounts \(Recommended\):**) Tj ET
+BT /F1 8.5 Tf 65 372.5 Td (- In the newly created Customer Group form, expand the **Credit Limit and) Tj ET
+BT /F1 8.5 Tf 65 361.0 Td (  Default Accounts** table:) Tj ET
+BT /F1 8.5 Tf 40 349.5 Td (     - `Company`: *Apex Global Industrial Ltd.*) Tj ET
+BT /F1 8.5 Tf 40 338.0 Td (     - `Default Account`: `1310 - Intercompany Receivables - Apex ME` \(instead of) Tj ET
+BT /F1 8.5 Tf 40 326.5 Td (standard `1300 - Accounts Receivable Debtors`\)) Tj ET
+BT /F1 8.5 Tf 65 315.0 Td (- Save.) Tj ET
+BT /F1 8.5 Tf 40 297.5 Td (3. **Assign to Internal Customer:**) Tj ET
+BT /F1 8.5 Tf 65 286.0 Td (- Go to **Selling > Customer > New** \(or open existing internal customer\):) Tj ET
+BT /F1 8.5 Tf 40 274.5 Td (     - `Customer Name`: **Apex Middle East Distribution LLC \(Internal\)**) Tj ET
+BT /F1 8.5 Tf 40 263.0 Td (     - `Customer Group`: **Inter Company Trading Group**) Tj ET
+BT /F1 8.5 Tf 40 251.5 Td (     - Under *Inter Company Information*:) Tj ET
+BT /F1 8.5 Tf 40 240.0 Td (       - `Is Internal Customer`: **Checked**) Tj ET
+BT /F1 8.5 Tf 40 228.5 Td (       - `Represents Company`: **Apex Middle East Distribution LLC**) Tj ET
+BT /F1 8.5 Tf 40 217.0 Td (       - `Inter Company Customer Group` \(`ic_customer_group`\): **Inter Company Trading) Tj ET
+BT /F1 8.5 Tf 40 205.5 Td (Group**) Tj ET
+BT /F1 8.5 Tf 65 194.0 Td (- Save.) Tj ET
+BT /F1 8.5 Tf 40 176.5 Td (4. **Outcome in Trade & Reporting:**) Tj ET
+BT /F1 8.5 Tf 65 165.0 Td (- When *Apex Global* issues a $100,000 Sales Invoice to *Apex ME*, it posts to) Tj ET
+BT /F1 8.5 Tf 65 153.5 Td (  `1310 - Intercompany Receivables` rather than third-party trade receivables.) Tj ET
+BT /F1 8.5 Tf 65 142.0 Td (- On the **Inter Company Elimination Run**, selecting `Customer Group: Inter) Tj ET
+BT /F1 8.5 Tf 65 130.5 Td (  Company Trading Group` isolates 100% of inter-group invoices and generates) Tj ET
+BT /F1 8.5 Tf 65 119.0 Td (  the elimination journal entry with zero risk of touching external client) Tj ET
+BT /F1 8.5 Tf 65 107.5 Td (  balances.) Tj ET
+0.85 0.85 0.85 RG 40 90.0 m 572 90.0 l S 0 0 0 rg
 Q
 endstream
 endobj
@@ -1074,7 +1073,7 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 31 0 R /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> >>
 endobj
 31 0 obj
-<< /Length 6158 >>
+<< /Length 6076 >>
 stream
 q
 0.4 0.4 0.4 rg
@@ -1118,12 +1117,12 @@ BT /F1 8.5 Tf 50 375.5 Td (  receipt of $1,000 USD in `Sister Company 1`.) Tj ET
 BT /F1 8.5 Tf 50 363.5 Td (\225 **Balance Reconciliation Report:** Converts balances using the transaction date) Tj ET
 BT /F1 8.5 Tf 50 351.5 Td (  exchange rate and reports the true base-currency variance.) Tj ET
 0.85 0.85 0.85 RG 40 333.5 m 572 333.5 l S 0 0 0 rg
-0.15 0.3 0.6 rg BT /F2 11 Tf 40 315.5 Td (5. Multi-Version Compatibility: ERPNext v14, v15, and v16) Tj ET 0 0 0 rg
-0.2 0.2 0.2 rg BT /F2 10 Tf 40 289.5 Td (Why this single app runs seamlessly on ERPNext 14, 15, and 16) Tj ET 0 0 0 rg
+0.15 0.3 0.6 rg BT /F2 11 Tf 40 315.5 Td (5. Multi-Version Compatibility: ERPNext v15 & v16) Tj ET 0 0 0 rg
+0.2 0.2 0.2 rg BT /F2 10 Tf 40 289.5 Td (Why this single app runs seamlessly on ERPNext v15 and v16) Tj ET 0 0 0 rg
 0.96 0.97 0.98 rg 40 267.0 532 9.5 re f
 0.15 0.2 0.35 rg BT /F3 7 Tf 44 268.5 Td (+------------------------------------------------------------------------------------+) Tj ET 0 0 0 rg
 0.96 0.97 0.98 rg 40 257.5 532 9.5 re f
-0.15 0.2 0.35 rg BT /F3 7 Tf 44 259.0 Td (|               COMPATIBILITY MATRIX: ERPNEXT v14, v15 & v16 CERTIFIED               |) Tj ET 0 0 0 rg
+0.15 0.2 0.35 rg BT /F3 7 Tf 44 259.0 Td (|                 COMPATIBILITY MATRIX: ERPNEXT v15 & v16 CERTIFIED                  |) Tj ET 0 0 0 rg
 0.96 0.97 0.98 rg 40 248.0 532 9.5 re f
 0.15 0.2 0.35 rg BT /F3 7 Tf 44 249.5 Td (|                                                                                    |) Tj ET 0 0 0 rg
 0.96 0.97 0.98 rg 40 238.5 532 9.5 re f
@@ -1131,22 +1130,21 @@ BT /F1 8.5 Tf 50 351.5 Td (  exchange rate and reports the true base-currency va
 0.96 0.97 0.98 rg 40 229.0 532 9.5 re f
 0.15 0.2 0.35 rg BT /F3 7 Tf 44 230.5 Td (|  ------------------+-----------------------+----------------+--------------------  |) Tj ET 0 0 0 rg
 0.96 0.97 0.98 rg 40 219.5 532 9.5 re f
-0.15 0.2 0.35 rg BT /F3 7 Tf 44 221.0 Td (|  ERPNext v14       | Python 3.10 / 3.11    | Frappe v14.x   | Fully Compatible     |) Tj ET 0 0 0 rg
+0.15 0.2 0.35 rg BT /F3 7 Tf 44 221.0 Td (|  ERPNext v15       | Python 3.10/3.11/3.12 | Frappe v15.x   | Fully Compatible     |) Tj ET 0 0 0 rg
 0.96 0.97 0.98 rg 40 210.0 532 9.5 re f
-0.15 0.2 0.35 rg BT /F3 7 Tf 44 211.5 Td (|  ERPNext v15       | Python 3.10/3.11/3.12 | Frappe v15.x   | Fully Compatible     |) Tj ET 0 0 0 rg
+0.15 0.2 0.35 rg BT /F3 7 Tf 44 211.5 Td (|  ERPNext v16       | Python 3.12 / 3.13+   | Frappe v16.x   | Certified Ready      |) Tj ET 0 0 0 rg
 0.96 0.97 0.98 rg 40 200.5 532 9.5 re f
-0.15 0.2 0.35 rg BT /F3 7 Tf 44 202.0 Td (|  ERPNext v16       | Python 3.12 / 3.13    | Frappe v16.x   | Certified Ready      |) Tj ET 0 0 0 rg
-0.96 0.97 0.98 rg 40 191.0 532 9.5 re f
-0.15 0.2 0.35 rg BT /F3 7 Tf 44 192.5 Td (+------------------------------------------------------------------------------------+) Tj ET 0 0 0 rg
-0.25 0.25 0.25 rg BT /F2 9.5 Tf 40 173.0 Td (Technical Guarantees for Marketplace Buyers:) Tj ET 0 0 0 rg
-BT /F1 8.5 Tf 40 158.0 Td (1. **Universal ORM & Document API:** The app exclusively uses Frappe's universal ORM) Tj ET
-BT /F1 8.5 Tf 40 146.5 Td (functions \(`frappe.get_doc`, `frappe.new_doc`, `frappe.db.get_value`,) Tj ET
-BT /F1 8.5 Tf 40 135.0 Td (`frappe.db.exists`\). These core APIs are 100% stable and identical across Frappe v14,) Tj ET
-BT /F1 8.5 Tf 40 123.5 Td (v15, and v16.) Tj ET
-BT /F1 8.5 Tf 40 112.0 Td (2. **Python Compatibility \(`>= 3.10`\):** The Python codebase uses modern clean syntax) Tj ET
-BT /F1 8.5 Tf 40 100.5 Td (compliant with Python 3.10, 3.11, 3.12, and 3.13. No deprecated Python standard) Tj ET
-BT /F1 8.5 Tf 40 89.0 Td (modules \(like `imp`, `pipes`, or removed `cgi` utilities\) are used.) Tj ET
-BT /F1 8.5 Tf 40 77.5 Td (3. **Collision-Free Migration:** Custom fields are created dynamically with) Tj ET
+0.15 0.2 0.35 rg BT /F3 7 Tf 44 202.0 Td (+------------------------------------------------------------------------------------+) Tj ET 0 0 0 rg
+0.25 0.25 0.25 rg BT /F2 9.5 Tf 40 182.5 Td (Technical Guarantees for Marketplace Buyers:) Tj ET 0 0 0 rg
+BT /F1 8.5 Tf 40 167.5 Td (1. **Universal ORM & Document API:** The app exclusively uses Frappe's universal ORM) Tj ET
+BT /F1 8.5 Tf 40 156.0 Td (functions \(`frappe.get_doc`, `frappe.new_doc`, `frappe.db.get_value`,) Tj ET
+BT /F1 8.5 Tf 40 144.5 Td (`frappe.db.exists`\). These core APIs are 100% stable and identical across Frappe v15) Tj ET
+BT /F1 8.5 Tf 40 133.0 Td (and v16.) Tj ET
+BT /F1 8.5 Tf 40 121.5 Td (2. **Python Compatibility \(`>= 3.10`\):** The Python codebase uses modern clean syntax) Tj ET
+BT /F1 8.5 Tf 40 110.0 Td (compliant with Python 3.10, 3.11, 3.12, and 3.13+. No deprecated Python standard) Tj ET
+BT /F1 8.5 Tf 40 98.5 Td (modules \(like `imp`, `pipes`, or removed `cgi` utilities\) are used.) Tj ET
+BT /F1 8.5 Tf 40 87.0 Td (3. **Collision-Free Migration:** Custom fields are created dynamically with) Tj ET
+BT /F1 8.5 Tf 40 75.5 Td (programmatic duplicate-checking rather than rigid SQL dumps. Upgrades from v15 to v16) Tj ET
 Q
 endstream
 endobj
@@ -1154,7 +1152,7 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 33 0 R /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> >>
 endobj
 33 0 obj
-<< /Length 3735 >>
+<< /Length 3608 >>
 stream
 q
 0.4 0.4 0.4 rg
@@ -1165,45 +1163,44 @@ BT /F1 9 Tf 40 760 Td (Inter-Company Transactions - Enterprise User Guide & Mult
 0.8 0.8 0.8 RG 40 40 m 572 40 l S
 BT /F1 9 Tf 520 28 Td (Page 14 of 14) Tj ET
 0 0 0 rg
-BT /F1 8.5 Tf 40 735 Td (programmatic duplicate-checking rather than rigid SQL dumps. Upgrades from v14 to v15) Tj ET
-BT /F1 8.5 Tf 40 723.5 Td (or v16 will never break database constraints.) Tj ET
-BT /F1 8.5 Tf 40 712.0 Td (4. **Modern Build System:** Uses standard `flit_core >=3.4` in `pyproject.toml`, which) Tj ET
-BT /F1 8.5 Tf 40 700.5 Td (is the official Frappe packaging standard for Frappe Cloud and bench deployments.) Tj ET
-0.85 0.85 0.85 RG 40 677.0 m 572 677.0 l S 0 0 0 rg
-0.15 0.3 0.6 rg BT /F2 11 Tf 40 659.0 Td (5. Reporting & Executive Audit Tools) Tj ET 0 0 0 rg
-0.2 0.2 0.2 rg BT /F2 10 Tf 40 633.0 Td (5.1 Inter Company Transaction Matrix) Tj ET 0 0 0 rg
-BT /F1 8.5 Tf 50 616.0 Td (\225 **Route:** `/app/query-report/Inter Company Transaction Matrix`) Tj ET
-BT /F1 8.5 Tf 50 604.0 Td (\225 Displays all transaction pairs side-by-side: Source Document vs. Target) Tj ET
-BT /F1 8.5 Tf 50 592.0 Td (  Document.) Tj ET
-BT /F1 8.5 Tf 50 580.0 Td (\225 Visual status pills:) Tj ET
-BT /F1 8.5 Tf 40 568.0 Td (  - **Green \(Synchronized\):** Both documents exist, rates and quantities match.) Tj ET
-BT /F1 8.5 Tf 40 556.5 Td (  - **Red \(Variance\):** Difference detected between source and target totals.) Tj ET
-BT /F1 8.5 Tf 40 545.0 Td (  - **Orange \(Pending Mirror\):** Initiating document submitted, target awaiting) Tj ET
-BT /F1 8.5 Tf 40 533.5 Td (processing.) Tj ET
-BT /F1 8.5 Tf 50 522.0 Td (\225 Includes summary cards: Total Volume, Total Absolute Variance, and Sync % Chart.) Tj ET
-0.2 0.2 0.2 rg BT /F2 10 Tf 40 504.0 Td (5.2 Inter Company Balance Reconciliation) Tj ET 0 0 0 rg
-BT /F1 8.5 Tf 50 487.0 Td (\225 **Route:** `/app/query-report/Inter Company Balance Reconciliation`) Tj ET
-BT /F1 8.5 Tf 50 475.0 Td (\225 Compares reciprocal GL balances: Entity A's Receivable from Entity B vs. Entity) Tj ET
-BT /F1 8.5 Tf 50 463.0 Td (  B's Payable to Entity A.) Tj ET
-BT /F1 8.5 Tf 50 451.0 Td (\225 Identifies unposted journal vouchers, currency translation differences, and) Tj ET
-BT /F1 8.5 Tf 50 439.0 Td (  missing invoices.) Tj ET
-0.85 0.85 0.85 RG 40 421.0 m 572 421.0 l S 0 0 0 rg
-0.15 0.3 0.6 rg BT /F2 11 Tf 40 403.0 Td (6. Troubleshooting & Error Handling) Tj ET 0 0 0 rg
-0.2 0.2 0.2 rg BT /F2 10 Tf 40 377.0 Td (Error Log Inspection) Tj ET 0 0 0 rg
-BT /F1 8.5 Tf 40 360.0 Td (If a transaction fails to mirror \(e.g., target warehouse closed or missing fiscal) Tj ET
-BT /F1 8.5 Tf 40 348.5 Td (year\):) Tj ET
-BT /F1 8.5 Tf 40 337.0 Td (1. Navigate to **Inter Company > Inter Company Error Log**.) Tj ET
-BT /F1 8.5 Tf 40 325.5 Td (2. Locate the failed record.) Tj ET
-BT /F1 8.5 Tf 40 314.0 Td (3. Review the traceback, resolve the underlying ledger/master issue in the target) Tj ET
-BT /F1 8.5 Tf 40 302.5 Td (company, and click **Retry Sync**.) Tj ET
-0.2 0.2 0.2 rg BT /F2 10 Tf 40 285.0 Td (Manual Synchronization) Tj ET 0 0 0 rg
-BT /F1 8.5 Tf 40 268.0 Td (If a document was submitted during maintenance or when the link was disabled:) Tj ET
-BT /F1 8.5 Tf 40 256.5 Td (1. Open the submitted document.) Tj ET
-BT /F1 8.5 Tf 40 245.0 Td (2. Click **Inter Company > Sync Mirror Now**.) Tj ET
-BT /F1 8.5 Tf 40 233.5 Td (3. The system processes the document immediately and binds the reciprocal link.) Tj ET
-0.85 0.85 0.85 RG 40 216.0 m 572 216.0 l S 0 0 0 rg
-BT /F1 8.5 Tf 40 204.0 Td (*End of User Guide. For technical issues or feature contributions, consult the) Tj ET
-BT /F1 8.5 Tf 40 192.5 Td (repository issue tracker.*) Tj ET
+BT /F1 8.5 Tf 40 735 Td (will never break database constraints.) Tj ET
+BT /F1 8.5 Tf 40 723.5 Td (4. **Modern Build System:** Uses standard `flit_core >=3.4` in `pyproject.toml`, which) Tj ET
+BT /F1 8.5 Tf 40 712.0 Td (is the official Frappe packaging standard for Frappe Cloud and bench deployments.) Tj ET
+0.85 0.85 0.85 RG 40 688.5 m 572 688.5 l S 0 0 0 rg
+0.15 0.3 0.6 rg BT /F2 11 Tf 40 670.5 Td (5. Reporting & Executive Audit Tools) Tj ET 0 0 0 rg
+0.2 0.2 0.2 rg BT /F2 10 Tf 40 644.5 Td (5.1 Inter Company Transaction Matrix) Tj ET 0 0 0 rg
+BT /F1 8.5 Tf 50 627.5 Td (\225 **Route:** `/app/query-report/Inter Company Transaction Matrix`) Tj ET
+BT /F1 8.5 Tf 50 615.5 Td (\225 Displays all transaction pairs side-by-side: Source Document vs. Target) Tj ET
+BT /F1 8.5 Tf 50 603.5 Td (  Document.) Tj ET
+BT /F1 8.5 Tf 50 591.5 Td (\225 Visual status pills:) Tj ET
+BT /F1 8.5 Tf 40 579.5 Td (  - **Green \(Synchronized\):** Both documents exist, rates and quantities match.) Tj ET
+BT /F1 8.5 Tf 40 568.0 Td (  - **Red \(Variance\):** Difference detected between source and target totals.) Tj ET
+BT /F1 8.5 Tf 40 556.5 Td (  - **Orange \(Pending Mirror\):** Initiating document submitted, target awaiting) Tj ET
+BT /F1 8.5 Tf 40 545.0 Td (processing.) Tj ET
+BT /F1 8.5 Tf 50 533.5 Td (\225 Includes summary cards: Total Volume, Total Absolute Variance, and Sync % Chart.) Tj ET
+0.2 0.2 0.2 rg BT /F2 10 Tf 40 515.5 Td (5.2 Inter Company Balance Reconciliation) Tj ET 0 0 0 rg
+BT /F1 8.5 Tf 50 498.5 Td (\225 **Route:** `/app/query-report/Inter Company Balance Reconciliation`) Tj ET
+BT /F1 8.5 Tf 50 486.5 Td (\225 Compares reciprocal GL balances: Entity A's Receivable from Entity B vs. Entity) Tj ET
+BT /F1 8.5 Tf 50 474.5 Td (  B's Payable to Entity A.) Tj ET
+BT /F1 8.5 Tf 50 462.5 Td (\225 Identifies unposted journal vouchers, currency translation differences, and) Tj ET
+BT /F1 8.5 Tf 50 450.5 Td (  missing invoices.) Tj ET
+0.85 0.85 0.85 RG 40 432.5 m 572 432.5 l S 0 0 0 rg
+0.15 0.3 0.6 rg BT /F2 11 Tf 40 414.5 Td (6. Troubleshooting & Error Handling) Tj ET 0 0 0 rg
+0.2 0.2 0.2 rg BT /F2 10 Tf 40 388.5 Td (Error Log Inspection) Tj ET 0 0 0 rg
+BT /F1 8.5 Tf 40 371.5 Td (If a transaction fails to mirror \(e.g., target warehouse closed or missing fiscal) Tj ET
+BT /F1 8.5 Tf 40 360.0 Td (year\):) Tj ET
+BT /F1 8.5 Tf 40 348.5 Td (1. Navigate to **Inter Company > Inter Company Error Log**.) Tj ET
+BT /F1 8.5 Tf 40 337.0 Td (2. Locate the failed record.) Tj ET
+BT /F1 8.5 Tf 40 325.5 Td (3. Review the traceback, resolve the underlying ledger/master issue in the target) Tj ET
+BT /F1 8.5 Tf 40 314.0 Td (company, and click **Retry Sync**.) Tj ET
+0.2 0.2 0.2 rg BT /F2 10 Tf 40 296.5 Td (Manual Synchronization) Tj ET 0 0 0 rg
+BT /F1 8.5 Tf 40 279.5 Td (If a document was submitted during maintenance or when the link was disabled:) Tj ET
+BT /F1 8.5 Tf 40 268.0 Td (1. Open the submitted document.) Tj ET
+BT /F1 8.5 Tf 40 256.5 Td (2. Click **Inter Company > Sync Mirror Now**.) Tj ET
+BT /F1 8.5 Tf 40 245.0 Td (3. The system processes the document immediately and binds the reciprocal link.) Tj ET
+0.85 0.85 0.85 RG 40 227.5 m 572 227.5 l S 0 0 0 rg
+BT /F1 8.5 Tf 40 215.5 Td (*End of User Guide. For technical issues or feature contributions, consult the) Tj ET
+BT /F1 8.5 Tf 40 204.0 Td (repository issue tracker.*) Tj ET
 Q
 endstream
 endobj
@@ -1217,34 +1214,34 @@ xref
 0000000351 00000 n 
 0000000419 00000 n 
 0000000565 00000 n 
-0000005238 00000 n 
-0000005384 00000 n 
-0000010452 00000 n 
-0000010600 00000 n 
-0000016724 00000 n 
-0000016872 00000 n 
-0000022378 00000 n 
-0000022526 00000 n 
-0000027827 00000 n 
-0000027975 00000 n 
-0000033391 00000 n 
-0000033539 00000 n 
-0000038228 00000 n 
-0000038376 00000 n 
-0000043681 00000 n 
-0000043829 00000 n 
-0000052504 00000 n 
-0000052652 00000 n 
-0000063056 00000 n 
-0000063204 00000 n 
-0000073660 00000 n 
-0000073808 00000 n 
-0000083581 00000 n 
-0000083729 00000 n 
-0000089940 00000 n 
-0000090088 00000 n 
+0000005284 00000 n 
+0000005430 00000 n 
+0000010500 00000 n 
+0000010648 00000 n 
+0000016795 00000 n 
+0000016943 00000 n 
+0000022436 00000 n 
+0000022584 00000 n 
+0000027826 00000 n 
+0000027974 00000 n 
+0000033402 00000 n 
+0000033550 00000 n 
+0000038420 00000 n 
+0000038568 00000 n 
+0000043638 00000 n 
+0000043786 00000 n 
+0000052461 00000 n 
+0000052609 00000 n 
+0000063013 00000 n 
+0000063161 00000 n 
+0000073617 00000 n 
+0000073765 00000 n 
+0000083538 00000 n 
+0000083686 00000 n 
+0000089815 00000 n 
+0000089963 00000 n 
 trailer
 << /Size 34 /Root 1 0 R >>
 startxref
-93876
+93624
 %%EOF
