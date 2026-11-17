@@ -30,7 +30,10 @@
 		if (!map || !window.ict || !ict.resolve_target_sync) return null;
 
 		const dt = frm.doc.doctype;
-		if (['Sales Order', 'Sales Invoice', 'Delivery Note', 'Quotation'].includes(dt) && frm.doc.customer) {
+		if (dt === 'Quotation' && frm.doc.quotation_to === 'Customer' && (frm.doc.party_name || frm.doc.customer)) {
+			return ict.resolve_target_sync(frm.doc.party_name || frm.doc.customer, 'customer', frm.doc.company, map);
+		}
+		if (['Sales Order', 'Sales Invoice', 'Delivery Note'].includes(dt) && frm.doc.customer) {
 			return ict.resolve_target_sync(frm.doc.customer, 'customer', frm.doc.company, map);
 		}
 		if (['Purchase Order', 'Purchase Invoice', 'Purchase Receipt', 'Supplier Quotation'].includes(dt) && frm.doc.supplier) {
@@ -112,15 +115,24 @@
 		}
 	}
 
-	function add_linked_doc_ui(frm, targetDocType, targetDocName, targetCompany, isCounterpart) {
+	function add_linked_doc_ui(frm, targetDocType, targetDocName, targetCompany, isCounterpart, counterpartMeta) {
 		const esc = frappe.utils.escape_html;
-		frm.add_custom_button(
-			__('Open Linked {0}', [__(targetDocType)]),
-			function() {
-				frappe.set_route('Form', targetDocType, targetDocName);
-			},
-			__('Inter Company')
+		const isOrphan = !!(
+			counterpartMeta &&
+			isCounterpart &&
+			!counterpartMeta.is_remote &&
+			(counterpartMeta.exists === false || cint(counterpartMeta.docstatus) === 2)
 		);
+
+		if (!counterpartMeta || counterpartMeta.exists !== false) {
+			frm.add_custom_button(
+				__('Open Linked {0}', [__(targetDocType)]),
+				function() {
+					frappe.set_route('Form', targetDocType, targetDocName);
+				},
+				__('Inter Company')
+			);
+		}
 
 		frm.add_custom_button(
 			__('Raise Dispute'),
@@ -137,15 +149,94 @@
 			__('Inter Company')
 		);
 
+		if (isCounterpart && frm.doc.docstatus === 0 && !frm.is_new() && frappe.model && frappe.model.can_delete(frm.doc.doctype)) {
+			frm.add_custom_button(
+				__('Delete Mirrored Draft'),
+				function() {
+					frappe.confirm(
+						__('Permanently delete Draft {0} <b>{1}</b> and remove its inter-company document reference?', [esc(__(frm.doc.doctype)), esc(frm.doc.name)]),
+						function() {
+							frappe.call({
+								method: 'inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.delete_mirrored_draft',
+								args: {
+									doctype: frm.doc.doctype,
+									name: frm.doc.name
+								},
+								freeze: true,
+								freeze_message: __('Deleting Mirrored Draft...'),
+								callback: function(res) {
+									if (res && res.message && res.message.deleted) {
+										frappe.show_alert({
+											message: __('{0} {1} deleted.', [__(frm.doc.doctype), frm.doc.name]),
+											indicator: 'green'
+										});
+										frappe.set_route('List', frm.doc.doctype);
+									}
+								}
+							});
+						}
+					);
+				},
+				__('Inter Company')
+			);
+		}
+
+		const isManager = frappe.user && (frappe.user.has_role('System Manager') || frappe.user.has_role('Accounts Manager'));
+		if (isCounterpart && !frm.is_new() && (isOrphan || isManager)) {
+			frm.add_custom_button(
+				isOrphan ? __('Unlink Orphan Reference') : __('Unlink Counterpart Reference'),
+				function() {
+					const promptMsg = isOrphan
+						? __('Source {0} <b>{1}</b> no longer exists or is cancelled. Unlink <b>{2}</b> so it can be edited, cancelled, or deleted independently?', [esc(__(targetDocType)), esc(targetDocName), esc(frm.doc.name)])
+						: __('Manually unlink <b>{0} {1}</b> from source {2} <b>{3}</b>? Any tracking row in Inter Company Document Reference will be removed.', [esc(__(frm.doc.doctype)), esc(frm.doc.name), esc(__(targetDocType)), esc(targetDocName)]);
+					frappe.confirm(
+						promptMsg,
+						function() {
+							frappe.call({
+								method: 'inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.unlink_mirrored_document',
+								args: {
+									doctype: frm.doc.doctype,
+									name: frm.doc.name
+								},
+								freeze: true,
+								freeze_message: __('Unlinking Inter-Company Reference...'),
+								callback: function(res) {
+									if (res && res.message && res.message.unlinked) {
+										frappe.show_alert({
+											message: __('Inter-company link removed from {0}.', [frm.doc.name]),
+											indicator: 'green'
+										});
+										frm.reload_doc();
+									}
+								}
+							});
+						}
+					);
+				},
+				__('Inter Company')
+			);
+		}
+
 		if (frm.dashboard && frm.dashboard.set_headline_alert) {
-			if (isCounterpart) {
+			if (isCounterpart && isOrphan) {
 				frm.dashboard.set_headline_alert(
-					__('Mirrored Inter-Company Draft from <a href="/app/{0}/{1}"><b>{2} {3}</b></a> ({4}). Currency, exchange rates, parties & amounts are strictly locked \u2014 contact <b>{4}</b> to cancel or amend. Warehouse / Cost Center / Account remain editable.', [
+					__('Source document <b>{0} {1}</b> ({2}) was deleted or cancelled. You can now cancel, delete, or click <b>Inter Company -> Unlink Orphan Reference</b> to manage this entry independently.', [
+						esc(__(targetDocType)),
+						esc(targetDocName),
+						esc(targetCompany)
+					]),
+					'orange'
+				);
+			} else if (isCounterpart) {
+				const docStateLabel = frm.doc.docstatus === 0 ? __('Draft') : (frm.doc.docstatus === 1 ? __('Document') : __('Cancelled Document'));
+				frm.dashboard.set_headline_alert(
+					__('Mirrored Inter-Company {5} from <a href="/app/{0}/{1}"><b>{2} {3}</b></a> ({4}). Currency, exchange rates, parties & amounts are strictly locked \u2014 contact <b>{4}</b> to cancel or amend. Warehouse / Cost Center / Account remain editable.', [
 						encodeURIComponent(frappe.router.slug(targetDocType)),
 						encodeURIComponent(targetDocName),
 						esc(__(targetDocType)),
 						esc(targetDocName),
-						esc(targetCompany)
+						esc(targetCompany),
+						docStateLabel
 					]),
 					'orange'
 				);
@@ -258,15 +349,34 @@
 			refresh: function(frm) {
 				sync_intercompany_state(frm);
 
-				// Show navigation button & locks for Mirrored Counterpart
+				// Show navigation button, draft delete, orphan unlink & locks for Mirrored Counterpart
 				if (frm.doc.intercompany_linked_doc_name && frm.doc.intercompany_linked_doc_doctype) {
-					add_linked_doc_ui(
-						frm,
-						frm.doc.intercompany_linked_doc_doctype,
-						frm.doc.intercompany_linked_doc_name,
-						frm.doc.intercompany_linked_company || frm.doc.intercompany_target_company || '',
-						true
-					);
+					const fallbackDt = frm.doc.intercompany_linked_doc_doctype;
+					const fallbackName = frm.doc.intercompany_linked_doc_name;
+					const fallbackCo = frm.doc.intercompany_linked_company || frm.doc.intercompany_target_company || '';
+					if (!frm.is_new()) {
+						frappe.call({
+							method: 'inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.get_linked_counterpart_for_form',
+							args: {
+								doctype: frm.doc.doctype,
+								name: frm.doc.name
+							},
+							callback: function(r) {
+								const cps = (r && r.message && r.message.counterparts) || [];
+								const first = cps.length > 0 ? cps[0] : null;
+								add_linked_doc_ui(
+									frm,
+									(first && first.doctype) || fallbackDt,
+									(first && first.name) || fallbackName,
+									(first && first.company) || fallbackCo,
+									true,
+									first
+								);
+							}
+						});
+					} else {
+						add_linked_doc_ui(frm, fallbackDt, fallbackName, fallbackCo, true, null);
+					}
 				} else if (frm.doc.docstatus === 0 && cint(frm.doc.is_intercompany) && frm.dashboard && frm.dashboard.set_headline_alert) {
 					if (frm.doc.doctype === 'Stock Entry') {
 						frm.dashboard.set_headline_alert(
@@ -296,7 +406,7 @@
 							const cps = (r && r.message && r.message.counterparts) || [];
 							if (cps.length > 0) {
 								const first = cps[0];
-								add_linked_doc_ui(frm, first.doctype, first.name, first.company || '', false);
+								add_linked_doc_ui(frm, first.doctype, first.name, first.company || '', false, first);
 							} else {
 								frm.add_custom_button(
 									__('Sync Mirror Now'),
@@ -659,12 +769,22 @@
 	}
 
 	// Attach customer triggers
-	['Sales Order', 'Sales Invoice', 'Delivery Note', 'Quotation'].forEach(function(dt) {
+	['Sales Order', 'Sales Invoice', 'Delivery Note'].forEach(function(dt) {
 		frappe.ui.form.on(dt, {
 			customer: function(frm) {
 				handle_party_selection(frm, 'customer', frm.doc.customer);
 			}
 		});
+	});
+	frappe.ui.form.on('Quotation', {
+		customer: function(frm) {
+			handle_party_selection(frm, 'customer', frm.doc.customer || frm.doc.party_name);
+		},
+		party_name: function(frm) {
+			if (frm.doc.quotation_to === 'Customer') {
+				handle_party_selection(frm, 'customer', frm.doc.party_name);
+			}
+		}
 	});
 
 	// Attach supplier triggers

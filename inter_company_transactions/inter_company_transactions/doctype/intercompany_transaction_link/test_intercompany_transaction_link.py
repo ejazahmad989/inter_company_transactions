@@ -1117,5 +1117,423 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 		with self.assertRaises(frappe.ValidationError):
 			validate_locked_mirrored_fields(bad_doc, previous=prev)
 
+	def test_submit_uncalculated_mirrored_drafts_all_transaction_types(self):
+		"""Verify mirrored drafts with uncalculated 0 totals/amounts submit cleanly while tampering still throws"""
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			_precalculate_mirrored_doc_totals,
+			validate_locked_mirrored_fields,
+		)
 
+		# 1. Journal Entry (e.g. ACC-JV-2026-00036 with total_debit=0, total_credit=0 in DB before Submit)
+		je_prev = frappe._dict({
+			"doctype": "Journal Entry",
+			"name": "ACC-JV-2026-00036",
+			"company": "Sister Co",
+			"is_intercompany": 1,
+			"intercompany_target_company": "MAIN",
+			"intercompany_linked_doc_doctype": "Journal Entry",
+			"intercompany_linked_doc_name": "ACC-JV-2026-00035",
+			"intercompany_linked_company": "MAIN",
+			"total_debit": 0.0,
+			"total_credit": 0.0,
+			"flags": frappe._dict(),
+			"accounts": [
+				frappe._dict({
+					"account": "Debtors - SC",
+					"account_currency": "PKR",
+					"exchange_rate": 1.0,
+					"party_type": "Customer",
+					"party": "MAIN (Internal)",
+					"debit_in_account_currency": 50000.0,
+					"credit_in_account_currency": 0.0,
+					"debit": 50000.0,
+					"credit": 0.0,
+				}),
+				frappe._dict({
+					"account": "TMP-MAIN - SC",
+					"account_currency": "PKR",
+					"exchange_rate": 1.0,
+					"party_type": None,
+					"party": None,
+					"debit_in_account_currency": 0.0,
+					"credit_in_account_currency": 50000.0,
+					"debit": 0.0,
+					"credit": 50000.0,
+				}),
+			],
+		})
+		je_submit = frappe._dict({
+			**je_prev,
+			"total_debit": 50000.0,
+			"total_credit": 50000.0,
+			"flags": frappe._dict(),
+			"accounts": [frappe._dict(r) for r in je_prev["accounts"]],
+		})
+		validate_locked_mirrored_fields(je_submit, previous=je_prev)
 
+		# Legacy LCV/remote JE where account_currency/exchange_rate/base debit were uncalculated
+		je_lcv_prev = frappe._dict({
+			**je_prev,
+			"accounts": [
+				frappe._dict({
+					"account": "Expenses - SC",
+					"account_currency": None,
+					"exchange_rate": 0.0,
+					"party_type": None,
+					"party": None,
+					"debit_in_account_currency": 450.0,
+					"credit_in_account_currency": 0.0,
+					"debit": 0.0,
+					"credit": 0.0,
+				}),
+				frappe._dict({
+					"account": "Creditors - SC",
+					"account_currency": None,
+					"exchange_rate": 0.0,
+					"party_type": "Supplier",
+					"party": "MAIN Supplier",
+					"debit_in_account_currency": 0.0,
+					"credit_in_account_currency": 450.0,
+					"debit": 0.0,
+					"credit": 0.0,
+				}),
+			],
+		})
+		je_lcv_submit = frappe._dict({
+			**je_lcv_prev,
+			"total_debit": 450.0,
+			"total_credit": 450.0,
+			"flags": frappe._dict(),
+			"accounts": [
+				frappe._dict({**je_lcv_prev["accounts"][0], "account_currency": "USD", "exchange_rate": 1.0, "debit": 450.0}),
+				frappe._dict({**je_lcv_prev["accounts"][1], "account_currency": "USD", "exchange_rate": 1.0, "credit": 450.0}),
+			],
+		})
+		validate_locked_mirrored_fields(je_lcv_submit, previous=je_lcv_prev)
+
+		# Tampering row debit must still block JE
+		je_bad = frappe._dict({
+			**je_submit,
+			"flags": frappe._dict(),
+			"accounts": [
+				frappe._dict({**je_submit["accounts"][0], "debit_in_account_currency": 60000.0, "debit": 60000.0}),
+				frappe._dict(je_submit["accounts"][1]),
+			],
+		})
+		with self.assertRaises(frappe.ValidationError):
+			validate_locked_mirrored_fields(je_bad, previous=je_prev)
+
+		# 2. Item-based vouchers (PO/SO/SI/PI/DN/PR/SQ/Quotation) with DB amount=0
+		for dt in ("Purchase Order", "Sales Order", "Purchase Invoice", "Sales Invoice", "Delivery Note", "Purchase Receipt", "Supplier Quotation"):
+			prev_item_doc = frappe._dict({
+				"doctype": dt,
+				"name": f"{dt[:3].upper()}-0001",
+				"company": "Sister Co",
+				"currency": "PKR",
+				"conversion_rate": 1.0,
+				"is_intercompany": 1,
+				"intercompany_target_company": "MAIN",
+				"intercompany_linked_doc_doctype": "Sales Order",
+				"intercompany_linked_doc_name": "SRC-0001",
+				"intercompany_linked_company": "MAIN",
+				"flags": frappe._dict(),
+				"items": [frappe._dict({"item_code": "ITEM-1", "uom": "Nos", "qty": 1.0, "rate": 46000.0, "amount": 0.0})],
+			})
+			sub_item_doc = frappe._dict({
+				**prev_item_doc,
+				"flags": frappe._dict(),
+				"items": [frappe._dict({"item_code": "ITEM-1", "uom": "Nos", "qty": 1.0, "rate": 46000.0, "amount": 46000.0})],
+			})
+			validate_locked_mirrored_fields(sub_item_doc, previous=prev_item_doc)
+
+			# Rate tampering still blocked
+			bad_item_doc = frappe._dict({
+				**sub_item_doc,
+				"flags": frappe._dict(),
+				"items": [frappe._dict({"item_code": "ITEM-1", "uom": "Nos", "qty": 1.0, "rate": 50000.0, "amount": 50000.0})],
+			})
+			with self.assertRaises(frappe.ValidationError):
+				validate_locked_mirrored_fields(bad_item_doc, previous=prev_item_doc)
+
+		# Quotation checks party_name and quotation_to
+		q_prev = frappe._dict({
+			"doctype": "Quotation",
+			"name": "QTN-0001",
+			"company": "MAIN",
+			"quotation_to": "Customer",
+			"party_name": "Sister Co Customer",
+			"currency": "PKR",
+			"conversion_rate": 1.0,
+			"is_intercompany": 1,
+			"intercompany_target_company": "Sister Co",
+			"intercompany_linked_doc_doctype": "Supplier Quotation",
+			"intercompany_linked_doc_name": "SQTN-0001",
+			"intercompany_linked_company": "Sister Co",
+			"flags": frappe._dict(),
+			"items": [frappe._dict({"item_code": "ITEM-1", "uom": "Nos", "qty": 2.0, "rate": 100.0, "amount": 0.0})],
+		})
+		q_sub = frappe._dict({
+			**q_prev,
+			"flags": frappe._dict(),
+			"items": [frappe._dict({"item_code": "ITEM-1", "uom": "Nos", "qty": 2.0, "rate": 100.0, "amount": 200.0})],
+		})
+		validate_locked_mirrored_fields(q_sub, previous=q_prev)
+		with self.assertRaises(frappe.ValidationError):
+			validate_locked_mirrored_fields(frappe._dict({**q_sub, "party_name": "Other Customer"}), previous=q_prev)
+
+		# 3. Stock Entry where basic_amount=500 and amount=0 in DB -> amount=500 on submit
+		se_prev = frappe._dict({
+			"doctype": "Stock Entry",
+			"name": "MAT-STE-0002",
+			"company": "Sister Co",
+			"is_intercompany": 1,
+			"intercompany_target_company": "MAIN",
+			"intercompany_linked_doc_doctype": "Stock Entry",
+			"intercompany_linked_doc_name": "MAT-STE-0001",
+			"intercompany_linked_company": "MAIN",
+			"flags": frappe._dict(),
+			"items": [frappe._dict({"item_code": "ITEM-1", "uom": "Nos", "qty": 5.0, "basic_rate": 100.0, "basic_amount": 500.0, "amount": 0.0})],
+		})
+		se_sub = frappe._dict({
+			**se_prev,
+			"flags": frappe._dict(),
+			"items": [frappe._dict({"item_code": "ITEM-1", "uom": "Nos", "qty": 5.0, "basic_rate": 100.0, "basic_amount": 500.0, "amount": 500.0})],
+		})
+		validate_locked_mirrored_fields(se_sub, previous=se_prev)
+		with self.assertRaises(frappe.ValidationError):
+			validate_locked_mirrored_fields(
+				frappe._dict({**se_sub, "items": [frappe._dict({**se_sub["items"][0], "basic_rate": 120.0})]}),
+				previous=se_prev,
+			)
+
+		# 4. Payment Entry with uninitialized source_exchange_rate=0 -> 1.0 on submit
+		pe_prev = frappe._dict({
+			"doctype": "Payment Entry",
+			"name": "ACC-PAY-0002",
+			"company": "Sister Co",
+			"payment_type": "Receive",
+			"party_type": "Customer",
+			"party": "MAIN Customer",
+			"paid_amount": 1000.0,
+			"received_amount": 1000.0,
+			"source_exchange_rate": 0.0,
+			"target_exchange_rate": 0.0,
+			"is_intercompany": 1,
+			"intercompany_target_company": "MAIN",
+			"intercompany_linked_doc_doctype": "Payment Entry",
+			"intercompany_linked_doc_name": "ACC-PAY-0001",
+			"intercompany_linked_company": "MAIN",
+			"flags": frappe._dict(),
+		})
+		pe_sub = frappe._dict({**pe_prev, "source_exchange_rate": 1.0, "target_exchange_rate": 1.0, "flags": frappe._dict()})
+		validate_locked_mirrored_fields(pe_sub, previous=pe_prev)
+		with self.assertRaises(frappe.ValidationError):
+			validate_locked_mirrored_fields(frappe._dict({**pe_sub, "paid_amount": 900.0}), previous=pe_prev)
+
+		# 5. Precalculation helper populates totals & amounts cleanly before initial DB insert
+		_precalculate_mirrored_doc_totals(je_prev)
+		self.assertEqual(je_prev.total_debit, 50000.0)
+		self.assertEqual(je_prev.total_credit, 50000.0)
+
+		po_draft = frappe._dict({
+			"doctype": "Purchase Order",
+			"conversion_rate": 1.0,
+			"items": [frappe._dict({"qty": 2.0, "rate": 46000.0, "amount": 0.0, "base_rate": 0.0, "base_amount": 0.0})],
+		})
+		_precalculate_mirrored_doc_totals(po_draft)
+		self.assertEqual(po_draft["items"][0].amount, 92000.0)
+		self.assertEqual(po_draft.total, 92000.0)
+
+	def test_orphan_cancellation_allowed_when_source_deleted_or_cancelled(self):
+		"""Verify mirrored counterpart can cancel freely when local source doc is deleted or cancelled, while active/remote still block"""
+		from unittest.mock import patch
+
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			validate_intercompany_cancellation,
+		)
+
+		mirrored_je = frappe._dict({
+			"doctype": "Journal Entry",
+			"name": "ACC-JV-2026-00039",
+			"company": "ABC Company",
+			"is_intercompany": 1,
+			"intercompany_target_company": "MAIN",
+			"intercompany_linked_doc_doctype": "Journal Entry",
+			"intercompany_linked_doc_name": "ACC-JV-2026-00038",
+			"intercompany_linked_company": "MAIN",
+			"flags": frappe._dict(),
+		})
+
+		with patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link._get_intercompany_settings",
+			return_value={"cancellation_authority": "Source Company Only (Strict Control)"},
+		), patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.get_linked_counterpart_documents",
+			return_value=[],
+		):
+			# 1. Source was deleted -> must NOT raise Source Company Cancellation Authority
+			def mock_exists_deleted(dt, name=None, **kwargs):
+				if dt == "DocType" and name == "Journal Entry":
+					return True
+				if dt == "Journal Entry" and name == "ACC-JV-2026-00038":
+					return False
+				return False
+
+			with patch.object(frappe.db, "exists", side_effect=mock_exists_deleted):
+				validate_intercompany_cancellation(mirrored_je)
+
+			# 2. Source exists and is Cancelled (docstatus=2) -> must NOT raise
+			def mock_exists_present(dt, name=None, **kwargs):
+				if dt == "DocType" and name == "Journal Entry":
+					return True
+				if dt == "Journal Entry" and name == "ACC-JV-2026-00038":
+					return True
+				return False
+
+			with patch.object(frappe.db, "exists", side_effect=mock_exists_present), patch.object(
+				frappe.db, "get_value", return_value=2
+			):
+				validate_intercompany_cancellation(mirrored_je)
+
+			# 3. Source exists and is Submitted (docstatus=1) -> MUST throw
+			with patch.object(frappe.db, "exists", side_effect=mock_exists_present), patch.object(
+				frappe.db, "get_value", return_value=1
+			):
+				with self.assertRaises(Exception):
+					validate_intercompany_cancellation(mirrored_je)
+
+			# 4. Remote reference -> MUST still throw under Strict mode even though local doc doesn't exist
+			def mock_exists_remote(dt, name=None, **kwargs):
+				if dt == "DocType" and name in ("Journal Entry", "Inter Company Document Reference"):
+					return True
+				return False
+
+			with patch.object(frappe.db, "exists", side_effect=mock_exists_remote), patch.object(
+				frappe.db, "has_column", return_value=True
+			), patch.object(frappe.db, "get_value", return_value="ICDR-REM-1"):
+				with self.assertRaises(Exception):
+					validate_intercompany_cancellation(mirrored_je)
+
+	def test_trash_and_doc_ref_on_trash_unlink_target_markers(self):
+		"""Verify deleting source or manually deleting Inter Company Document Reference unlinks target intercompany_linked_doc_* fields"""
+		from unittest.mock import patch
+
+		from inter_company_transactions.inter_company_transactions.doctype.inter_company_document_reference.inter_company_document_reference import (
+			InterCompanyDocumentReference,
+		)
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			cleanup_intercompany_links_on_trash,
+		)
+
+		# 1. Source cleanup_intercompany_links_on_trash clears markers on surviving target doc
+		src_doc = frappe._dict({"doctype": "Journal Entry", "name": "ACC-JV-2026-00038"})
+		set_calls = []
+
+		def mock_sql_dict(query, params=None, pluck=False, as_dict=False, **kwargs):
+			if "Inter Company Document Reference" in query:
+				return [{
+					"name": "ICDR-0099",
+					"source_doctype": "Journal Entry",
+					"source_name": "ACC-JV-2026-00038",
+					"target_doctype": "Journal Entry",
+					"target_name": "ACC-JV-2026-00039",
+				}]
+			return []
+
+		with patch.object(frappe.db, "exists", return_value=True), patch.object(
+			frappe.db, "has_column", return_value=True
+		), patch.object(
+			frappe.db, "get_value", return_value="ACC-JV-2026-00038"
+		), patch.object(
+			frappe.db, "set_value", side_effect=lambda dt, name, vals, **kw: set_calls.append((dt, name, vals))
+		), patch.object(
+			frappe.db, "sql", side_effect=mock_sql_dict
+		), patch.object(frappe, "delete_doc"):
+			cleanup_intercompany_links_on_trash(src_doc)
+			self.assertEqual(len(set_calls), 1)
+			self.assertEqual(set_calls[0][0], "Journal Entry")
+			self.assertEqual(set_calls[0][1], "ACC-JV-2026-00039")
+			self.assertEqual(set_calls[0][2]["intercompany_linked_doc_name"], "")
+
+		# 2. Manual deletion of Inter Company Document Reference clears markers via on_trash
+		ref_doc = InterCompanyDocumentReference.__new__(InterCompanyDocumentReference)
+		ref_doc.target_doctype = "Journal Entry"
+		ref_doc.target_name = "ACC-JV-2026-00039"
+		manual_set_calls = []
+
+		with patch.object(frappe.db, "exists", return_value=True), patch.object(
+			frappe.db, "has_column", return_value=True
+		), patch.object(
+			frappe.db, "get_value", return_value="ACC-JV-2026-00038"
+		), patch.object(
+			frappe.db, "set_value", side_effect=lambda dt, name, vals, **kw: manual_set_calls.append((dt, name, vals))
+		):
+			ref_doc.on_trash()
+			self.assertEqual(len(manual_set_calls), 1)
+			self.assertEqual(manual_set_calls[0][1], "ACC-JV-2026-00039")
+			self.assertEqual(manual_set_calls[0][2]["intercompany_linked_doc_doctype"], "")
+
+	def test_delete_mirrored_draft_and_unlink_mirrored_document_endpoints(self):
+		"""Verify delete_mirrored_draft enforces docstatus=0 + permission and unlink_mirrored_document works on submitted orphans"""
+		from unittest.mock import patch
+
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			delete_mirrored_draft,
+			unlink_mirrored_document,
+		)
+
+		draft_je = frappe._dict({"doctype": "Journal Entry", "name": "ACC-JV-DRAFT-1", "docstatus": 0})
+		sub_je = frappe._dict({
+			"doctype": "Journal Entry",
+			"name": "ACC-JV-2026-00039",
+			"docstatus": 1,
+			"intercompany_linked_doc_doctype": "Journal Entry",
+			"intercompany_linked_doc_name": "ACC-JV-2026-00038",
+		})
+
+		# 1. delete_mirrored_draft deletes Draft when permitted
+		deleted = []
+		with patch.object(frappe.db, "exists", return_value=True), patch.object(
+			frappe, "has_permission", return_value=True
+		), patch.object(frappe, "get_doc", return_value=draft_je), patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.cleanup_intercompany_links_on_trash"
+		), patch.object(
+			frappe, "delete_doc", side_effect=lambda dt, name, **kw: deleted.append((dt, name))
+		):
+			res = delete_mirrored_draft("Journal Entry", "ACC-JV-DRAFT-1")
+			self.assertTrue(res["deleted"])
+			self.assertIn(("Journal Entry", "ACC-JV-DRAFT-1"), deleted)
+
+		# 2. delete_mirrored_draft rejects Submitted doc
+		with patch.object(frappe.db, "exists", return_value=True), patch.object(
+			frappe, "has_permission", return_value=True
+		), patch.object(frappe, "get_doc", return_value=sub_je):
+			with self.assertRaises(Exception):
+				delete_mirrored_draft("Journal Entry", "ACC-JV-2026-00039")
+
+		# 3. unlink_mirrored_document unlinks Submitted orphan via cancel permission
+		cleared = []
+
+		def mock_unlink_exists(dt, name=None, **kwargs):
+			if dt == "Journal Entry" and name == "ACC-JV-2026-00039":
+				return True
+			if dt == "Journal Entry" and name == "ACC-JV-2026-00038":
+				return False
+			if dt == "DocType":
+				return False
+			return False
+
+		def mock_has_perm(dt, ptype="read", doc=None, **kwargs):
+			return ptype == "cancel"
+
+		with patch.object(frappe.db, "exists", side_effect=mock_unlink_exists), patch.object(
+			frappe, "get_doc", return_value=sub_je
+		), patch.object(frappe, "has_permission", side_effect=mock_has_perm), patch.object(
+			frappe, "get_roles", return_value=["Accounts User"]
+		), patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link._clear_mirrored_link_markers",
+			side_effect=lambda dt, n: cleared.append((dt, n)),
+		):
+			res = unlink_mirrored_document("Journal Entry", "ACC-JV-2026-00039")
+			self.assertTrue(res["unlinked"])
+			self.assertEqual(cleared, [("Journal Entry", "ACC-JV-2026-00039")])

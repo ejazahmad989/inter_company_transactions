@@ -453,8 +453,17 @@ def receive_remote_transaction(payload=None):
 	party_name = resolve_counterparty_for_remote_source(source_company, target_doctype, target_company)
 	if target_doctype in ["Purchase Order", "Purchase Invoice", "Purchase Receipt", "Supplier Quotation"]:
 		target_doc.supplier = party_name
-	elif target_doctype in ["Sales Order", "Sales Invoice", "Delivery Note", "Quotation"]:
+	elif target_doctype == "Quotation":
+		target_doc.quotation_to = "Customer"
+		target_doc.party_name = party_name
+	elif target_doctype in ["Sales Order", "Sales Invoice", "Delivery Note"]:
 		target_doc.customer = party_name
+
+	# Set currency and conversion_rate on trading vouchers when available
+	if data.get("currency") and hasattr(target_doc, "currency"):
+		target_doc.currency = data.get("currency")
+	if data.get("conversion_rate") and hasattr(target_doc, "conversion_rate"):
+		target_doc.conversion_rate = flt(data.get("conversion_rate") or 1.0)
 
 	# Map Stock Entry (Company 1 Material Issue -> Company 2 Material Receipt)
 	if target_doctype == "Stock Entry":
@@ -472,15 +481,17 @@ def receive_remote_transaction(payload=None):
 		for row in data.get("items", []):
 			resolved_item_code = resolve_item_code_for_remote(row.get("item_code"), target_company)
 			basic_rate = flt(row.get("basic_rate") or row.get("valuation_rate") or row.get("rate") or 0.0)
+			qty = flt(row.get("qty") or 1.0)
 			se_row = {
 				"item_code": resolved_item_code,
-				"qty": flt(row.get("qty") or 1.0),
+				"qty": qty,
 				"uom": row.get("uom") or "Nos",
 				"conversion_factor": flt(row.get("conversion_factor") or 1.0),
 				"s_warehouse": None,
 				"t_warehouse": target_warehouse,
 				"basic_rate": basic_rate,
-				"basic_amount": flt(basic_rate * flt(row.get("qty") or 1.0)),
+				"basic_amount": flt(basic_rate * qty, 2),
+				"amount": flt(basic_rate * qty, 2),
 			}
 			if basic_rate <= 0:
 				se_row["allow_zero_valuation_rate"] = 1
@@ -521,30 +532,44 @@ def receive_remote_transaction(payload=None):
 				payable_acct = frappe.db.get_value("Company", target_company, "default_payable_account")
 				target_doc.append("accounts", {
 					"account": expense_acct,
+					"exchange_rate": 1.0,
 					"debit_in_account_currency": flt(total_amt, 2),
 					"credit_in_account_currency": 0,
+					"debit": flt(total_amt, 2),
+					"credit": 0,
 				})
 				if party_name and payable_acct:
 					target_doc.append("accounts", {
 						"account": payable_acct,
+						"exchange_rate": 1.0,
 						"party_type": "Supplier",
 						"party": party_name,
 						"debit_in_account_currency": 0,
 						"credit_in_account_currency": flt(total_amt, 2),
+						"debit": 0,
+						"credit": flt(total_amt, 2),
 					})
 				else:
 					target_doc.append("accounts", {
 						"account": clearing_account or expense_acct,
+						"exchange_rate": 1.0,
 						"debit_in_account_currency": 0,
 						"credit_in_account_currency": flt(total_amt, 2),
+						"debit": 0,
+						"credit": flt(total_amt, 2),
 					})
 		else:
 			# Post mirrored entries
 			for acc_row in data.get("accounts", []):
+				dr = flt(acc_row.get("credit_in_account_currency"))
+				cr = flt(acc_row.get("debit_in_account_currency"))
 				target_doc.append("accounts", {
 					"account": clearing_account,
-					"debit_in_account_currency": flt(acc_row.get("credit_in_account_currency")),
-					"credit_in_account_currency": flt(acc_row.get("debit_in_account_currency"))
+					"exchange_rate": 1.0,
+					"debit_in_account_currency": dr,
+					"credit_in_account_currency": cr,
+					"debit": dr,
+					"credit": cr,
 				})
 
 	# Payment Entry specifics
@@ -555,8 +580,13 @@ def receive_remote_transaction(payload=None):
 		target_doc.party = party_name
 		target_doc.paid_amount = flt(data.get("received_amount") or data.get("paid_amount") or 0.0)
 		target_doc.received_amount = flt(data.get("paid_amount") or data.get("received_amount") or 0.0)
+		if not flt(getattr(target_doc, "source_exchange_rate", 0)):
+			target_doc.source_exchange_rate = 1.0
+		if not flt(getattr(target_doc, "target_exchange_rate", 0)):
+			target_doc.target_exchange_rate = 1.0
 
 	# Set Intercompany Link Markers
+	target_doc.is_intercompany = 1
 	target_doc.intercompany_linked_doc_doctype = source_doctype
 	target_doc.intercompany_linked_doc_name = source_name
 	target_doc.intercompany_linked_company = source_company
@@ -566,12 +596,18 @@ def receive_remote_transaction(payload=None):
 	# before final submission; create permission was verified above.
 	target_doc.flags.ignore_permissions = True
 	target_doc.flags.ignore_mandatory = True
+	target_doc.flags.ict_system_sync = True
 
 	try:
 		if hasattr(target_doc, "set_missing_values"):
 			target_doc.set_missing_values(for_validate=True)
 	except Exception:
 		pass
+
+	from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+		_precalculate_mirrored_doc_totals,
+	)
+	_precalculate_mirrored_doc_totals(target_doc)
 
 	target_doc.insert(ignore_permissions=True, ignore_mandatory=True)
 
@@ -589,6 +625,8 @@ def receive_remote_transaction(payload=None):
 		try:
 			if hasattr(frappe.db, "savepoint"):
 				frappe.db.savepoint("ict_remote_submit")
+			target_doc.flags.ignore_permissions = True
+			target_doc.flags.ict_system_sync = True
 			target_doc.submit()
 		except Exception:
 			if hasattr(frappe.db, "rollback"):

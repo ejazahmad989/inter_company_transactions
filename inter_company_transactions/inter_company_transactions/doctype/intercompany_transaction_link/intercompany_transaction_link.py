@@ -389,7 +389,8 @@ def create_linked_documents(doc, method=None):
                 linked_doc.intercompany_linked_company = doc.company
                 linked_doc.intercompany_target_company = doc.company
 
-                # Apply tax handling strategy cleanly
+                # Apply tax handling strategy cleanly and pre-calculate derived totals
+                # so mirrored drafts are stored with valid amounts/totals and submit cleanly.
                 if (
                     linked_doc.doctype in ("Sales Order", "Purchase Order", "Sales Invoice", "Purchase Invoice")
                     and settings.get("tax_handling_strategy") == "Apply Target Company Tax Templates"
@@ -397,10 +398,10 @@ def create_linked_documents(doc, method=None):
                     try:
                         if hasattr(linked_doc, "set_taxes"):
                             linked_doc.set_taxes()
-                        if hasattr(linked_doc, "calculate_taxes_and_totals"):
-                            linked_doc.calculate_taxes_and_totals()
                     except Exception:
                         pass
+
+                _precalculate_mirrored_doc_totals(linked_doc)
 
                 # Cross-company mirror creation: source submission is already authorized by an enabled
                 # Intercompany Transaction Link, while target accountants may restrict direct User Permissions
@@ -699,29 +700,61 @@ def validate_intercompany_cancellation(doc, method=None):
                 }
 
         if is_target_counterpart and source_info:
-            esc = frappe.utils.escape_html
-            frappe.throw(
-                _(
-                    "<div style='font-size: 13px; line-height: 1.6;'>"
-                    "<h4><b>Cancellation Restricted to Source Company</b></h4>"
-                    "<b>{0} {1}</b> in company <b>{2}</b> is a mirrored inter-company entry "
-                    "generated from <b>{3} {4}</b> in company <b>{5}</b>.<br><br>"
-                    "Under current <b>Inter Company Settings</b> (<i>Source Company Only</i>), "
-                    "only the originating company (<b>{5}</b>) can cancel or amend this transaction pair "
-                    "so both ledgers remain 100% tallied.<br><br>"
-                    "<b>Required Action:</b> Please contact the accounting team in <b>{5}</b> "
-                    "to cancel <b>{3} {4}</b>, which will automatically cancel this entry."
-                    "</div>"
-                ).format(
-                    esc(doc.doctype),
-                    esc(doc.name),
-                    esc(doc.company),
-                    esc(source_info.get("doctype") or ""),
-                    esc(source_info.get("name") or ""),
-                    esc(source_info.get("company") or _("Source Company")),
-                ),
-                title=_("Source Company Cancellation Authority"),
-            )
+            src_dt = source_info.get("doctype") or ""
+            src_name = source_info.get("name") or ""
+            is_remote_ref = False
+            if hasattr(frappe, "db") and frappe.db and frappe.db.exists("DocType", "Inter Company Document Reference"):
+                if frappe.db.has_column("Inter Company Document Reference", "is_remote"):
+                    is_remote_ref = bool(
+                        frappe.db.get_value(
+                            "Inter Company Document Reference",
+                            {"target_doctype": doc.doctype, "target_name": doc.name, "is_remote": 1},
+                            "name",
+                        )
+                    )
+
+            source_still_active = True
+            if (
+                not is_remote_ref
+                and src_dt
+                and src_name
+                and hasattr(frappe, "db")
+                and frappe.db
+                and frappe.db.exists("DocType", src_dt)
+            ):
+                if not frappe.db.exists(src_dt, src_name):
+                    source_still_active = False
+                else:
+                    src_docstatus = frappe.db.get_value(src_dt, src_name, "docstatus")
+                    if cint(src_docstatus) == 2:
+                        source_still_active = False
+
+            if source_still_active:
+                esc = frappe.utils.escape_html
+                frappe.throw(
+                    _(
+                        "<div style='font-size: 13px; line-height: 1.6;'>"
+                        "<h4><b>Cancellation Restricted to Source Company</b></h4>"
+                        "<b>{0} {1}</b> in company <b>{2}</b> is a mirrored inter-company entry "
+                        "generated from <b>{3} {4}</b> in company <b>{5}</b>.<br><br>"
+                        "Under current <b>Inter Company Settings</b> (<i>Source Company Only</i>), "
+                        "only the originating company (<b>{5}</b>) can cancel or amend this transaction pair "
+                        "so both ledgers remain 100% tallied.<br><br>"
+                        "<b>Required Action:</b> Contact the accounting team in <b>{5}</b> "
+                        "to cancel <b>{3} {4}</b> (which automatically cancels this entry), "
+                        "or ask your Administrator to delete its link in <b>Inter Company Document Reference</b> "
+                        "to manage it independently."
+                        "</div>"
+                    ).format(
+                        esc(doc.doctype),
+                        esc(doc.name),
+                        esc(doc.company),
+                        esc(src_dt),
+                        esc(src_name),
+                        esc(source_info.get("company") or _("Source Company")),
+                    ),
+                    title=_("Source Company Cancellation Authority"),
+                )
 
     # Check counterpart documents
     counterparts = get_linked_counterpart_documents(doc)
@@ -854,11 +887,28 @@ def cancel_linked_documents(doc, method=None):
             )
 
 
+def _clear_mirrored_link_markers(doctype, docname):
+    """Clear intercompany_linked_doc_* markers on a document so it is no longer locked to a deleted counterpart."""
+    if not doctype or not docname or not (hasattr(frappe, "db") and frappe.db):
+        return
+    if not frappe.db.exists(doctype, docname):
+        return
+    updates = {}
+    for fn in ("intercompany_linked_doc_doctype", "intercompany_linked_doc_name", "intercompany_linked_company"):
+        if frappe.db.has_column(doctype, fn):
+            if frappe.db.get_value(doctype, docname, fn):
+                updates[fn] = ""
+    if updates:
+        frappe.db.set_value(doctype, docname, updates, update_modified=False)
+
+
 def cleanup_intercompany_links_on_trash(doc, method=None):
     """
     Hooked on on_trash across supported transaction DocTypes.
-    Prevents LinkExistsError ('Cannot delete or cancel because ... is linked with Inter Company Document Reference')
-    by purging audit tracking rows when a cancelled or draft voucher is permanently deleted.
+    1. Prevents LinkExistsError ('Cannot delete or cancel because ... is linked with Inter Company Document Reference')
+       by purging audit tracking rows when a cancelled or draft voucher is permanently deleted.
+    2. Unlinks any surviving target counterpart when the source document is permanently deleted so the
+       counterpart is never trapped with a dead reference.
     """
     if not hasattr(doc, "doctype") or not getattr(doc, "name", None):
         return
@@ -867,22 +917,27 @@ def cleanup_intercompany_links_on_trash(doc, method=None):
 
     try:
         if frappe.db.exists("DocType", "Inter Company Document Reference"):
-            ref_names = frappe.db.sql(
+            ref_rows = frappe.db.sql(
                 """
-                SELECT name FROM `tabInter Company Document Reference`
+                SELECT name, source_doctype, source_name, target_doctype, target_name
+                FROM `tabInter Company Document Reference`
                 WHERE (source_doctype = %s AND source_name = %s)
                    OR (target_doctype = %s AND target_name = %s)
                 """,
                 (doc.doctype, doc.name, doc.doctype, doc.name),
-                pluck=True,
+                as_dict=True,
             )
-            for ref_name in (ref_names or []):
-                frappe.delete_doc(
-                    "Inter Company Document Reference",
-                    ref_name,
-                    ignore_permissions=True,
-                    force=True,
-                )
+            for ref in (ref_rows or []):
+                ref_name = ref.get("name") if isinstance(ref, dict) else ref
+                if isinstance(ref, dict) and ref.get("source_doctype") == doc.doctype and ref.get("source_name") == doc.name:
+                    _clear_mirrored_link_markers(ref.get("target_doctype"), ref.get("target_name"))
+                if ref_name:
+                    frappe.delete_doc(
+                        "Inter Company Document Reference",
+                        ref_name,
+                        ignore_permissions=True,
+                        force=True,
+                    )
 
         if frappe.db.exists("DocType", "Inter Company Error Log"):
             err_names = frappe.db.sql(
@@ -3154,29 +3209,36 @@ def create_journal_entry_from_lcv(source_lcv, mapping, linked_company, direction
 
     # Credit Payable (to Sister Supplier) or Intercompany Clearing Account
     payable_account = frappe.db.get_value("Company", je.company, "default_payable_account")
+    debit_row = _build_je_row(
+        debit_account,
+        "debit",
+        converted_amt,
+        target_ccy,
+        tx_date=je.posting_date,
+        cost_center=default_cost_center,
+    )
     if supplier and payable_account:
-        credit_row = {
-            "account": payable_account,
-            "party_type": "Supplier",
-            "party": supplier,
-            "debit_in_account_currency": 0,
-            "credit_in_account_currency": converted_amt,
-            "cost_center": default_cost_center,
-        }
+        credit_row = _build_je_row(
+            payable_account,
+            "credit",
+            converted_amt,
+            target_ccy,
+            tx_date=je.posting_date,
+            party_type="Supplier",
+            party=supplier,
+            cost_center=default_cost_center,
+        )
     else:
-        credit_row = {
-            "account": clearing_account or debit_account,
-            "debit_in_account_currency": 0,
-            "credit_in_account_currency": converted_amt,
-            "cost_center": default_cost_center,
-        }
+        credit_row = _build_je_row(
+            clearing_account or debit_account,
+            "credit",
+            converted_amt,
+            target_ccy,
+            tx_date=je.posting_date,
+            cost_center=default_cost_center,
+        )
 
-    je.append("accounts", {
-        "account": debit_account,
-        "debit_in_account_currency": converted_amt,
-        "credit_in_account_currency": 0,
-        "cost_center": default_cost_center,
-    })
+    je.append("accounts", debit_row)
     je.append("accounts", credit_row)
 
     je.intercompany_linked_doc_doctype = source_lcv.doctype
@@ -3213,6 +3275,8 @@ def _build_je_row(account, side, target_base_amount, target_company_currency, fx
         if raw_fx <= 0:
             raw_fx = 1.0
         amt_in_acc_ccy = flt(base_amt / raw_fx, 2)
+        if amt_in_acc_ccy > 0 and abs(flt(amt_in_acc_ccy * raw_fx, 2) - base_amt) > 0.001:
+            raw_fx = base_amt / amt_in_acc_ccy
     else:
         amt_in_acc_ccy = base_amt
 
@@ -3511,6 +3575,8 @@ def create_document_reference(source_doc, target_doc):
                 "target_company": target_doc.company
             })
             ref_doc.flags.ignore_permissions = True
+            ref_doc.flags.ignore_links = True
+            ref_doc.flags.ignore_mandatory = True
             ref_doc.insert(ignore_permissions=True)
     except Exception as e:
         if hasattr(frappe.db, "rollback"):
@@ -3754,46 +3820,142 @@ def trigger_manual_intercompany_sync(doctype, name):
 def get_linked_counterpart_for_form(doctype, name):
     """
     Lightweight lookup used by Desk JS on Source or Target forms to display
-    'Open Linked ...' and 'Raise Dispute' controls without modifying source records.
+    'Open Linked ...', 'Raise Dispute', and orphan-unlink / draft-delete controls
+    without modifying source records.
     """
     if doctype not in _SUPPORTED_INTERCOMPANY_DOCTYPES or not name:
         return {"counterparts": []}
-    if not (hasattr(frappe, "db") and frappe.db and frappe.db.exists("DocType", "Inter Company Document Reference")):
+    if not (hasattr(frappe, "db") and frappe.db and frappe.db.exists(doctype, name)):
         return {"counterparts": []}
 
     frappe.has_permission(doctype, "read", name, throw=True)
     counterparts = []
 
-    src_refs = frappe.get_all(
-        "Inter Company Document Reference",
-        filters={"source_doctype": doctype, "source_name": name},
-        fields=["target_doctype", "target_name", "target_company"],
-        ignore_permissions=True,
-    )
-    for r in src_refs:
-        counterparts.append({
-            "doctype": r.target_doctype,
-            "name": r.target_name,
-            "company": r.target_company,
-            "relationship": "target",
-        })
-
-    if not counterparts:
-        tgt_refs = frappe.get_all(
+    if frappe.db.exists("DocType", "Inter Company Document Reference"):
+        src_refs = frappe.get_all(
             "Inter Company Document Reference",
-            filters={"target_doctype": doctype, "target_name": name},
-            fields=["source_doctype", "source_name", "source_company"],
+            filters={"source_doctype": doctype, "source_name": name},
+            fields=["target_doctype", "target_name", "target_company"],
             ignore_permissions=True,
         )
-        for r in tgt_refs:
+        for r in src_refs:
             counterparts.append({
-                "doctype": r.source_doctype,
-                "name": r.source_name,
-                "company": r.source_company,
+                "doctype": r.target_doctype,
+                "name": r.target_name,
+                "company": r.target_company,
+                "relationship": "target",
+                "exists": bool(frappe.db.exists(r.target_doctype, r.target_name)),
+            })
+
+        if not counterparts:
+            ref_fields = ["source_doctype", "source_name", "source_company"]
+            has_is_remote = frappe.db.has_column("Inter Company Document Reference", "is_remote")
+            if has_is_remote:
+                ref_fields.append("is_remote")
+            tgt_refs = frappe.get_all(
+                "Inter Company Document Reference",
+                filters={"target_doctype": doctype, "target_name": name},
+                fields=ref_fields,
+                ignore_permissions=True,
+            )
+            for r in tgt_refs:
+                is_remote = cint(r.get("is_remote")) if has_is_remote else 0
+                src_exists = True if is_remote else bool(frappe.db.exists(r.source_doctype, r.source_name))
+                src_status = frappe.db.get_value(r.source_doctype, r.source_name, "docstatus") if (not is_remote and src_exists) else None
+                counterparts.append({
+                    "doctype": r.source_doctype,
+                    "name": r.source_name,
+                    "company": r.source_company,
+                    "relationship": "source",
+                    "exists": src_exists,
+                    "docstatus": src_status,
+                    "is_remote": is_remote,
+                })
+
+    if not counterparts:
+        linked_dt = frappe.db.get_value(doctype, name, "intercompany_linked_doc_doctype") if frappe.db.has_column(doctype, "intercompany_linked_doc_doctype") else None
+        linked_name = frappe.db.get_value(doctype, name, "intercompany_linked_doc_name") if frappe.db.has_column(doctype, "intercompany_linked_doc_name") else None
+        linked_co = frappe.db.get_value(doctype, name, "intercompany_linked_company") if frappe.db.has_column(doctype, "intercompany_linked_company") else None
+        if linked_dt and linked_name:
+            src_exists = bool(frappe.db.exists(linked_dt, linked_name))
+            src_status = frappe.db.get_value(linked_dt, linked_name, "docstatus") if src_exists else None
+            counterparts.append({
+                "doctype": linked_dt,
+                "name": linked_name,
+                "company": linked_co or "",
                 "relationship": "source",
+                "exists": src_exists,
+                "docstatus": src_status,
+                "is_remote": 0,
             })
 
     return {"counterparts": counterparts}
+
+
+@frappe.whitelist()
+def delete_mirrored_draft(doctype, name):
+    """Safely deletes a mirrored draft (docstatus=0) and cleans up its Inter Company Document Reference rows."""
+    if doctype not in _SUPPORTED_INTERCOMPANY_DOCTYPES or not name:
+        frappe.throw(_("Invalid document specified for deletion."))
+    if not frappe.db.exists(doctype, name):
+        return {"success": True, "deleted": True}
+
+    frappe.has_permission(doctype, "delete", name, throw=True)
+    doc = frappe.get_doc(doctype, name)
+    if cint(doc.docstatus) != 0:
+        frappe.throw(_("Only Draft documents can be deleted directly. Please Cancel the document first."))
+
+    cleanup_intercompany_links_on_trash(doc)
+    frappe.delete_doc(doctype, name)
+    return {"success": True, "deleted": True}
+
+
+@frappe.whitelist()
+def unlink_mirrored_document(doctype, name):
+    """
+    Unlinks a mirrored counterpart whose source document was deleted/cancelled (or by Admin override),
+    clearing intercompany_linked_doc_* fields and any stale Inter Company Document Reference rows.
+    """
+    if doctype not in _SUPPORTED_INTERCOMPANY_DOCTYPES or not name:
+        frappe.throw(_("Invalid document specified."))
+    if not frappe.db.exists(doctype, name):
+        frappe.throw(_("{0} {1} was not found.").format(doctype, name))
+
+    doc = frappe.get_doc(doctype, name)
+    docstatus = cint(doc.docstatus)
+    has_write = frappe.has_permission(doctype, "write", doc)
+    has_cancel = docstatus == 1 and frappe.has_permission(doctype, "cancel", doc)
+    has_delete = docstatus in (0, 2) and frappe.has_permission(doctype, "delete", doc)
+    if not (has_write or has_cancel or has_delete):
+        frappe.has_permission(doctype, "cancel" if docstatus == 1 else "write", doc, throw=True)
+
+    src_dt = doc.get("intercompany_linked_doc_doctype")
+    src_name = doc.get("intercompany_linked_doc_name")
+    is_admin = "System Manager" in frappe.get_roles() or "Accounts Manager" in frappe.get_roles()
+    src_missing_or_cancelled = (
+        not src_dt
+        or not src_name
+        or not frappe.db.exists(src_dt, src_name)
+        or cint(frappe.db.get_value(src_dt, src_name, "docstatus")) == 2
+    )
+
+    if not src_missing_or_cancelled and not is_admin:
+        frappe.throw(_("Only orphaned/cancelled links can be unlinked directly, or ask System Manager / Accounts Manager."))
+
+    if frappe.db.exists("DocType", "Inter Company Document Reference"):
+        ref_names = frappe.db.sql(
+            """
+            SELECT name FROM `tabInter Company Document Reference`
+            WHERE target_doctype = %s AND target_name = %s
+            """,
+            (doctype, name),
+            pluck=True,
+        )
+        for rn in (ref_names or []):
+            frappe.delete_doc("Inter Company Document Reference", rn, ignore_permissions=True, force=True)
+
+    _clear_mirrored_link_markers(doctype, name)
+    return {"success": True, "unlinked": True}
 
 
 @frappe.whitelist()
@@ -4124,16 +4286,152 @@ def resolve_party_target_company(party_name, party_type=None, current_company=No
     return None
 
 
+def _precalculate_mirrored_doc_totals(doc):
+    """
+    Pre-calculates ERPNext derived line amounts and document totals on mirrored drafts
+    before initial DB insert (since create_* builders set flags.ignore_validate = True).
+    Works uniformly across all 14 supported intercompany DocTypes.
+    """
+    if not doc:
+        return
+
+    dt = getattr(doc, "doctype", None)
+    if dt == "Journal Entry":
+        company_ccy = None
+        if getattr(doc, "company", None) and hasattr(frappe, "db") and frappe.db:
+            try:
+                company_ccy = frappe.db.get_value("Company", doc.company, "default_currency")
+            except Exception:
+                company_ccy = None
+
+        for row in (doc.get("accounts") or []):
+            acct = row.get("account")
+            if not row.get("account_currency"):
+                acc_ccy = None
+                if acct and hasattr(frappe, "db") and frappe.db:
+                    try:
+                        acc_ccy = frappe.db.get_value("Account", acct, "account_currency")
+                    except Exception:
+                        acc_ccy = None
+                if acc_ccy or company_ccy:
+                    row["account_currency"] = acc_ccy or company_ccy
+            if abs(flt(row.get("exchange_rate"))) <= 0.0001:
+                row["exchange_rate"] = 1.0
+            fx = flt(row.get("exchange_rate") or 1.0)
+            if abs(flt(row.get("debit"))) <= 0.0001 and abs(flt(row.get("debit_in_account_currency"))) > 0.0001:
+                row["debit"] = flt(flt(row.get("debit_in_account_currency")) * fx, 2)
+            if abs(flt(row.get("credit"))) <= 0.0001 and abs(flt(row.get("credit_in_account_currency"))) > 0.0001:
+                row["credit"] = flt(flt(row.get("credit_in_account_currency")) * fx, 2)
+
+        try:
+            if hasattr(doc, "set_amounts_in_company_currency"):
+                doc.set_amounts_in_company_currency()
+        except Exception:
+            pass
+        try:
+            if hasattr(doc, "set_total_debit_credit"):
+                doc.set_total_debit_credit()
+        except Exception:
+            pass
+
+        accounts = doc.get("accounts") or []
+        if accounts and abs(flt(doc.get("total_debit"))) <= 0.0001 and abs(flt(doc.get("total_credit"))) <= 0.0001:
+            doc.total_debit = flt(sum(flt(r.get("debit") or r.get("debit_in_account_currency")) for r in accounts), 2)
+            doc.total_credit = flt(sum(flt(r.get("credit") or r.get("credit_in_account_currency")) for r in accounts), 2)
+        return
+
+    if dt == "Stock Entry":
+        try:
+            if hasattr(doc, "calculate_rate_and_amount"):
+                doc.calculate_rate_and_amount()
+        except Exception:
+            pass
+        items = doc.get("items") or []
+        for row in items:
+            qty = flt(row.get("qty"))
+            brate = flt(row.get("basic_rate"))
+            if abs(flt(row.get("basic_amount"))) <= 0.0001 and qty and brate:
+                row["basic_amount"] = flt(qty * brate, 2)
+            if abs(flt(row.get("amount"))) <= 0.0001 and (flt(row.get("basic_amount")) or flt(row.get("additional_cost"))):
+                row["amount"] = flt(flt(row.get("basic_amount")) + flt(row.get("additional_cost")), 2)
+        if items and abs(flt(doc.get("total_amount"))) <= 0.0001:
+            total_val = flt(sum(flt(r.get("amount") or r.get("basic_amount")) for r in items), 2)
+            if hasattr(doc, "total_amount"):
+                doc.total_amount = total_val
+            if doc.get("purpose") == "Material Receipt" and hasattr(doc, "total_incoming_value"):
+                doc.total_incoming_value = total_val
+        return
+
+    if dt == "Payment Entry":
+        try:
+            if hasattr(doc, "set_amounts"):
+                doc.set_amounts()
+        except Exception:
+            pass
+        return
+
+    # Trading transactions (SO, PO, SI, PI, DN, PR, Quotation, Supplier Quotation)
+    try:
+        if hasattr(doc, "calculate_taxes_and_totals"):
+            doc.calculate_taxes_and_totals()
+    except Exception:
+        pass
+    items = doc.get("items") or []
+    conv_rate = flt(doc.get("conversion_rate") or 1.0)
+    for row in items:
+        qty = flt(row.get("qty"))
+        rate = flt(row.get("rate"))
+        if abs(flt(row.get("amount"))) <= 0.0001 and qty and rate:
+            amt = flt(qty * rate, 2)
+            row["amount"] = amt
+            if "base_rate" in row or hasattr(row, "base_rate"):
+                row["base_rate"] = flt(rate * conv_rate, 2)
+            if "base_amount" in row or hasattr(row, "base_amount"):
+                row["base_amount"] = flt(amt * conv_rate, 2)
+    if items and abs(flt(doc.get("total"))) <= 0.0001:
+        total_amt = flt(sum(flt(r.get("amount")) for r in items), 2)
+        if hasattr(doc, "total") or isinstance(doc, dict):
+            doc.total = total_amt
+        if hasattr(doc, "net_total") or isinstance(doc, dict):
+            doc.net_total = total_amt
+        if hasattr(doc, "grand_total") or isinstance(doc, dict):
+            doc.grand_total = total_amt
+
+
 def validate_locked_mirrored_fields(doc, previous=None):
     """
     Strictly prevents modifying currency, exchange rates, parties, or financial amounts/quantities
     on mirrored intercompany counterparts created by ICT (where intercompany_linked_doc_name is set).
+    Allows ERPNext to compute and populate derived 0/uninitialized totals/amounts on Submit
+    when underlying quantities, unit rates, and account debit/credit inputs remain untouched.
     Local operational classification fields (Warehouse, Cost Center, Expense/Income Account) remain editable.
     """
     if not doc or not doc.get("intercompany_linked_doc_name"):
         return
     if doc.flags.get("ict_system_sync"):
         return
+
+    src_dt = doc.get("intercompany_linked_doc_doctype")
+    src_name = doc.get("intercompany_linked_doc_name")
+    if (
+        src_dt
+        and src_name
+        and hasattr(frappe, "db")
+        and frappe.db
+        and frappe.db.exists("DocType", src_dt)
+        and not frappe.db.exists(src_dt, src_name)
+    ):
+        is_remote_ref = False
+        if frappe.db.exists("DocType", "Inter Company Document Reference") and frappe.db.has_column("Inter Company Document Reference", "is_remote"):
+            is_remote_ref = bool(
+                frappe.db.get_value(
+                    "Inter Company Document Reference",
+                    {"target_doctype": doc.doctype, "target_name": doc.name, "is_remote": 1},
+                    "name",
+                )
+            )
+        if not is_remote_ref:
+            return
 
     if previous is None:
         if hasattr(doc, "get_doc_before_save"):
@@ -4172,12 +4470,23 @@ def validate_locked_mirrored_fields(doc, previous=None):
         ("payment_type", _("Payment Type")),
         ("intercompany_target_company", _("Intercompany Target Company")),
     ]
+    if getattr(doc, "doctype", None) == "Quotation":
+        str_locked.extend([
+            ("quotation_to", _("Quotation To")),
+            ("party_name", _("Party Name")),
+        ])
+
     num_locked = [
+        ("paid_amount", _("Paid Amount")),
+        ("received_amount", _("Received Amount")),
+    ]
+    # Lock exchange rates & JE aggregate totals whenever initialized (> 0) so uncalculated
+    # mirrored drafts saved with ignore_validate=True (total_debit=0 / total_credit=0)
+    # still submit cleanly while row-level amounts remain strictly guarded below.
+    num_locked_if_nonzero = [
         ("conversion_rate", _("Exchange Rate")),
         ("source_exchange_rate", _("Source Exchange Rate")),
         ("target_exchange_rate", _("Target Exchange Rate")),
-        ("paid_amount", _("Paid Amount")),
-        ("received_amount", _("Received Amount")),
         ("total_debit", _("Total Debit")),
         ("total_credit", _("Total Credit")),
     ]
@@ -4187,11 +4496,18 @@ def validate_locked_mirrored_fields(doc, previous=None):
 
     for fname, label in str_locked:
         if _has_field(previous, fname):
+            if fname == "currency" and not previous.get(fname):
+                continue
             if _differs(doc.get(fname), previous.get(fname), is_num=False):
                 changed_fields.append(label)
 
     for fname, label in num_locked:
         if _has_field(previous, fname):
+            if _differs(doc.get(fname), previous.get(fname), is_num=True):
+                changed_fields.append(label)
+
+    for fname, label in num_locked_if_nonzero:
+        if _has_field(previous, fname) and abs(flt(previous.get(fname))) > 0.0001:
             if _differs(doc.get(fname), previous.get(fname), is_num=True):
                 changed_fields.append(label)
 
@@ -4216,7 +4532,15 @@ def validate_locked_mirrored_fields(doc, previous=None):
                     ("amount", "Amount"),
                     ("basic_amount", "Basic Amount"),
                 ]:
-                    if (o_row.get(fname) is not None or n_row.get(fname) is not None) and _differs(n_row.get(fname), o_row.get(fname), is_num=True):
+                    o_val = o_row.get(fname)
+                    n_val = n_row.get(fname)
+                    if o_val is None and n_val is None:
+                        continue
+                    # Uncalculated derived amounts (amount=0 / basic_amount=0 from ignore_validate insert)
+                    # are recomputed by ERPNext on Submit while qty, rate & basic_rate remain locked.
+                    if fname in ("amount", "basic_amount") and abs(flt(o_val)) <= 0.0001:
+                        continue
+                    if _differs(n_val, o_val, is_num=True):
                         changed_fields.append(_("Row #{0} {1}").format(idx, _(label)))
 
     # Journal Entry Account child table locked fields
@@ -4228,7 +4552,11 @@ def validate_locked_mirrored_fields(doc, previous=None):
         else:
             for idx, (n_row, o_row) in enumerate(zip(new_accts, old_accts), start=1):
                 for fname, label in [("account_currency", "Account Currency"), ("party_type", "Party Type"), ("party", "Party")]:
-                    if _differs(n_row.get(fname), o_row.get(fname), is_num=False):
+                    o_val = o_row.get(fname)
+                    n_val = n_row.get(fname)
+                    if fname == "account_currency" and not o_val:
+                        continue
+                    if _differs(n_val, o_val, is_num=False):
                         changed_fields.append(_("Account Row #{0} {1}").format(idx, _(label)))
                 for fname, label in [
                     ("exchange_rate", "Exchange Rate"),
@@ -4237,7 +4565,17 @@ def validate_locked_mirrored_fields(doc, previous=None):
                     ("debit", "Base Debit"),
                     ("credit", "Base Credit"),
                 ]:
-                    if (o_row.get(fname) is not None or n_row.get(fname) is not None) and _differs(n_row.get(fname), o_row.get(fname), is_num=True):
+                    o_val = o_row.get(fname)
+                    n_val = n_row.get(fname)
+                    if o_val is None and n_val is None:
+                        continue
+                    if fname == "exchange_rate" and abs(flt(o_val)) <= 0.0001:
+                        continue
+                    if fname == "debit" and abs(flt(o_val)) <= 0.0001 and abs(flt(o_row.get("debit_in_account_currency"))) > 0.0001:
+                        continue
+                    if fname == "credit" and abs(flt(o_val)) <= 0.0001 and abs(flt(o_row.get("credit_in_account_currency"))) > 0.0001:
+                        continue
+                    if _differs(n_val, o_val, is_num=True):
                         changed_fields.append(_("Account Row #{0} {1}").format(idx, _(label)))
 
     if changed_fields:
@@ -4309,7 +4647,12 @@ def auto_detect_intercompany_party(doc, method=None):
     party_map = get_intercompany_party_map(company)
     target_company = None
 
-    if doc.doctype in ["Sales Order", "Sales Invoice", "Delivery Note", "Quotation"]:
+    if doc.doctype == "Quotation":
+        customer = (doc.get("party_name") if doc.get("quotation_to") == "Customer" else None) or doc.get("customer")
+        if customer:
+            target_company = resolve_party_target_company(customer, "customer", company, party_map)
+
+    elif doc.doctype in ["Sales Order", "Sales Invoice", "Delivery Note"]:
         customer = doc.get("customer")
         if customer:
             target_company = resolve_party_target_company(customer, "customer", company, party_map)
