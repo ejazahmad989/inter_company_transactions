@@ -1,6 +1,0 @@
-{
-  "name": "Inter Company Transactions",
-  "description": "Frappe ERPNext custom app for automating inter-company transactions, workflows, and validations across linked companies",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
