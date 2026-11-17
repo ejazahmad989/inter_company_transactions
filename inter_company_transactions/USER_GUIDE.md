@@ -2,7 +2,7 @@
 **Version:** 2.0 (Enterprise Edition)  
 **Compatibility:** Frappe Framework v15 & v16 / ERPNext v15 & v16 (Certified)  
 **Author:** Ejaz Ahmed (ejazahmad989@gmail.com)  
-**Date:** September 2026  
+**Date:** November 2026  
 
 ---
 
@@ -17,13 +17,16 @@
    - [3.5 Inter Company Elimination Run](#35-inter-company-elimination-run)
    - [3.6 Inter Company Dispute](#36-inter-company-dispute)
    - [3.7 Inter Company Remote Site (Cross-Site Federation)](#37-inter-company-remote-site-cross-site-federation)
+   - [3.8 Inter Company Customer Group](#38-inter-company-customer-group)
+   - [3.9 Inter Company Document Reference (Audit Trail, Locking & Unlinking)](#39-inter-company-document-reference-audit-trail-locking--unlinking)
 4. [Step-by-Step Practical Examples](#4-step-by-step-practical-examples)
    - [Example A: Order-to-Cash & Procure-to-Pay Mirroring](#example-a-order-to-cash--procure-to-pay-mirroring)
-   - [Example B: Transfer Pricing Margin Calculation](#example-b-transfer-pricing-margin-calculation)
-   - [Example C: Multilateral Netting & Settlement Calculation](#example-c-multilateral-netting--settlement-calculation)
-   - [Example D: Raising and Resolving a Billing Dispute](#example-d-raising-and-resolving-a-billing-dispute)
-5. [Reporting & Executive Audit Tools](#5-reporting--executive-audit-tools)
-6. [Troubleshooting & Error Handling](#6-troubleshooting--error-handling)
+   - [Example B: Financial Mirroring & 2-Way Settlement](#example-b-financial-mirroring--2-way-settlement)
+   - [Example C: Transfer Pricing Policy (OECD Arm's Length Compliance)](#example-c-transfer-pricing-policy-oecd-arms-length-compliance)
+   - [Example D: Raising and Resolving an Inter Company Dispute](#example-d-raising-and-resolving-an-inter-company-dispute)
+5. [Multi-Version Compatibility: ERPNext v15 & v16](#5-multi-version-compatibility-erpnext-v15--v16)
+6. [Reporting & Executive Audit Tools](#6-reporting--executive-audit-tools)
+7. [Troubleshooting, Unlinking & Recovery](#7-troubleshooting-unlinking--recovery)
 
 ---
 
@@ -117,6 +120,7 @@ The engine supports real-time, automated document mirroring across all standard 
 | 11 | **Stock Entry** | **Stock Entry** | Bi-directional | *Material Issue* in Company A triggers an automated *Material Receipt* in Company B at the designated transfer valuation rate. |
 | 12 | **Journal Entry** | **Journal Entry** | Bi-directional | Cross-entity fund transfers or expense allocations automatically generate balancing voucher with reversed debit/credit accounts. |
 | 13 | **Payment Entry** | **Payment Entry** | Bi-directional | Payment made from Company A to Company B creates a matching Receipt voucher in Company B linked to the open intercompany invoice. |
+| 14 | **Landed Cost Voucher** | **Journal Entry** | Forward | Intercompany freight/customs recharge automatically creates a balanced payable/expense Journal Entry in the target sister company. |
 
 #### 3.1.2 Intelligent Auto-Switching in Intercompany Transaction Type
 When defining transaction pairings in `Intercompany Transaction Link` -> `Transaction Types` child table or `Intercompany Transaction Type`:
@@ -142,14 +146,11 @@ When defining transaction pairings in `Intercompany Transaction Link` -> `Transa
 ---
 
 #### 3.1.2 Unsupported Cross-Entity Transactions (What It CANNOT Do and WHY It Is a MUST)
-In enterprise multi-company accounting, certain ERPNext DocTypes **cannot and must not** be mirrored directly between separate legal entities. Attempting to mirror these documents directly would violate statutory financial compliance, corporate tax laws, and GAAP/IFRS standards:
+In enterprise multi-company accounting, certain ERPNext DocTypes **cannot and must not** be mirrored 1-to-1 into an identical DocType across separate legal entities because doing so would violate statutory financial compliance, tax laws, and GAAP/IFRS standards:
 
-1. **Landed Cost Voucher (LCV)**
-   - *Why It Cannot Be Mirrored:* A Landed Cost Voucher is strictly an **internal inventory valuation adjustment tool** within a single legal entity. Its sole purpose is to capitalize freight, customs, or handling costs into the moving-average or FIFO valuation rate of an existing Purchase Receipt. It does **not** create legal debtor/creditor claims.
-   - *What Is a MUST (Statutory Compliance):* If Sister Company A provides logistics, freight, or clearance services to Sister Company B:
-     - Company A **MUST** issue a standard service **Sales Invoice** to Company B.
-     - The engine mirrors this into a **Purchase Invoice** (Freight & Handling) in Company B.
-     - Company B can then optionally reference this Purchase Invoice inside its own internal Landed Cost Voucher if it wishes to capitalize those freight costs into inventory.
+1. **Landed Cost Voucher (Direct 1-to-1 LCV Mirroring)**
+   - *Why Direct LCV-to-LCV Cannot Be Mirrored:* A Landed Cost Voucher modifies the **internal inventory valuation rate** of an entity's own Purchase Receipt. Entity A's LCV cannot directly revalue Entity B's warehouse stock.
+   - *Supported Automation & Statutory Pattern:* When ticked `Is Intercompany`, submitting a Landed Cost Voucher recharges the freight/customs expense by generating a balanced **Journal Entry** in the target sister company (or Company A issues a **Sales Invoice** mirrored to a **Purchase Invoice** in Company B, which Company B can apply in its own internal LCV).
 
 2. **Subcontracting Order**
    - *Why It Cannot Be Mirrored Directly:* A Subcontracting Order in ERPNext v15 is bound to a single entity's internal Bill of Materials (BOM), supplied raw material tracking, and subcontracting receipt valuation algorithms. Sister entities operate independent inventory ledgers and separate tax jurisdictions.
@@ -182,6 +183,9 @@ In enterprise multi-company accounting, certain ERPNext DocTypes **cannot and mu
     - *Local Multi-Company (Single Database):* Both entities reside on the same bench site.
     - *Federated Cross-Site (REST API):* Entities operate on separate ERPNext instances across data centers.
   - `Default Transfer Rate Method`: Default pricing fallback (`Source Document Rate`, `Cost / Valuation Rate`, `Cost + Markup %`).
+  - `Cancellation Authority`:
+    - *Source Company Only (Strict Control):* Only the originating company can cancel or amend an active linked pair (propagates cancellation to the mirrored counterpart automatically).
+    - *Bidirectional (Either Side Cancels Both):* Either company can cancel the linked pair when no downstream payments/deliveries block cancellation.
 
 ### 3.3 Transfer Pricing Policy (OECD Compliance)
 * **Location:** `Inter Company > Transfer Pricing Policy`
@@ -317,6 +321,65 @@ By creating a designated **Inter Company Customer Group** and tagging it via the
 4. **Outcome in Trade & Reporting:**
    - When *Apex Global* issues a $100,000 Sales Invoice to *Apex ME*, it posts to `1310 - Intercompany Receivables` rather than third-party trade receivables.
    - On the **Inter Company Elimination Run**, selecting `Customer Group: Inter Company Trading Group` isolates 100% of inter-group invoices and generates the elimination journal entry with zero risk of touching external client balances.
+
+---
+
+### 3.9 Inter Company Document Reference (Audit Trail, Locking & Unlinking)
+* **Location:** `Inter Company > Inter Company Document Reference`
+* **Permissions:** Accessible to **System Manager** and **Accounts Manager** (Read, Write, Create, Delete, Export, Report).
+* **Purpose:** Central audit registry that records every reciprocal transaction link created across sister companies and remote ERPNext instances.
+
+#### 3.9.1 How Transaction References Are Saved
+Whenever an intercompany voucher mirrors a counterpart (automatically on submit, via **Sync Mirror Now**, or via federated REST sync), the engine creates an **Inter Company Document Reference** record containing:
+- **Source Details:** `Source DocType`, `Source Document`, and `Source Company`.
+- **Target Details:** `Target DocType`, `Target Document`, and `Target Company`.
+- **Federation Metadata (if cross-site):** `Remote Federated Sync` (`is_remote`), `Remote Site URL`, and `Idempotency Key` (`{source_site}:{doctype}:{name}`).
+
+At the same time, the mirrored counterpart stores back-reference link fields directly on its document:
+- `intercompany_linked_doc_doctype` (e.g., `Journal Entry` or `Sales Order`)
+- `intercompany_linked_doc_name` (e.g., `ACC-JV-2026-00038`)
+- `intercompany_linked_company` (e.g., `Main Company`)
+
+#### 3.9.2 Mirrored Field Locking & Clean Submission
+To keep both companies' ledgers 100% tallied:
+- **Strictly Locked on Mirrored Drafts:** `Company`, `Currency`, `Conversion Rate`, `Party` (`Customer` / `Supplier` / `Party Type`), `Payment Type`, `Item Code`, `Qty`, `UOM`, `Rate`, `Basic Rate`, `Exchange Rate`, and Journal Entry `Debit` / `Credit` inputs.
+- **Editable Local Operational Fields:** Receiving entity accountants can freely choose local `Warehouse`, `Cost Center`, and `Expense / Income Account` before submitting the mirrored draft.
+- **Clean Submit Calculation:** When ERPNext populates derived totals on submit (`Total Debit`, `Total Credit`, item `Amount`, `Basic Amount`, `Base Amount`, or `Payment Entry` exchange rates initialized from `0`), the lock validator automatically permits those derived calculations as long as underlying rates, quantities, and debit/credit inputs were not altered.
+
+#### 3.9.3 Safe Draft Deletion, Manual Unlinking & Orphan Recovery
+```
++------------------------------------------------------------------------------------+
+|                   INTER COMPANY DOCUMENT REFERENCE LIFECYCLE                       |
+|                                                                                    |
+|  1. SOURCE DOCUMENT DELETED (on_trash):                                            |
+|     - Clears intercompany_linked_doc_* on surviving target counterpart first       |
+|     - Deletes the Inter Company Document Reference row cleanly                     |
+|     - Prevents LinkExistsError and prevents orphaned cancellation blocks           |
+|                                                                                    |
+|  2. MANUAL UNLINK IN "Inter Company Document Reference" (Delete Row):              |
+|     - System Manager or Accounts Manager deletes the reference row                 |
+|     - on_trash automatically clears intercompany_linked_doc_* on target voucher    |
+|     - Target voucher immediately becomes an independent editable document          |
+|                                                                                    |
+|  3. MIRRORED DRAFT DELETION & ORPHAN BUTTONS ON FORM:                              |
+|     - Drafts (docstatus=0): Click [Inter Company -> Delete Mirrored Draft]         |
+|       (safely removes the reference row and deletes the Draft voucher)             |
+|     - Orphaned Entries (Source already deleted or cancelled):                      |
+|       * Cancellation Authority automatically unlocks so you can Cancel -> Delete   |
+|       * Banner displays source deletion notice + [Unlink Orphan Reference] button  |
++------------------------------------------------------------------------------------+
+```
+
+1. **Deleting a Mirrored Draft Directly:**
+   - Open any mirrored Draft (`docstatus = 0`), then click **Inter Company > Delete Mirrored Draft** (or **... > Delete** if your role has delete permission).
+   - This safely cleans up the **Inter Company Document Reference** row and permanently deletes the Draft without leaving broken references.
+2. **Manually Unlinking via Inter Company Document Reference:**
+   - Navigate to **Inter Company > Inter Company Document Reference**.
+   - Open or select the row linking the source and target entries and **Delete** it.
+   - Deleting the reference record automatically clears `intercompany_linked_doc_*` markers on the target document (`on_trash`), allowing the target company to edit, cancel, amend, or delete its entry independently.
+3. **Resolving Already-Orphaned Documents:**
+   - If the originating document was already deleted or cancelled (leaving the mirrored entry submitted or stuck with a dead reference), opening the mirrored entry automatically detects the missing/cancelled source.
+   - Under **Source Company Only** mode, cancellation protection is automatically lifted for orphaned entries so you can click **Cancel** and then **Delete** (or click **Inter Company > Unlink Orphan Reference** to keep it as a standalone document).
 
 ---
 
@@ -636,9 +699,9 @@ By creating a designated **Inter Company Customer Group** and tagging it via the
 
 ---
 
-## 5. Reporting & Executive Audit Tools
+## 6. Reporting & Executive Audit Tools
 
-### 5.1 Inter Company Transaction Matrix
+### 6.1 Inter Company Transaction Matrix
 * **Route:** `/app/query-report/Inter Company Transaction Matrix`
 * Displays all transaction pairs side-by-side: Source Document vs. Target Document.
 * Visual status pills:
@@ -647,14 +710,14 @@ By creating a designated **Inter Company Customer Group** and tagging it via the
   - **Orange (Pending Mirror):** Initiating document submitted, target awaiting processing.
 * Includes summary cards: Total Volume, Total Absolute Variance, and Sync % Chart.
 
-### 5.2 Inter Company Balance Reconciliation
+### 6.2 Inter Company Balance Reconciliation
 * **Route:** `/app/query-report/Inter Company Balance Reconciliation`
 * Compares reciprocal GL balances: Entity A's Receivable from Entity B vs. Entity B's Payable to Entity A.
 * Identifies unposted journal vouchers, currency translation differences, and missing invoices.
 
 ---
 
-## 6. Troubleshooting & Error Handling
+## 7. Troubleshooting, Unlinking & Recovery
 
 ### Error Log Inspection
 If a transaction fails to mirror (e.g., target warehouse closed or missing fiscal year):
@@ -667,6 +730,12 @@ If a document was submitted during maintenance or when the link was disabled:
 1. Open the submitted document.
 2. Click **Inter Company > Sync Mirror Now**.
 3. The system processes the document immediately and binds the reciprocal link.
+
+### Unlinking, Cancelling, or Deleting Mirrored & Orphaned Entries
+If you need to delete a mirrored Draft or unlink/cancel a mirrored entry whose source voucher was deleted:
+1. **Mirrored Draft (`docstatus = 0`):** Open the draft and click **Inter Company > Delete Mirrored Draft** (or **... > Delete**).
+2. **Active Linked Pair (Manual Break):** Navigate to **Inter Company > Inter Company Document Reference**, delete the corresponding reference row, and the target entry unlocks automatically. You can also click **Inter Company > Unlink Counterpart Reference** (available to System Manager / Accounts Manager).
+3. **Orphaned Entry (Source Deleted or Cancelled):** Open the remaining mirrored entry, click **Cancel** (automatically unlocked when the source voucher is missing/cancelled), and then **Delete** -- or click **Inter Company > Unlink Orphan Reference** to keep it independently.
 
 ---
 *End of User Guide. For technical issues or feature contributions, consult the repository issue tracker.*
