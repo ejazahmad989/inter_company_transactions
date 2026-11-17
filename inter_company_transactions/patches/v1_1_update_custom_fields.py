@@ -49,5 +49,4 @@ def execute():
 	except Exception as e:
 		print(f"Notice: Permissions update during patch: {e}")
 
-	frappe.db.commit()
 	print("Patch v1_1_update_custom_fields executed successfully.")

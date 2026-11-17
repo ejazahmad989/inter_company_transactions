@@ -1550,3 +1550,403 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 			res = unlink_mirrored_document("Journal Entry", "ACC-JV-2026-00039")
 			self.assertTrue(res["unlinked"])
 			self.assertEqual(cleared, [("Journal Entry", "ACC-JV-2026-00039")])
+
+	def test_static_semgrep_and_frappe_api_hygiene(self):
+		"""Verify zero SQL format injections, zero unannotated commits, and zero ignore_permissions in frappe.get_all"""
+		import ast
+		from pathlib import Path
+
+		repo_root = Path(__file__).resolve().parents[4]
+		py_files = [
+			p for p in repo_root.rglob("*.py")
+			if ".git" not in p.parts and "node_modules" not in p.parts
+		]
+		self.assertGreater(len(py_files), 5)
+
+		for py_file in py_files:
+			src = py_file.read_text(encoding="utf-8")
+			tree = ast.parse(src, filename=str(py_file))
+
+			for node in ast.walk(tree):
+				if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+					# 1. Forbid ignore_permissions in frappe.get_all / frappe.db.get_all
+					if node.func.attr == "get_all":
+						kw_names = [kw.arg for kw in node.keywords]
+						self.assertNotIn(
+							"ignore_permissions",
+							kw_names,
+							f"Forbidden ignore_permissions in {py_file.name}:{node.lineno}",
+						)
+
+					# 2. Forbid f-string / .format / % formatting in frappe.db.sql
+					if node.func.attr == "sql" and isinstance(node.func.value, ast.Attribute) and node.func.value.attr == "db":
+						if node.args:
+							q_arg = node.args[0]
+							self.assertNotIsInstance(
+								q_arg, ast.JoinedStr,
+								f"SQL f-string injection risk in {py_file.name}:{node.lineno}",
+							)
+							if isinstance(q_arg, ast.Call) and isinstance(q_arg.func, ast.Attribute):
+								self.assertNotEqual(
+									q_arg.func.attr, "format",
+									f"SQL .format() injection risk in {py_file.name}:{node.lineno}",
+								)
+							if isinstance(q_arg, ast.BinOp) and isinstance(q_arg.op, ast.Mod):
+								self.fail(f"SQL % formatting injection risk in {py_file.name}:{node.lineno}")
+
+					# 3. Forbid unannotated frappe.db.commit()
+					if node.func.attr == "commit" and isinstance(node.func.value, ast.Attribute) and node.func.value.attr == "db":
+						line_text = src.splitlines()[node.lineno - 1]
+						self.assertIn(
+							"# nosemgrep",
+							line_text,
+							f"Unannotated frappe.db.commit() in {py_file.name}:{node.lineno}",
+						)
+
+	def test_frappe_get_all_real_signature_for_fx_and_links(self):
+		"""Enforce real Frappe get_all signature (no ignore_permissions) across Currency Exchange and link queries"""
+		from unittest.mock import patch
+
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			check_active_downstream_transactions,
+			check_intercompany_exchange_rate,
+			get_linked_counterpart_documents,
+			get_linked_counterpart_for_form,
+			lookup_intercompany_exchange_rate,
+			validate_intercompany_cross_currency_rate,
+		)
+
+		def strict_get_all(doctype, *args, **kwargs):
+			if "ignore_permissions" in kwargs:
+				raise TypeError("get_list() got multiple values for keyword argument 'ignore_permissions'")
+			if doctype == "Currency Exchange":
+				flt_dict = kwargs.get("filters") or {}
+				if flt_dict.get("from_currency") == "USD" and flt_dict.get("to_currency") == "PKR":
+					return [{"exchange_rate": 275.0}]
+				return []
+			if doctype == "Inter Company Document Reference":
+				return []
+			if doctype == "Payment Entry Reference":
+				return []
+			if doctype == "Journal Entry Account":
+				return []
+			return []
+
+		def mock_get_value(dt, name=None, fieldname=None, **kwargs):
+			if dt == "Company" and fieldname == "default_currency":
+				return "PKR" if name == "Main PKR Co" else "USD"
+			return None
+
+		stock_entry = frappe._dict({
+			"doctype": "Stock Entry",
+			"name": "MAT-STE-2026-0009",
+			"company": "Main PKR Co",
+			"stock_entry_type": "Material Issue",
+			"posting_date": "14-11-2026",
+			"is_intercompany": 1,
+			"intercompany_target_company": "John USD Co",
+			"docstatus": 1,
+			"flags": frappe._dict(),
+		})
+
+		with patch.object(frappe, "get_all", side_effect=strict_get_all), patch.object(
+			frappe.db, "exists", side_effect=lambda dt, name=None, **kw: dt == "DocType" and name in ("Currency Exchange", "Inter Company Document Reference", "Payment Entry Reference", "Journal Entry Account")
+		), patch.object(
+			frappe.db, "has_column", return_value=True
+		), patch.object(
+			frappe.db, "get_value", side_effect=mock_get_value
+		):
+			rate = lookup_intercompany_exchange_rate("pkr", "usd", "14-11-2026")
+			self.assertAlmostEqual(rate, 1.0 / 275.0, places=7)
+
+			validate_intercompany_cross_currency_rate(stock_entry)
+
+			fx_info = check_intercompany_exchange_rate("Main PKR Co", "John USD Co", "14-11-2026")
+			self.assertTrue(fx_info["required"])
+			self.assertTrue(fx_info["has_rate"])
+			self.assertEqual(fx_info["transaction_date"], "2026-11-14")
+
+			self.assertEqual(get_linked_counterpart_documents(stock_entry), [])
+			self.assertEqual(check_active_downstream_transactions("Sales Invoice", "SINV-1", "Main PKR Co"), [])
+			self.assertEqual(get_linked_counterpart_for_form("Stock Entry", "MAT-STE-2026-0009")["counterparts"], [])
+
+	def test_all_14_doctypes_same_and_cross_currency_mirroring(self):
+		"""Verify all 14 supported DocTypes mirror accurately under both same-currency (PKR->PKR) and cross-currency (PKR->USD)"""
+		from unittest.mock import patch
+
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			create_corresponding_document,
+		)
+
+		class FakeTargetDoc:
+			def __init__(self, dt):
+				self.doctype = dt
+				self.items = []
+				self.accounts = []
+				self.flags = frappe._dict()
+				self.company = None
+				self.currency = None
+				self.conversion_rate = None
+				self.price_list_currency = "PKR"
+				self.plc_conversion_rate = 1.0
+
+			def append(self, tbl, row):
+				getattr(self, tbl).append(frappe._dict(row))
+
+			def get(self, key, default=None):
+				return getattr(self, key, default)
+
+			def set_missing_values(self, **kwargs):
+				# Simulate ERPNext resetting currency back unless preserved afterwards
+				self.currency = "USD" if self.company == "USD Co" else "PKR"
+				self.conversion_rate = 1.0
+
+		mapping = frappe._dict({"main_company": "PKR Main Co", "item_mappings": []})
+		settings = frappe._dict({"auto_create_missing_items": 1, "default_transfer_pricing_rule": "Source Document Rate"})
+
+		all_pairs = [
+			("Sales Order", "Purchase Order"),
+			("Purchase Order", "Sales Order"),
+			("Sales Invoice", "Purchase Invoice"),
+			("Purchase Invoice", "Sales Invoice"),
+			("Delivery Note", "Purchase Receipt"),
+			("Purchase Receipt", "Delivery Note"),
+			("Quotation", "Supplier Quotation"),
+			("Supplier Quotation", "Quotation"),
+			("Material Request", "Purchase Order"),
+			("Material Request", "Sales Order"),
+			("Request for Quotation", "Supplier Quotation"),
+			("Stock Entry", "Stock Entry"),
+			("Journal Entry", "Journal Entry"),
+			("Payment Entry", "Payment Entry"),
+			("Landed Cost Voucher", "Journal Entry"),
+		]
+
+		for mode in ("same_currency", "cross_currency"):
+			tgt_company = "PKR Sister Co" if mode == "same_currency" else "USD Co"
+			tgt_ccy = "PKR" if mode == "same_currency" else "USD"
+			linked_co = frappe._dict({
+				"company": tgt_company,
+				"main_company_customer": "Sister Cust",
+				"main_company_supplier": "Sister Supp",
+				"other_company_customer": "Main Cust",
+				"other_company_supplier": "Main Supp",
+				"other_company_warehouse": "Transit - TGT",
+				"other_company_account": "TMP-MAIN - TGT",
+			})
+
+			def mock_get_value(dt, filters=None, fieldname=None, **kwargs):
+				if dt == "Company" and fieldname == "default_currency":
+					return "PKR" if filters == "PKR Main Co" else tgt_ccy
+				if dt == "Company" and fieldname == "default_receivable_account":
+					return "Debtors - TGT"
+				if dt == "Company" and fieldname == "default_payable_account":
+					return "Creditors - TGT"
+				if dt == "Company" and fieldname == "default_income_account":
+					return "Sales - TGT"
+				if dt == "Company" and fieldname == "default_expense_account":
+					return "Expenses - TGT"
+				if dt == "Company" and fieldname == "cost_center":
+					return "Main - TGT"
+				if dt == "Account" and fieldname == "account_currency":
+					return tgt_ccy
+				if dt == "Account" and fieldname == "account_type":
+					return "Bank"
+				if dt == "Warehouse" and fieldname == "name":
+					return "Transit - TGT"
+				if dt == "Item" and fieldname == ["item_name", "stock_uom", "description"]:
+					return frappe._dict({"item_name": "Widget", "stock_uom": "Nos", "description": "Widget"})
+				return None
+
+			def mock_get_all(dt, filters=None, **kwargs):
+				if dt == "Currency Exchange":
+					flt_d = filters or {}
+					if flt_d.get("from_currency") == "USD" and flt_d.get("to_currency") == "PKR":
+						return [{"exchange_rate": 275.0}]
+				return []
+
+			class FakeSourceDoc:
+				def __init__(self, data):
+					for k, v in data.items():
+						setattr(self, k, v)
+
+				def get(self, key, default=None):
+					return getattr(self, key, default)
+
+			for src_dt, tgt_dt in all_pairs:
+				src_doc = FakeSourceDoc({
+					"doctype": src_dt,
+					"name": f"SRC-{src_dt[:3].upper()}-001",
+					"company": "PKR Main Co",
+					"posting_date": "2026-11-15",
+					"transaction_date": "2026-11-15",
+					"schedule_date": "2026-11-20",
+					"delivery_date": "2026-11-20",
+					"stock_entry_type": "Material Issue",
+					"payment_type": "Pay",
+					"paid_amount": 2750.0,
+					"received_amount": 2750.0,
+					"paid_from_account_currency": "PKR",
+					"paid_to_account_currency": "PKR",
+					"total_credit": 2750.0,
+					"total_debit": 2750.0,
+					"total_taxes_and_charges": 2750.0,
+					"currency": None if src_dt in ("Material Request", "Request for Quotation", "Stock Entry", "Landed Cost Voucher") else "PKR",
+					"conversion_rate": 1.0,
+					"items": [
+						frappe._dict({
+							"item_code": "ITEM-1",
+							"item_name": "Widget",
+							"qty": 1.0,
+							"uom": "Nos",
+							"rate": 0.0 if src_dt == "Request for Quotation" else 2750.0,
+							"basic_rate": 2750.0,
+						})
+					],
+					"accounts": [
+						frappe._dict({
+							"party_type": "Supplier",
+							"party": "Sister Supp",
+							"account_currency": "PKR",
+							"exchange_rate": 1.0,
+							"debit_in_account_currency": 2750.0,
+							"debit": 2750.0,
+							"credit_in_account_currency": 0.0,
+							"credit": 0.0,
+						})
+					],
+					"taxes": [frappe._dict({"description": "Freight", "amount": 2750.0, "base_amount": 2750.0})],
+				})
+
+				mapping_info = {
+					"mapping": mapping,
+					"linked_company": linked_co,
+					"target_doctype": tgt_dt,
+				}
+
+				with patch.object(frappe, "new_doc", side_effect=lambda dt: FakeTargetDoc(dt)), patch.object(
+					frappe, "get_all", side_effect=mock_get_all
+				), patch.object(
+					frappe.db, "exists", side_effect=lambda dt, name=None, **kw: dt in ("Item", "DocType", "Journal Entry Type")
+				), patch.object(
+					frappe.db, "has_column", return_value=False
+				), patch.object(
+					frappe.db, "get_value", side_effect=mock_get_value
+				):
+					res = create_corresponding_document(src_doc, mapping_info, "main_to_other", settings=settings)
+					self.assertIsNotNone(res, f"Failed creating counterpart for {src_dt} -> {tgt_dt} ({mode})")
+					self.assertEqual(res.company, tgt_company)
+
+					if tgt_dt == "Stock Entry":
+						expected_se_rate = 2750.0 if mode == "same_currency" else 10.0
+						self.assertAlmostEqual(res.items[0].basic_rate, expected_se_rate, places=2)
+					elif tgt_dt == "Journal Entry":
+						expected_je_amt = 2750.0 if mode == "same_currency" else 10.0
+						self.assertAlmostEqual(sum(flt(a.debit) for a in res.accounts), expected_je_amt, places=2)
+						self.assertAlmostEqual(sum(flt(a.credit) for a in res.accounts), expected_je_amt, places=2)
+					elif tgt_dt == "Payment Entry":
+						expected_pe_amt = 2750.0 if mode == "same_currency" else 10.0
+						self.assertAlmostEqual(res.paid_amount, expected_pe_amt, places=2)
+						self.assertAlmostEqual(res.received_amount, expected_pe_amt, places=2)
+					elif tgt_dt in ("Sales Order", "Purchase Order", "Sales Invoice", "Purchase Invoice", "Delivery Note", "Purchase Receipt", "Quotation", "Supplier Quotation"):
+						if mode == "cross_currency":
+							# Target doc keeps PKR billing currency with exact 1/275 conversion_rate (0.003636364)
+							self.assertEqual(res.currency, "PKR")
+							self.assertAlmostEqual(res.conversion_rate, 1.0 / 275.0, places=6)
+						else:
+							self.assertEqual(res.currency, "PKR")
+							self.assertEqual(res.conversion_rate, 1.0)
+
+	def test_remote_sync_all_doctypes_cross_currency(self):
+		"""Verify prepare_remote_payload and receive_remote_transaction convert cross-currency amounts across Stock/LCV/JE/PE"""
+		from unittest.mock import patch
+
+		from inter_company_transactions.sync import prepare_remote_payload, receive_remote_transaction
+
+		class FakeRemoteDoc:
+			def __init__(self, dt):
+				self.doctype = dt
+				self.name = f"REM-{dt[:3].upper()}-001"
+				self.items = []
+				self.accounts = []
+				self.flags = frappe._dict()
+				self.docstatus = 0
+				self.company = None
+				self.currency = None
+				self.conversion_rate = None
+
+			def append(self, tbl, row):
+				getattr(self, tbl).append(frappe._dict(row))
+
+			def get(self, key, default=None):
+				return getattr(self, key, default)
+
+			def set_missing_values(self, **kwargs):
+				pass
+
+			def insert(self, **kwargs):
+				return self
+
+		se_src = frappe._dict({
+			"doctype": "Stock Entry",
+			"name": "MAT-STE-REM-1",
+			"company": "Main PKR Co",
+			"posting_date": "2026-11-15",
+			"stock_entry_type": "Material Issue",
+			"items": [frappe._dict({"item_code": "ITEM-1", "qty": 2.0, "basic_rate": 2750.0, "uom": "Nos"})],
+		})
+
+		with patch.object(frappe.db, "get_value", return_value="PKR"):
+			payload = prepare_remote_payload(se_src, "Remote USD Co")
+			self.assertEqual(payload["source_company_currency"], "PKR")
+			self.assertEqual(payload["currency"], "PKR")
+
+		created = []
+
+		def make_doc(dt):
+			d = FakeRemoteDoc(dt)
+			created.append(d)
+			return d
+
+		def mock_get_value(dt, filters=None, fieldname=None, **kwargs):
+			if dt == "Company" and fieldname == "default_currency":
+				return "USD"
+			if dt == "Company" and fieldname == "default_expense_account":
+				return "Expenses - RUSD"
+			if dt == "Company" and fieldname == "default_payable_account":
+				return "Creditors - RUSD"
+			if dt == "Customer" and fieldname == "name":
+				return "Main PKR Co (Internal)"
+			if dt == "Account" and fieldname == "name":
+				return "TMP-MAIN - RUSD"
+			return None
+
+		def mock_get_all(dt, filters=None, **kwargs):
+			if dt == "Currency Exchange":
+				flt_d = filters or {}
+				if flt_d.get("from_currency") == "USD" and flt_d.get("to_currency") == "PKR":
+					return [{"exchange_rate": 275.0}]
+			return []
+
+		with patch.object(frappe, "new_doc", side_effect=make_doc), patch.object(
+			frappe, "get_all", side_effect=mock_get_all
+		), patch.object(
+			frappe, "has_permission", return_value=True
+		), patch.object(
+			frappe, "get_cached_doc", return_value=frappe._dict({"auto_submit_target_doc": 0})
+		), patch.object(
+			frappe.db, "exists", side_effect=lambda dt, name=None, **kw: dt in ("Company", "Item", "Journal Entry Type", "Warehouse") or (dt == "DocType" and name == "Currency Exchange")
+		), patch.object(
+			frappe.db, "get_value", side_effect=mock_get_value
+		), patch(
+			"inter_company_transactions.sync.create_remote_document_reference"
+		), patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.get_intercompany_warehouse",
+			return_value="Transit - RUSD",
+		):
+			resp = receive_remote_transaction(payload)
+			self.assertTrue(resp["success"])
+			se_created = created[-1]
+			self.assertAlmostEqual(se_created.items[0].basic_rate, 10.0, places=2)
+			self.assertAlmostEqual(se_created.items[0].basic_amount, 20.0, places=2)
+

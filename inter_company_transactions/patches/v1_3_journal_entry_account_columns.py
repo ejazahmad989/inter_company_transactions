@@ -24,7 +24,6 @@ def execute():
 		updated = True
 
 	if updated:
-		frappe.db.commit()
 		try:
 			frappe.clear_cache(doctype="Journal Entry")
 			frappe.clear_cache(doctype="Journal Entry Account")

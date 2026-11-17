@@ -33,7 +33,6 @@ def execute():
 					WHERE `fieldname` = 'intercompany_target_company'
 					  AND `default` IS NOT NULL
 				""")
-			frappe.db.commit()
 	except Exception as e:
 		frappe.logger().warning(f"[ICT Patch v1.4] Warning updating Custom Field defaults: {e}")
 
@@ -52,7 +51,6 @@ def execute():
 					dt,
 					filters={"docstatus": 0, "intercompany_target_company": ["is", "set"]},
 					fields=["name", "company", "is_intercompany", "intercompany_target_company"],
-					ignore_permissions=True,
 				)
 				for row in draft_docs or []:
 					if not row.get("is_intercompany") or row.get("intercompany_target_company") == row.get("company"):
@@ -95,11 +93,9 @@ def execute():
 							frappe.delete_doc("Inter Company Document Reference", ref.name, force=True, ignore_permissions=True)
 						except Exception:
 							pass
-			frappe.db.commit()
 	except Exception as e:
 		frappe.logger().warning(f"[ICT Patch v1.4] Warning cleaning up draft document references: {e}")
 
-	frappe.db.commit()
 	try:
 		frappe.clear_cache()
 	except Exception:

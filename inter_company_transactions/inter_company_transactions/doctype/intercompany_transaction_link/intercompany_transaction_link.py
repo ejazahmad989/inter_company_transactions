@@ -455,7 +455,6 @@ def create_linked_documents(doc, method=None):
 def get_linked_counterpart_documents(doc):
     """
     Fetch all linked counterpart documents (both where doc is source and where doc is target).
-    Uses ignore_permissions=True so server-side validation does not hit user company restrictions.
     """
     if not hasattr(doc, "company") or not doc.company:
         return []
@@ -478,7 +477,6 @@ def get_linked_counterpart_documents(doc):
                 ["source_company", "=", doc.company],
             ],
             fields=fields,
-            ignore_permissions=True,
         )
         for ld in linked_docs:
             related_docs.append({
@@ -502,7 +500,6 @@ def get_linked_counterpart_documents(doc):
                 ["target_company", "=", doc.company],
             ],
             fields=["source_doctype", "source_name", "source_company"],
-            ignore_permissions=True,
         )
         for rl in reverse_links:
             related_docs.append({
@@ -539,7 +536,6 @@ def check_active_downstream_transactions(doctype, docname, company):
                         "docstatus": 1,
                     },
                     fields=["parent"],
-                    ignore_permissions=True,
                 )
                 for pe in pe_refs:
                     if pe.parent and f"Payment Entry '{pe.parent}'" not in blocking_records:
@@ -558,7 +554,6 @@ def check_active_downstream_transactions(doctype, docname, company):
                         "docstatus": 1,
                     },
                     fields=["parent"],
-                    ignore_permissions=True,
                 )
                 for je in je_refs:
                     if je.parent and f"Journal Entry '{je.parent}'" not in blocking_records:
@@ -574,7 +569,6 @@ def check_active_downstream_transactions(doctype, docname, company):
                     "Delivery Note Item",
                     filters={"against_sales_order": docname, "docstatus": 1},
                     fields=["parent"],
-                    ignore_permissions=True,
                 )
                 for dn in dns:
                     if dn.parent and f"Delivery Note '{dn.parent}'" not in blocking_records:
@@ -585,7 +579,6 @@ def check_active_downstream_transactions(doctype, docname, company):
                     "Sales Invoice Item",
                     filters={"sales_order": docname, "docstatus": 1},
                     fields=["parent"],
-                    ignore_permissions=True,
                 )
                 for si in sis:
                     if si.parent and f"Sales Invoice '{si.parent}'" not in blocking_records:
@@ -601,7 +594,6 @@ def check_active_downstream_transactions(doctype, docname, company):
                     "Purchase Receipt Item",
                     filters={"purchase_order": docname, "docstatus": 1},
                     fields=["parent"],
-                    ignore_permissions=True,
                 )
                 for pr in prs:
                     if pr.parent and f"Purchase Receipt '{pr.parent}'" not in blocking_records:
@@ -612,7 +604,6 @@ def check_active_downstream_transactions(doctype, docname, company):
                     "Purchase Invoice Item",
                     filters={"purchase_order": docname, "docstatus": 1},
                     fields=["parent"],
-                    ignore_permissions=True,
                 )
                 for pi in pis:
                     if pi.parent and f"Purchase Invoice '{pi.parent}'" not in blocking_records:
@@ -628,7 +619,6 @@ def check_active_downstream_transactions(doctype, docname, company):
                     "Sales Invoice Item",
                     filters={"delivery_note": docname, "docstatus": 1},
                     fields=["parent"],
-                    ignore_permissions=True,
                 )
                 for si in sis:
                     if si.parent and f"Sales Invoice '{si.parent}'" not in blocking_records:
@@ -644,7 +634,6 @@ def check_active_downstream_transactions(doctype, docname, company):
                     "Purchase Invoice Item",
                     filters={"purchase_receipt": docname, "docstatus": 1},
                     fields=["parent"],
-                    ignore_permissions=True,
                 )
                 for pi in pis:
                     if pi.parent and f"Purchase Invoice '{pi.parent}'" not in blocking_records:
@@ -1646,7 +1635,6 @@ def intercompany_party_query(doctype, txt, searchfield, start, page_len, filters
         order_by="modified desc, name asc",
         start=params["start"],
         page_length=params["page_len"],
-        ignore_permissions=True,
     )
     return [
         (r.get("name"), r.get(name_col), r.get("represents_company"))
@@ -1711,33 +1699,50 @@ def intercompany_account_query(doctype, txt, searchfield, start, page_len, filte
     )
 
 
+def _normalize_tx_date(transaction_date=None):
+    """Safely convert date/datetime/ISO/DD-MM-YYYY strings to YYYY-MM-DD."""
+    if not transaction_date:
+        return str(nowdate())
+    try:
+        return str(getdate(transaction_date))
+    except Exception:
+        from datetime import datetime
+        for fmt in ("%d-%m-%Y", "%d/%m/%Y", "%Y/%m/%d", "%Y-%m-%d"):
+            try:
+                return datetime.strptime(str(transaction_date).strip()[:10], fmt).strftime("%Y-%m-%d")
+            except Exception:
+                continue
+        return str(nowdate())
+
+
 def lookup_intercompany_exchange_rate(from_currency, to_currency, transaction_date=None):
     """
     Silently queries Currency Exchange in both forward and inverse (1 / rate) directions
-    without invoking erpnext.setup.utils.get_exchange_rate (which prints 4x msgprint popups when missing).
+    without triggering erpnext.setup.utils.get_exchange_rate msgprint popups.
     Returns float (9 decimals) or None if no Currency Exchange record exists.
     """
-    if not from_currency or not to_currency or from_currency == to_currency:
+    from_ccy = (str(from_currency).strip().upper() if from_currency else "")
+    to_ccy = (str(to_currency).strip().upper() if to_currency else "")
+    if not from_ccy or not to_ccy or from_ccy == to_ccy:
         return 1.0
 
     if not (hasattr(frappe, "db") and frappe.db and frappe.db.exists("DocType", "Currency Exchange")):
         return None
 
-    tx_date = str(getdate(transaction_date or nowdate()))
+    tx_date = _normalize_tx_date(transaction_date)
 
     try:
         # 1. Exact forward match on or before transaction_date
         fwd = frappe.get_all(
             "Currency Exchange",
             filters={
-                "from_currency": from_currency,
-                "to_currency": to_currency,
+                "from_currency": from_ccy,
+                "to_currency": to_ccy,
                 "date": ["<=", tx_date],
             },
             fields=["exchange_rate"],
             order_by="date desc",
             limit=1,
-            ignore_permissions=True,
         )
         if fwd and flt(fwd[0].get("exchange_rate")) > 0:
             return flt(fwd[0].get("exchange_rate"), 9)
@@ -1746,14 +1751,13 @@ def lookup_intercompany_exchange_rate(from_currency, to_currency, transaction_da
         inv = frappe.get_all(
             "Currency Exchange",
             filters={
-                "from_currency": to_currency,
-                "to_currency": from_currency,
+                "from_currency": to_ccy,
+                "to_currency": from_ccy,
                 "date": ["<=", tx_date],
             },
             fields=["exchange_rate"],
             order_by="date desc",
             limit=1,
-            ignore_permissions=True,
         )
         if inv and flt(inv[0].get("exchange_rate")) > 0:
             return flt(1.0 / flt(inv[0].get("exchange_rate")), 9)
@@ -1761,25 +1765,40 @@ def lookup_intercompany_exchange_rate(from_currency, to_currency, transaction_da
         # 3. Fallback to latest available record regardless of date
         fwd_any = frappe.get_all(
             "Currency Exchange",
-            filters={"from_currency": from_currency, "to_currency": to_currency},
+            filters={"from_currency": from_ccy, "to_currency": to_ccy},
             fields=["exchange_rate"],
             order_by="date desc",
             limit=1,
-            ignore_permissions=True,
         )
         if fwd_any and flt(fwd_any[0].get("exchange_rate")) > 0:
             return flt(fwd_any[0].get("exchange_rate"), 9)
 
         inv_any = frappe.get_all(
             "Currency Exchange",
-            filters={"from_currency": to_currency, "to_currency": from_currency},
+            filters={"from_currency": to_ccy, "to_currency": from_ccy},
             fields=["exchange_rate"],
             order_by="date desc",
             limit=1,
-            ignore_permissions=True,
         )
         if inv_any and flt(inv_any[0].get("exchange_rate")) > 0:
             return flt(1.0 / flt(inv_any[0].get("exchange_rate")), 9)
+    except Exception as e:
+        frappe.logger().warning(f"Currency Exchange lookup error ({from_ccy}->{to_ccy} on {tx_date}): {e!s}")
+
+    # 4. Optional fallback to ERPNext HTTP Currency Exchange Settings if explicitly enabled
+    try:
+        if frappe.db.exists("DocType", "Currency Exchange Settings"):
+            use_http = frappe.db.get_single_value("Currency Exchange Settings", "use_httpclient")
+            if cint(use_http):
+                from erpnext.setup.utils import get_exchange_rate
+                prev_mute = getattr(frappe.flags, "mute_messages", False)
+                frappe.flags.mute_messages = True
+                try:
+                    ext_rate = flt(get_exchange_rate(from_ccy, to_ccy, tx_date), 9)
+                    if ext_rate > 0 and ext_rate != 1.0:
+                        return ext_rate
+                finally:
+                    frappe.flags.mute_messages = prev_mute
     except Exception:
         pass
 
@@ -1897,7 +1916,7 @@ def check_intercompany_exchange_rate(
             "to_currency": tgt_ccy,
         }
 
-    tx_date = str(getdate(transaction_date or nowdate()))
+    tx_date = _normalize_tx_date(transaction_date)
     rate = None
     if doc_currency == tgt_ccy and flt(conversion_rate) > 0:
         rate = flt(1.0 / flt(conversion_rate), 9)
@@ -1927,7 +1946,7 @@ def save_intercompany_currency_exchange(from_currency, to_currency, exchange_rat
     if not from_currency or not to_currency or from_currency == to_currency:
         frappe.throw(_("From Currency and To Currency must be different."))
 
-    tx_date = str(getdate(date or nowdate()))
+    tx_date = _normalize_tx_date(date)
     existing = frappe.db.get_value(
         "Currency Exchange",
         {"date": tx_date, "from_currency": from_currency, "to_currency": to_currency},
@@ -2161,7 +2180,6 @@ def calculate_transfer_rate(
                     "methodology", "markup_percentage", "fixed_rate",
                     "effective_from", "effective_to",
                 ],
-                ignore_permissions=True,
             )
             best_policy = None
             best_score = -1
@@ -2345,6 +2363,46 @@ def create_corresponding_document(source_doc, mapping_info, direction, settings=
     return None
 
 
+def _resolve_party_control_account(party_type, party, company, target_currency, default_fieldname):
+    """Resolve Party Account matching target_currency first, then any Party Account, then Company default."""
+    if party and company and hasattr(frappe, "db") and frappe.db:
+        pa_rows = frappe.get_all(
+            "Party Account",
+            filters={"parenttype": party_type, "parent": party, "company": company},
+            fields=["account"],
+        )
+        for row in pa_rows or []:
+            acct = row.get("account")
+            if acct and target_currency:
+                acc_ccy = frappe.db.get_value("Account", acct, "account_currency")
+                if acc_ccy == target_currency:
+                    return acct
+        if pa_rows and pa_rows[0].get("account"):
+            return pa_rows[0].get("account")
+    return frappe.db.get_value("Company", company, default_fieldname) if company else None
+
+
+def _preserve_intercompany_currency_after_defaults(target_doc, target_currency, conversion_rate, date=None):
+    """Re-apply exact intercompany currency and conversion_rate after ERPNext set_missing_values."""
+    if not target_doc:
+        return
+    if hasattr(target_doc, "currency") or isinstance(target_doc, dict):
+        target_doc.currency = target_currency
+    if hasattr(target_doc, "conversion_rate") or isinstance(target_doc, dict):
+        target_doc.conversion_rate = conversion_rate
+    if hasattr(target_doc, "price_list_currency") and target_doc.company:
+        tgt_comp_ccy = frappe.db.get_value("Company", target_doc.company, "default_currency")
+        plc = getattr(target_doc, "price_list_currency", None)
+        if not plc or plc == target_currency:
+            target_doc.price_list_currency = target_currency
+            target_doc.plc_conversion_rate = conversion_rate
+        elif tgt_comp_ccy and plc != tgt_comp_ccy:
+            if abs(flt(getattr(target_doc, "plc_conversion_rate", 0))) <= 0:
+                target_doc.plc_conversion_rate = get_intercompany_exchange_rate(plc, tgt_comp_ccy, date)
+        else:
+            target_doc.plc_conversion_rate = 1.0
+
+
 def create_sales_invoice(source_doc, mapping, linked_company, direction, settings=None):
     """Create Sales Invoice from Purchase Invoice or other source"""
     si = frappe.new_doc("Sales Invoice")
@@ -2374,9 +2432,9 @@ def create_sales_invoice(source_doc, mapping, linked_company, direction, setting
     if not warehouse:
         warehouse = frappe.db.get_value("Warehouse", {"company": si.company, "is_group": 0}, "name")
 
-    debit_to = frappe.db.get_value("Company", si.company, "default_receivable_account")
-    if not debit_to and si.customer:
-        debit_to = frappe.db.get_value("Party Account", {"parent": si.customer, "company": si.company}, "account")
+    debit_to = _resolve_party_control_account(
+        "Customer", si.customer, si.company, target_currency, "default_receivable_account"
+    )
     if debit_to:
         si.debit_to = debit_to
 
@@ -2425,6 +2483,7 @@ def create_sales_invoice(source_doc, mapping, linked_company, direction, setting
         si.set_missing_values(for_validate=True)
     except Exception:
         pass
+    _preserve_intercompany_currency_after_defaults(si, target_currency, conversion_rate, si.posting_date)
 
     si.docstatus = 0  # Draft
     return si
@@ -2459,9 +2518,9 @@ def create_purchase_invoice(source_doc, mapping, linked_company, direction, sett
     if not warehouse:
         warehouse = frappe.db.get_value("Warehouse", {"company": pi.company, "is_group": 0}, "name")
 
-    credit_to = frappe.db.get_value("Company", pi.company, "default_payable_account")
-    if not credit_to and pi.supplier:
-        credit_to = frappe.db.get_value("Party Account", {"parent": pi.supplier, "company": pi.company}, "account")
+    credit_to = _resolve_party_control_account(
+        "Supplier", pi.supplier, pi.company, target_currency, "default_payable_account"
+    )
     if credit_to:
         pi.credit_to = credit_to
 
@@ -2510,6 +2569,7 @@ def create_purchase_invoice(source_doc, mapping, linked_company, direction, sett
         pi.set_missing_values(for_validate=True)
     except Exception:
         pass
+    _preserve_intercompany_currency_after_defaults(pi, target_currency, conversion_rate, pi.posting_date)
 
     pi.docstatus = 0  # Draft
     return pi
@@ -2577,6 +2637,7 @@ def create_purchase_order(sales_order, mapping, linked_company, direction, setti
         po.set_missing_values(for_validate=True)
     except Exception:
         pass
+    _preserve_intercompany_currency_after_defaults(po, target_currency, conversion_rate, po.transaction_date)
 
     po.docstatus = 0  # Draft
     return po
@@ -2644,6 +2705,7 @@ def create_sales_order(purchase_order, mapping, linked_company, direction, setti
         so.set_missing_values(for_validate=True)
     except Exception:
         pass
+    _preserve_intercompany_currency_after_defaults(so, target_currency, conversion_rate, so.transaction_date)
 
     so.docstatus = 0  # Draft
     return so
@@ -2717,6 +2779,7 @@ def create_delivery_note(purchase_receipt, mapping, linked_company, direction, s
         dn.set_missing_values(for_validate=True)
     except Exception:
         pass
+    _preserve_intercompany_currency_after_defaults(dn, target_currency, conversion_rate, dn.posting_date)
 
     dn.docstatus = 0  # Draft
     return dn
@@ -2790,6 +2853,7 @@ def create_purchase_receipt(delivery_note, mapping, linked_company, direction, s
         pr.set_missing_values(for_validate=True)
     except Exception:
         pass
+    _preserve_intercompany_currency_after_defaults(pr, target_currency, conversion_rate, pr.posting_date)
 
     pr.docstatus = 0  # Draft
     return pr
@@ -2841,10 +2905,18 @@ def create_quotation(supplier_quotation, mapping, linked_company, direction, set
 
     q.flags.ignore_permissions = True
     q.flags.ignore_mandatory = True
+    q.flags.ignore_account_permission = True
+    q.flags.ignore_validate = True
+    q.flags.ignore_links = True
+    q.flags.ignore_pricing_rule = True
+    q.flags.ignore_party_validation = True
+
     try:
         q.set_missing_values(for_validate=True)
     except Exception:
         pass
+    _preserve_intercompany_currency_after_defaults(q, target_currency, conversion_rate, q.transaction_date)
+
     q.docstatus = 0
     return q
 
@@ -2894,10 +2966,18 @@ def create_supplier_quotation(quotation, mapping, linked_company, direction, set
 
     sq.flags.ignore_permissions = True
     sq.flags.ignore_mandatory = True
+    sq.flags.ignore_account_permission = True
+    sq.flags.ignore_validate = True
+    sq.flags.ignore_links = True
+    sq.flags.ignore_pricing_rule = True
+    sq.flags.ignore_party_validation = True
+
     try:
         sq.set_missing_values(for_validate=True)
     except Exception:
         pass
+    _preserve_intercompany_currency_after_defaults(sq, target_currency, conversion_rate, sq.transaction_date)
+
     sq.docstatus = 0
     return sq
 
@@ -3046,7 +3126,10 @@ def create_stock_entry(source_stock_entry, mapping, linked_company, direction, s
     # Resolve currency conversion if source and target company default currencies differ
     source_company_currency = frappe.db.get_value("Company", source_stock_entry.company, "default_currency")
     target_company_currency = frappe.db.get_value("Company", se.company, "default_currency")
-    fx_rate = get_intercompany_exchange_rate(source_company_currency, target_company_currency, se.posting_date)
+    fx_rate = (
+        extract_document_exchange_rate(source_stock_entry, source_company_currency, target_company_currency)
+        or get_intercompany_exchange_rate(source_company_currency, target_company_currency, se.posting_date)
+    )
 
     if not target_warehouse:
         target_warehouse = get_intercompany_warehouse(target_warehouse_company)
@@ -3710,7 +3793,6 @@ def fix_legacy_custom_fields(force=False):
                         dt,
                         filters={"docstatus": 0, "intercompany_target_company": ["is", "set"]},
                         fields=["name", "is_intercompany"],
-                        ignore_permissions=True,
                     )
                     for row in stale_rows or []:
                         if not cint(row.get("is_intercompany")):
@@ -3836,7 +3918,6 @@ def get_linked_counterpart_for_form(doctype, name):
             "Inter Company Document Reference",
             filters={"source_doctype": doctype, "source_name": name},
             fields=["target_doctype", "target_name", "target_company"],
-            ignore_permissions=True,
         )
         for r in src_refs:
             counterparts.append({
@@ -3856,7 +3937,6 @@ def get_linked_counterpart_for_form(doctype, name):
                 "Inter Company Document Reference",
                 filters={"target_doctype": doctype, "target_name": name},
                 fields=ref_fields,
-                ignore_permissions=True,
             )
             for r in tgt_refs:
                 is_remote = cint(r.get("is_remote")) if has_is_remote else 0

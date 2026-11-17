@@ -58,7 +58,6 @@ def verify_marketplace_readiness():
             "Custom Field",
             filters={"dt": ["in", all_restricted]},
             fields=["dt", "fieldname"],
-            ignore_permissions=True,
         )
         for r in rows:
             cf_violations.append(f"{r.dt}.{r.fieldname}")

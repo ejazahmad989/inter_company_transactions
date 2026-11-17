@@ -186,4 +186,4 @@ Out-of-the-box translation support included for:
 ## 📄 License & Publisher
 - **Publisher:** Ejaz Tech (`ejazahmad989@gmail.com`) & Rahil Ali (`rahilali3311@gmail.com`)
 - **License:** MIT License (Commercial & Marketplace Ready)
-- **Documentation:** Complete setup and operations guide available in [`USER_GUIDE.md`](USER_GUIDE.md) and inside ERPNext Desk via the User Guide PDF download.
+- **Documentation:** Complete setup and operations guide available in [`USER_GUIDE.md`](USER_GUIDE.md), [`Inter_Company_Transactions_User_Guide.pdf`](Inter_Company_Transactions_User_Guide.pdf), and the illustrated beginner guide [`Inter_Company_Transactions_Visual_Workbook.pdf`](Inter_Company_Transactions_Visual_Workbook.pdf).

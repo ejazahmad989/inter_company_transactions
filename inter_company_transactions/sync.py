@@ -80,10 +80,17 @@ def get_remote_site_for_company(company_name):
 def prepare_remote_payload(doc, target_company):
 	"""
 	Serializes a local transaction into a standard cross-site payload.
-	Includes header data, line items, taxes, and idempotency key.
+	Includes header data, source company currency, line items, taxes, and idempotency key.
 	"""
 	system_site = frappe.utils.get_url() or "local"
 	idempotency_key = f"{system_site}:{doc.doctype}:{doc.name}"
+
+	source_company_currency = None
+	if doc.get("company") and hasattr(frappe, "db") and frappe.db:
+		try:
+			source_company_currency = frappe.db.get_value("Company", doc.get("company"), "default_currency")
+		except Exception:
+			source_company_currency = None
 
 	payload = {
 		"idempotency_key": idempotency_key,
@@ -91,11 +98,12 @@ def prepare_remote_payload(doc, target_company):
 		"source_doctype": doc.doctype,
 		"source_name": doc.name,
 		"source_company": doc.company,
+		"source_company_currency": source_company_currency,
 		"target_company": target_company,
 		"posting_date": str(doc.get("posting_date") or doc.get("transaction_date") or nowdate()),
 		"transaction_date": str(doc.get("transaction_date") or doc.get("posting_date") or nowdate()),
 		"schedule_date": str(doc.get("schedule_date") or doc.get("delivery_date") or ""),
-		"currency": doc.get("currency"),
+		"currency": doc.get("currency") or source_company_currency,
 		"conversion_rate": flt(doc.get("conversion_rate") or 1.0),
 		"grand_total": flt(doc.get("grand_total") or doc.get("total") or 0.0),
 		"total_qty": flt(doc.get("total_qty") or 0.0),
@@ -128,7 +136,7 @@ def prepare_remote_payload(doc, target_company):
 				"t_warehouse": row.get("t_warehouse"),
 			})
 
-	# Serialize Accounts (for Journal Entry or Payment Entry)
+	# Serialize Accounts (for Journal Entry)
 	if hasattr(doc, "accounts") and doc.accounts:
 		for row in doc.accounts:
 			payload["accounts"].append({
@@ -137,7 +145,10 @@ def prepare_remote_payload(doc, target_company):
 				"party": row.get("party"),
 				"debit_in_account_currency": flt(row.get("debit_in_account_currency") or row.get("debit") or 0.0),
 				"credit_in_account_currency": flt(row.get("credit_in_account_currency") or row.get("credit") or 0.0),
-				"account_currency": row.get("account_currency")
+				"debit": flt(row.get("debit") or 0.0),
+				"credit": flt(row.get("credit") or 0.0),
+				"exchange_rate": flt(row.get("exchange_rate") or 1.0),
+				"account_currency": row.get("account_currency"),
 			})
 
 	# Serialize Taxes / Landed Cost charges
@@ -155,6 +166,10 @@ def prepare_remote_payload(doc, target_company):
 		payload["payment_type"] = doc.get("payment_type")
 		payload["paid_amount"] = flt(doc.get("paid_amount") or 0.0)
 		payload["received_amount"] = flt(doc.get("received_amount") or 0.0)
+		payload["paid_from_account_currency"] = doc.get("paid_from_account_currency")
+		payload["paid_to_account_currency"] = doc.get("paid_to_account_currency")
+		payload["source_exchange_rate"] = flt(doc.get("source_exchange_rate") or 1.0)
+		payload["target_exchange_rate"] = flt(doc.get("target_exchange_rate") or 1.0)
 		payload["party_type"] = doc.get("party_type")
 		payload["party"] = doc.get("party")
 
@@ -449,28 +464,63 @@ def receive_remote_transaction(payload=None):
 	if hasattr(target_doc, "schedule_date") and not getattr(target_doc, "schedule_date", None):
 		target_doc.schedule_date = data.get("schedule_date") or data.get("transaction_date") or nowdate()
 
+	if hasattr(target_doc, "delivery_date") and not getattr(target_doc, "delivery_date", None):
+		target_doc.delivery_date = data.get("schedule_date") or data.get("transaction_date") or nowdate()
+
+	from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+		_precalculate_mirrored_doc_totals,
+		_preserve_intercompany_currency_after_defaults,
+		get_intercompany_warehouse,
+		get_or_create_intercompany_warehouse,
+		lookup_intercompany_exchange_rate,
+	)
+
+	tx_date = data.get("posting_date") or data.get("transaction_date") or nowdate()
+	source_company_ccy = data.get("source_company_currency") or data.get("currency")
+	target_company_ccy = frappe.db.get_value("Company", target_company, "default_currency")
+
+	def _remote_fx(from_ccy, to_ccy):
+		if not from_ccy or not to_ccy or from_ccy == to_ccy:
+			return 1.0
+		src_doc_ccy = data.get("currency")
+		src_conv = flt(data.get("conversion_rate") or 0.0)
+		if src_doc_ccy and source_company_ccy and src_doc_ccy != source_company_ccy and src_conv > 0:
+			if from_ccy == src_doc_ccy and to_ccy == source_company_ccy:
+				return flt(src_conv, 9)
+			if from_ccy == source_company_ccy and to_ccy == src_doc_ccy:
+				return flt(1.0 / src_conv, 9)
+		return flt(lookup_intercompany_exchange_rate(from_ccy, to_ccy, tx_date) or 1.0, 9)
+
 	# Resolve Party (Customer or Supplier)
 	party_name = resolve_counterparty_for_remote_source(source_company, target_doctype, target_company)
+	party_dt = None
 	if target_doctype in ["Purchase Order", "Purchase Invoice", "Purchase Receipt", "Supplier Quotation"]:
 		target_doc.supplier = party_name
+		party_dt = "Supplier"
 	elif target_doctype == "Quotation":
 		target_doc.quotation_to = "Customer"
 		target_doc.party_name = party_name
+		party_dt = "Customer"
 	elif target_doctype in ["Sales Order", "Sales Invoice", "Delivery Note"]:
 		target_doc.customer = party_name
+		party_dt = "Customer"
 
-	# Set currency and conversion_rate on trading vouchers when available
-	if data.get("currency") and hasattr(target_doc, "currency"):
-		target_doc.currency = data.get("currency")
-	if data.get("conversion_rate") and hasattr(target_doc, "conversion_rate"):
-		target_doc.conversion_rate = flt(data.get("conversion_rate") or 1.0)
+	# Resolve currency, conversion_rate, and item rate_factor cleanly for trading vouchers
+	src_voucher_ccy = data.get("currency") or source_company_ccy or target_company_ccy
+	party_ccy = None
+	if party_dt and party_name and frappe.db.exists(party_dt, party_name):
+		party_ccy = frappe.db.get_value(party_dt, party_name, "default_currency")
+	target_currency = party_ccy or src_voucher_ccy or target_company_ccy
+	target_conv_rate = 1.0 if (not target_currency or not target_company_ccy or target_currency == target_company_ccy) else _remote_fx(target_currency, target_company_ccy)
+	item_rate_factor = 1.0 if (not src_voucher_ccy or not target_currency or src_voucher_ccy == target_currency) else _remote_fx(src_voucher_ccy, target_currency)
+
+	if target_currency and hasattr(target_doc, "currency"):
+		target_doc.currency = target_currency
+	if hasattr(target_doc, "conversion_rate"):
+		target_doc.conversion_rate = target_conv_rate
 
 	# Map Stock Entry (Company 1 Material Issue -> Company 2 Material Receipt)
 	if target_doctype == "Stock Entry":
-		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
-			get_intercompany_warehouse,
-			get_or_create_intercompany_warehouse,
-		)
 		target_doc.stock_entry_type = "Material Receipt"
 		target_doc.purpose = "Material Receipt"
 		target_warehouse = get_intercompany_warehouse(target_company) or get_or_create_intercompany_warehouse(target_company)
@@ -478,9 +528,11 @@ def receive_remote_transaction(payload=None):
 		target_doc.to_warehouse = target_warehouse
 		target_doc.remarks = data.get("remarks") or f"Intercompany Material Receipt synchronized from {source_company} ({source_doctype} {source_name})"
 
+		se_fx = _remote_fx(source_company_ccy, target_company_ccy)
 		for row in data.get("items", []):
 			resolved_item_code = resolve_item_code_for_remote(row.get("item_code"), target_company)
-			basic_rate = flt(row.get("basic_rate") or row.get("valuation_rate") or row.get("rate") or 0.0)
+			raw_rate = flt(row.get("basic_rate") or row.get("valuation_rate") or row.get("rate") or 0.0)
+			basic_rate = flt(raw_rate * se_fx, 4) if raw_rate > 0 else 0.0
 			qty = flt(row.get("qty") or 1.0)
 			se_row = {
 				"item_code": resolved_item_code,
@@ -497,18 +549,22 @@ def receive_remote_transaction(payload=None):
 				se_row["allow_zero_valuation_rate"] = 1
 			target_doc.append("items", se_row)
 
-	# Map Standard Order / Invoice / Receipt Line Items
+	# Map Standard Order / Invoice / Receipt / Quotation Line Items
 	elif hasattr(target_doc, "items") and data.get("items"):
 		for row in data["items"]:
 			resolved_item_code = resolve_item_code_for_remote(row.get("item_code"), target_company)
 			item_row = {
 				"item_code": resolved_item_code,
 				"qty": flt(row.get("qty")),
-				"rate": flt(row.get("rate")),
+				"rate": flt(flt(row.get("rate")) * item_rate_factor, 4),
 				"uom": row.get("uom")
 			}
-			if row.get("schedule_date"):
-				item_row["schedule_date"] = row.get("schedule_date")
+			sched = row.get("schedule_date") or getattr(target_doc, "schedule_date", None) or getattr(target_doc, "delivery_date", None)
+			if sched:
+				if target_doctype == "Sales Order":
+					item_row["delivery_date"] = sched
+				else:
+					item_row["schedule_date"] = sched
 			# Warehouse resolution
 			if hasattr(target_doc, "set_warehouse") and target_doc.set_warehouse:
 				item_row["warehouse"] = target_doc.set_warehouse
@@ -518,12 +574,16 @@ def receive_remote_transaction(payload=None):
 	if target_doctype == "Journal Entry":
 		target_doc.voucher_type = "Inter Company Journal Entry" if frappe.db.exists("Journal Entry Type", "Inter Company Journal Entry") else "Journal Entry"
 		target_doc.user_remark = data.get("remarks")
+		je_fx = _remote_fx(source_company_ccy, target_company_ccy)
+		if source_company_ccy and target_company_ccy and source_company_ccy != target_company_ccy:
+			target_doc.multi_currency = 1
 		clearing_account = get_or_create_intercompany_clearing_account(target_company)
 		if source_doctype == "Landed Cost Voucher":
 			total_amt = flt(data.get("total_taxes_and_charges") or 0.0)
 			if total_amt <= 0:
 				total_amt = sum(flt(t.get("base_amount") or t.get("amount") or 0.0) for t in (data.get("taxes") or []))
-			if total_amt > 0:
+			converted_amt = flt(total_amt * je_fx, 2)
+			if converted_amt > 0:
 				expense_acct = (
 					frappe.db.get_value("Company", target_company, "default_expense_account")
 					or frappe.db.get_value("Account", {"company": target_company, "root_type": "Expense", "is_group": 0}, "name")
@@ -532,39 +592,50 @@ def receive_remote_transaction(payload=None):
 				payable_acct = frappe.db.get_value("Company", target_company, "default_payable_account")
 				target_doc.append("accounts", {
 					"account": expense_acct,
+					"account_currency": target_company_ccy,
 					"exchange_rate": 1.0,
-					"debit_in_account_currency": flt(total_amt, 2),
+					"debit_in_account_currency": converted_amt,
 					"credit_in_account_currency": 0,
-					"debit": flt(total_amt, 2),
+					"debit": converted_amt,
 					"credit": 0,
 				})
 				if party_name and payable_acct:
 					target_doc.append("accounts", {
 						"account": payable_acct,
+						"account_currency": target_company_ccy,
 						"exchange_rate": 1.0,
 						"party_type": "Supplier",
 						"party": party_name,
 						"debit_in_account_currency": 0,
-						"credit_in_account_currency": flt(total_amt, 2),
+						"credit_in_account_currency": converted_amt,
 						"debit": 0,
-						"credit": flt(total_amt, 2),
+						"credit": converted_amt,
 					})
 				else:
 					target_doc.append("accounts", {
 						"account": clearing_account or expense_acct,
+						"account_currency": target_company_ccy,
 						"exchange_rate": 1.0,
 						"debit_in_account_currency": 0,
-						"credit_in_account_currency": flt(total_amt, 2),
+						"credit_in_account_currency": converted_amt,
 						"debit": 0,
-						"credit": flt(total_amt, 2),
+						"credit": converted_amt,
 					})
 		else:
-			# Post mirrored entries
+			# Post mirrored entries in target company base currency
 			for acc_row in data.get("accounts", []):
-				dr = flt(acc_row.get("credit_in_account_currency"))
-				cr = flt(acc_row.get("debit_in_account_currency"))
+				row_fx = flt(acc_row.get("exchange_rate") or 1.0)
+				src_base_dr = flt(acc_row.get("credit") or (flt(acc_row.get("credit_in_account_currency")) * row_fx))
+				src_base_cr = flt(acc_row.get("debit") or (flt(acc_row.get("debit_in_account_currency")) * row_fx))
+				if target_company_ccy and acc_row.get("account_currency") == target_company_ccy:
+					dr = flt(acc_row.get("credit_in_account_currency"), 2)
+					cr = flt(acc_row.get("debit_in_account_currency"), 2)
+				else:
+					dr = flt(src_base_dr * je_fx, 2)
+					cr = flt(src_base_cr * je_fx, 2)
 				target_doc.append("accounts", {
 					"account": clearing_account,
+					"account_currency": target_company_ccy,
 					"exchange_rate": 1.0,
 					"debit_in_account_currency": dr,
 					"credit_in_account_currency": cr,
@@ -578,8 +649,17 @@ def receive_remote_transaction(payload=None):
 		target_doc.payment_type = inv_type
 		target_doc.party_type = "Supplier" if inv_type == "Pay" else "Customer"
 		target_doc.party = party_name
-		target_doc.paid_amount = flt(data.get("received_amount") or data.get("paid_amount") or 0.0)
-		target_doc.received_amount = flt(data.get("paid_amount") or data.get("received_amount") or 0.0)
+		pe_fx = _remote_fx(source_company_ccy, target_company_ccy)
+		if data.get("payment_type") == "Pay":
+			ref_amt = flt(data.get("received_amount") or data.get("paid_amount") or 0.0)
+			ref_ccy = data.get("paid_to_account_currency") or source_company_ccy
+		else:
+			ref_amt = flt(data.get("paid_amount") or data.get("received_amount") or 0.0)
+			ref_ccy = data.get("paid_from_account_currency") or source_company_ccy
+		conv_factor = 1.0 if (not ref_ccy or not target_company_ccy or ref_ccy == target_company_ccy) else (_remote_fx(ref_ccy, target_company_ccy) if ref_ccy != source_company_ccy else pe_fx)
+		settled_tgt_amt = flt(ref_amt * conv_factor, 2)
+		target_doc.paid_amount = settled_tgt_amt
+		target_doc.received_amount = settled_tgt_amt
 		if not flt(getattr(target_doc, "source_exchange_rate", 0)):
 			target_doc.source_exchange_rate = 1.0
 		if not flt(getattr(target_doc, "target_exchange_rate", 0)):
@@ -604,9 +684,9 @@ def receive_remote_transaction(payload=None):
 	except Exception:
 		pass
 
-	from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
-		_precalculate_mirrored_doc_totals,
-	)
+	if hasattr(target_doc, "currency") and target_currency:
+		_preserve_intercompany_currency_after_defaults(target_doc, target_currency, target_conv_rate, tx_date)
+
 	_precalculate_mirrored_doc_totals(target_doc)
 
 	target_doc.insert(ignore_permissions=True, ignore_mandatory=True)

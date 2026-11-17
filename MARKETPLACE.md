@@ -25,7 +25,7 @@
 | **App Version** | `1.0.0` (Production Stable) |
 | **License** | MIT (Open Source — required for Frappe Cloud Marketplace) |
 | **Repository URL** | `https://github.com/ejazahmad989/inter_company_transactions` |
-| **Documentation** | Included (`USER_GUIDE.md` & `inter_company_transactions/public/Inter_Company_Transactions_User_Guide.pdf`) |
+| **Documentation** | Included (`USER_GUIDE.md`, `Inter_Company_Transactions_User_Guide.pdf`, & `Inter_Company_Transactions_Visual_Workbook.pdf`) |
 | **App Icon** | `inter_company_transactions/public/images/inter_company_icon_512.png` |
 | **Hero Banner** | `inter_company_transactions/public/images/marketplace_banner.png` |
 

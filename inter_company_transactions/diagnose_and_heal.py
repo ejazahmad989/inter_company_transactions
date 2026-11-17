@@ -90,7 +90,6 @@ def repair_database_text(log):
 						dt,
 						filters={col: ["like", f"%{old_val}%"]},
 						fields=["name", col],
-						ignore_permissions=True,
 					)
 					for row in rows or []:
 						orig = row.get(col) or ""
@@ -108,7 +107,6 @@ def repair_database_text(log):
 						dt,
 						or_filters=[[col, "like", "%and!%"], [col, "like", "%or!%"]],
 						fields=["name", col],
-						ignore_permissions=True,
 					)
 					for gr in glued_rows or []:
 						orig = gr.get(col) or ""
@@ -152,7 +150,6 @@ def restore_master_permissions(log):
 				perm_dt,
 				filters={"parent": ["in", master_doctypes], "role": ["in", admin_roles]},
 				fields=["name", "create", "delete", "write", "read"],
-				ignore_permissions=True,
 			)
 			for row in rows or []:
 				if not (row.get("create") and row.get("delete") and row.get("write") and row.get("read")):
@@ -172,7 +169,6 @@ def restore_master_permissions(log):
 				"DocType",
 				filters={"name": ["in", master_doctypes]},
 				fields=["name", "read_only", "in_create"],
-				ignore_permissions=True,
 			)
 			for row in rows or []:
 				if row.get("read_only") or row.get("in_create"):

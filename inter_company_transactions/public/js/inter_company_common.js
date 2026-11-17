@@ -341,6 +341,243 @@
 		}
 	}
 
+	function get_voucher_tx_date(frm) {
+		return (frm && frm.doc && (frm.doc.posting_date || frm.doc.transaction_date)) || frappe.datetime.get_today();
+	}
+
+	function doc_has_inline_cross_currency_rate(frm, info) {
+		if (!frm || !frm.doc || !info) return false;
+		const src_ccy = info.from_currency;
+		const tgt_ccy = info.to_currency;
+		if (!src_ccy || !tgt_ccy || src_ccy === tgt_ccy) return true;
+
+		if (frm.doc.currency && frm.doc.currency !== src_ccy && flt(frm.doc.conversion_rate) > 0 && flt(frm.doc.conversion_rate) !== 1) {
+			return true;
+		}
+		if (frm.doc.doctype === 'Payment Entry') {
+			if (frm.doc.paid_from_account_currency && frm.doc.paid_from_account_currency !== src_ccy && flt(frm.doc.source_exchange_rate) > 0 && flt(frm.doc.source_exchange_rate) !== 1) {
+				return true;
+			}
+			if (frm.doc.paid_to_account_currency && frm.doc.paid_to_account_currency !== src_ccy && flt(frm.doc.target_exchange_rate) > 0 && flt(frm.doc.target_exchange_rate) !== 1) {
+				return true;
+			}
+		}
+		if (frm.doc.doctype === 'Journal Entry' && Array.isArray(frm.doc.accounts)) {
+			for (let i = 0; i < frm.doc.accounts.length; i++) {
+				const row = frm.doc.accounts[i];
+				if (row && row.account_currency && row.account_currency !== src_ccy && flt(row.exchange_rate) > 0 && flt(row.exchange_rate) !== 1) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	function prompt_exchange_rate_dialog(frm, info, on_saved, on_cancel) {
+		const esc = frappe.utils.escape_html;
+		const from_ccy = info.from_currency;
+		const to_ccy = info.to_currency;
+		const tx_date = info.transaction_date || get_voucher_tx_date(frm);
+		const opt_to_to_from = __('1 {0} = ? {1}', [to_ccy, from_ccy]);
+		const opt_from_to_to = __('1 {0} = ? {1}', [from_ccy, to_ccy]);
+
+		let saved_done = false;
+		let default_dir = opt_to_to_from;
+		let default_rate = info.inverse_rate || '';
+		if (!default_rate && info.exchange_rate) {
+			default_dir = opt_from_to_to;
+			default_rate = info.exchange_rate;
+		}
+
+		const dialog = new frappe.ui.Dialog({
+			title: __('Exchange Rate Required ({0} ↔ {1})', [from_ccy, to_ccy]),
+			fields: [
+				{
+					fieldname: 'intro_html',
+					fieldtype: 'HTML',
+					options: '<div style="margin-bottom: 10px; line-height: 1.5;">' +
+						__('<b>{0}</b> ({1}) and <b>{2}</b> ({3}) use different base currencies.<br>Save a Currency Exchange rate for <b>{4}</b> so both companies\' ledgers stay 100% balanced.', [
+							esc(frm.doc.company || ''),
+							esc(from_ccy),
+							esc(frm.doc.intercompany_target_company || ''),
+							esc(to_ccy),
+							esc(tx_date)
+						]) +
+						'</div>'
+				},
+				{
+					fieldname: 'direction',
+					fieldtype: 'Select',
+					label: __('Quote Direction'),
+					options: [opt_to_to_from, opt_from_to_to].join('\n'),
+					default: default_dir,
+					reqd: 1
+				},
+				{
+					fieldname: 'rate',
+					fieldtype: 'Float',
+					label: __('Exchange Rate'),
+					precision: 9,
+					default: default_rate || undefined,
+					reqd: 1,
+					description: __('Example: if 1 {0} = 275 {1}, enter 275.', [to_ccy, from_ccy])
+				},
+				{
+					fieldname: 'date',
+					fieldtype: 'Date',
+					label: __('Effective Date'),
+					default: tx_date,
+					reqd: 1
+				},
+				{
+					fieldname: 'preview_html',
+					fieldtype: 'HTML'
+				}
+			],
+			primary_action_label: __('Save Exchange Rate'),
+			primary_action: function(values) {
+				const entered = flt(values.rate);
+				if (entered <= 0) {
+					frappe.msgprint({
+						title: __('Invalid Exchange Rate'),
+						indicator: 'red',
+						message: __('Exchange rate must be greater than zero.')
+					});
+					return;
+				}
+				const is_to_from = values.direction === opt_to_to_from;
+				const save_from = is_to_from ? to_ccy : from_ccy;
+				const save_to = is_to_from ? from_ccy : to_ccy;
+
+				frappe.call({
+					method: 'inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.save_intercompany_currency_exchange',
+					args: {
+						from_currency: save_from,
+						to_currency: save_to,
+						exchange_rate: entered,
+						date: values.date || tx_date
+					},
+					freeze: true,
+					freeze_message: __('Saving Currency Exchange...'),
+					callback: function(res) {
+						if (res && res.message && res.message.success) {
+							saved_done = true;
+							dialog.hide();
+							frappe.show_alert({
+								message: __('Saved exchange rate: 1 {0} = {1} {2}', [save_from, flt(entered, 6), save_to]),
+								indicator: 'green'
+							});
+							if (typeof on_saved === 'function') {
+								on_saved(res.message);
+							}
+						}
+					}
+				});
+			}
+		});
+
+		function update_preview() {
+			const v = flt(dialog.get_value('rate'));
+			const dir = dialog.get_value('direction');
+			const $wrapper = dialog.fields_dict.preview_html && dialog.fields_dict.preview_html.$wrapper;
+			if (!$wrapper) return;
+			if (v > 0) {
+				const is_to_from = dir === opt_to_to_from;
+				const r_to_from = is_to_from ? v : (1.0 / v);
+				const r_from_to = is_to_from ? (1.0 / v) : v;
+				$wrapper.html(
+					'<div class="text-muted small" style="padding: 6px 0;">' +
+					__('Converted Rates: <b>1 {0} = {1} {2}</b> &nbsp;|&nbsp; <b>1 {2} = {3} {0}</b>', [
+						esc(to_ccy),
+						flt(r_to_from, 6),
+						esc(from_ccy),
+						flt(r_from_to, 9)
+					]) +
+					'</div>'
+				);
+			} else {
+				$wrapper.html('');
+			}
+		}
+
+		['rate', 'direction'].forEach(function(fn) {
+			const field = dialog.fields_dict[fn];
+			if (field && field.$input) {
+				field.$input.on('input change', update_preview);
+			}
+		});
+
+		if (dialog.$wrapper) {
+			dialog.$wrapper.on('hidden.bs.modal', function() {
+				if (!saved_done && typeof on_cancel === 'function') {
+					on_cancel();
+				}
+			});
+		}
+
+		dialog.show();
+		update_preview();
+	}
+
+	function check_and_update_exchange_rate_ui(frm) {
+		if (!frm || !frm.doc || frm.doc.docstatus !== 0 || is_mirrored_counterpart(frm)) return;
+		if (!cint(frm.doc.is_intercompany) || !frm.doc.company || !frm.doc.intercompany_target_company) return;
+		if (frm.doc.company === frm.doc.intercompany_target_company) return;
+
+		const esc = frappe.utils.escape_html;
+		frappe.call({
+			method: 'inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.check_intercompany_exchange_rate',
+			args: {
+				source_company: frm.doc.company,
+				target_company: frm.doc.intercompany_target_company,
+				transaction_date: get_voucher_tx_date(frm),
+				doc_currency: frm.doc.currency || null,
+				conversion_rate: frm.doc.conversion_rate || null
+			},
+			callback: function(r) {
+				const info = r && r.message;
+				if (!info) return;
+				frm._ict_fx_info = info;
+				if (!info.required) return;
+
+				const has_inline = doc_has_inline_cross_currency_rate(frm, info);
+				if (!info.has_rate && !has_inline) {
+					if (frm.dashboard && frm.dashboard.set_headline_alert) {
+						frm.dashboard.set_headline_alert(
+							__('Cross-Currency Exchange Rate Required: <b>{0}</b> ({1}) ↔ <b>{2}</b> ({3}) on <b>{4}</b>. Click <b>Inter Company → Set Exchange Rate</b> before submitting.', [
+								esc(frm.doc.company),
+								esc(info.from_currency),
+								esc(frm.doc.intercompany_target_company),
+								esc(info.to_currency),
+								esc(info.transaction_date || get_voucher_tx_date(frm))
+							]),
+							'orange'
+						);
+					}
+					frm.add_custom_button(
+						__('Set Exchange Rate ({0} ↔ {1})', [info.from_currency, info.to_currency]),
+						function() {
+							prompt_exchange_rate_dialog(frm, info, function() {
+								frm.refresh();
+							});
+						},
+						__('Inter Company')
+					);
+				} else {
+					frm.add_custom_button(
+						__('Update Exchange Rate ({0} ↔ {1})', [info.from_currency, info.to_currency]),
+						function() {
+							prompt_exchange_rate_dialog(frm, info, function() {
+								frm.refresh();
+							});
+						},
+						__('Inter Company')
+					);
+				}
+			}
+		});
+	}
+
 	supportedDocTypes.forEach(function(dt) {
 		frappe.ui.form.on(dt, {
 			onload: function(frm) {
@@ -377,23 +614,26 @@
 					} else {
 						add_linked_doc_ui(frm, fallbackDt, fallbackName, fallbackCo, true, null);
 					}
-				} else if (frm.doc.docstatus === 0 && cint(frm.doc.is_intercompany) && frm.dashboard && frm.dashboard.set_headline_alert) {
-					if (frm.doc.doctype === 'Stock Entry') {
-						frm.dashboard.set_headline_alert(
-							__('Inter-Company Stock Transfer: Submit as Material Issue in {0}; a matching Material Receipt will be auto-created in {1}.', [
-								frm.doc.company || __('Source Company'),
-								frm.doc.intercompany_target_company || __('Target Sister Company')
-							]),
-							'blue'
-						);
-					} else if (frm.doc.doctype === 'Landed Cost Voucher') {
-						frm.dashboard.set_headline_alert(
-							__('Inter-Company Landed Cost Recharge: On submit, a balanced Journal Entry will be auto-created in {0}.', [
-								frm.doc.intercompany_target_company || __('Target Sister Company')
-							]),
-							'blue'
-						);
+				} else if (frm.doc.docstatus === 0 && cint(frm.doc.is_intercompany)) {
+					if (frm.dashboard && frm.dashboard.set_headline_alert) {
+						if (frm.doc.doctype === 'Stock Entry') {
+							frm.dashboard.set_headline_alert(
+								__('Inter-Company Stock Transfer: Submit as Material Issue in {0}; a matching Material Receipt will be auto-created in {1}.', [
+									frm.doc.company || __('Source Company'),
+									frm.doc.intercompany_target_company || __('Target Sister Company')
+								]),
+								'blue'
+							);
+						} else if (frm.doc.doctype === 'Landed Cost Voucher') {
+							frm.dashboard.set_headline_alert(
+								__('Inter-Company Landed Cost Recharge: On submit, a balanced Journal Entry will be auto-created in {0}.', [
+									frm.doc.intercompany_target_company || __('Target Sister Company')
+								]),
+								'blue'
+							);
+						}
 					}
+					check_and_update_exchange_rate_ui(frm);
 				} else if (frm.doc.docstatus === 1 && cint(frm.doc.is_intercompany) && !frm.is_new()) {
 					// Check if a mirrored counterpart already exists in Inter Company Document Reference
 					frappe.call({
@@ -459,6 +699,7 @@
 						frm.set_value('stock_entry_type', 'Material Issue');
 					}
 					sync_intercompany_state(frm);
+					check_and_update_exchange_rate_ui(frm);
 					let msg = __('Intercompany mode enabled: Select target sister company in Intercompany Target Company.');
 					if (frm.doc.doctype === 'Stock Entry') {
 						msg = __('Intercompany Stock Transfer enabled (Material Issue -> Material Receipt in target sister company).');
@@ -492,6 +733,17 @@
 					});
 				}
 			},
+			intercompany_target_company: function(frm) {
+				if (is_mirrored_counterpart(frm)) return;
+				sync_intercompany_state(frm);
+				check_and_update_exchange_rate_ui(frm);
+			},
+			posting_date: function(frm) {
+				check_and_update_exchange_rate_ui(frm);
+			},
+			transaction_date: function(frm) {
+				check_and_update_exchange_rate_ui(frm);
+			},
 			company: function(frm) {
 				if (is_mirrored_counterpart(frm)) return;
 				if (cint(frm.doc.is_intercompany)) {
@@ -504,6 +756,7 @@
 					}
 				}
 				sync_intercompany_state(frm);
+				check_and_update_exchange_rate_ui(frm);
 			},
 			validate: function(frm) {
 				if (is_mirrored_counterpart(frm)) {
@@ -540,6 +793,55 @@
 						});
 					}
 				}
+			},
+			before_submit: function(frm) {
+				if (
+					is_mirrored_counterpart(frm) ||
+					!cint(frm.doc.is_intercompany) ||
+					!frm.doc.company ||
+					!frm.doc.intercompany_target_company ||
+					frm.doc.company === frm.doc.intercompany_target_company
+				) {
+					return;
+				}
+
+				return new Promise(function(resolve) {
+					frappe.call({
+						method: 'inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.check_intercompany_exchange_rate',
+						args: {
+							source_company: frm.doc.company,
+							target_company: frm.doc.intercompany_target_company,
+							transaction_date: get_voucher_tx_date(frm),
+							doc_currency: frm.doc.currency || null,
+							conversion_rate: frm.doc.conversion_rate || null
+						},
+						callback: function(r) {
+							const info = r && r.message;
+							if (!info || !info.required || info.has_rate || doc_has_inline_cross_currency_rate(frm, info)) {
+								resolve();
+								return;
+							}
+							prompt_exchange_rate_dialog(
+								frm,
+								info,
+								function() {
+									resolve();
+								},
+								function() {
+									frappe.validated = false;
+									frappe.show_alert({
+										message: __('Submission cancelled — Currency Exchange rate between {0} and {1} is required.', [info.from_currency, info.to_currency]),
+										indicator: 'orange'
+									});
+									resolve();
+								}
+							);
+						},
+						error: function() {
+							resolve();
+						}
+					});
+				});
 			}
 		});
 	});
