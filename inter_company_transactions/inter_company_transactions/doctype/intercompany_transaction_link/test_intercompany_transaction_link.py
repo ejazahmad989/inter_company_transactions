@@ -915,6 +915,8 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 
 	def test_locked_mirrored_fields_enforced_allows_local_warehouse(self):
 		"""Verify mirrored counterpart blocks currency/FX/rate/amount edits but permits local warehouse updates"""
+		from unittest.mock import patch
+
 		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
 			validate_locked_mirrored_fields,
 		)
@@ -944,33 +946,34 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 			],
 		})
 
-		# Safe edit: only warehouse changed -> must pass without exception
-		safe_doc = frappe._dict({
-			**prev_doc,
-			"flags": frappe._dict(),
-			"items": [
-				frappe._dict({
-					"item_code": "WIDGET-01",
-					"uom": "Nos",
-					"qty": 5.0,
-					"rate": 100.0,
-					"amount": 500.0,
-					"warehouse": "Finished Goods - JC",
-					"cost_center": "Sales - JC",
-				})
-			],
-		})
-		validate_locked_mirrored_fields(safe_doc, previous=prev_doc)
+		with patch.object(frappe.db, "exists", return_value=True):
+			# Safe edit: only warehouse changed -> must pass without exception
+			safe_doc = frappe._dict({
+				**prev_doc,
+				"flags": frappe._dict(),
+				"items": [
+					frappe._dict({
+						"item_code": "WIDGET-01",
+						"uom": "Nos",
+						"qty": 5.0,
+						"rate": 100.0,
+						"amount": 500.0,
+						"warehouse": "Finished Goods - JC",
+						"cost_center": "Sales - JC",
+					})
+				],
+			})
+			validate_locked_mirrored_fields(safe_doc, previous=prev_doc)
 
-		# Illegal edit: conversion_rate or item rate tampered -> must throw
-		tampered_doc = frappe._dict({
-			**prev_doc,
-			"conversion_rate": 2.5,
-			"flags": frappe._dict(),
-			"items": [frappe._dict(prev_doc["items"][0])],
-		})
-		with self.assertRaises(Exception):
-			validate_locked_mirrored_fields(tampered_doc, previous=prev_doc)
+			# Illegal edit: conversion_rate or item rate tampered -> must throw
+			tampered_doc = frappe._dict({
+				**prev_doc,
+				"conversion_rate": 2.5,
+				"flags": frappe._dict(),
+				"items": [frappe._dict(prev_doc["items"][0])],
+			})
+			with self.assertRaises(Exception):
+				validate_locked_mirrored_fields(tampered_doc, previous=prev_doc)
 
 	def test_cancellation_authority_strict_vs_bidirectional(self):
 		"""Verify Target-side cancellation is blocked under Source Company Only and permitted under Bidirectional"""
@@ -992,10 +995,14 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 			"flags": frappe._dict(),
 		})
 
-		# Strict mode -> must throw on mirrored counterpart
+		# Strict mode -> must throw on mirrored counterpart when source document is active (docstatus=1)
 		with patch(
 			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link._get_intercompany_settings",
 			return_value={"cancellation_authority": "Source Company Only (Strict Control)"},
+		), patch.object(
+			frappe.db, "exists", side_effect=lambda dt, name=None, **kw: (dt == "DocType" and name == "Sales Invoice") or (dt == "Sales Invoice" and name == "SINV-001")
+		), patch.object(
+			frappe.db, "get_value", return_value=1
 		):
 			with self.assertRaises(Exception):
 				validate_intercompany_cancellation(target_doc)
@@ -1080,6 +1087,8 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 
 	def test_validate_locked_mirrored_fields_non_iterable_document(self):
 		"""Verify validate_locked_mirrored_fields does not raise TypeError when previous is a non-iterable Document"""
+		from unittest.mock import patch
+
 		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
 			validate_locked_mirrored_fields,
 		)
@@ -1109,16 +1118,19 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 		}
 		prev = NonIterableDoc(base_data)
 		doc = NonIterableDoc(base_data)
-		# Should pass cleanly with zero TypeError even though `customer`, `party_type`, etc. are absent
-		validate_locked_mirrored_fields(doc, previous=prev)
+		with patch.object(frappe.db, "exists", return_value=True):
+			# Should pass cleanly with zero TypeError even though `customer`, `party_type`, etc. are absent
+			validate_locked_mirrored_fields(doc, previous=prev)
 
-		# Modifying supplier must still trigger locked-field ValidationError cleanly
-		bad_doc = NonIterableDoc({**base_data, "supplier": "Another Supplier"})
-		with self.assertRaises(frappe.ValidationError):
-			validate_locked_mirrored_fields(bad_doc, previous=prev)
+			# Modifying supplier must still trigger locked-field ValidationError cleanly
+			bad_doc = NonIterableDoc({**base_data, "supplier": "Another Supplier"})
+			with self.assertRaises(frappe.ValidationError):
+				validate_locked_mirrored_fields(bad_doc, previous=prev)
 
 	def test_submit_uncalculated_mirrored_drafts_all_transaction_types(self):
 		"""Verify mirrored drafts with uncalculated 0 totals/amounts submit cleanly while tampering still throws"""
+		from unittest.mock import patch
+
 		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
 			_precalculate_mirrored_doc_totals,
 			validate_locked_mirrored_fields,
@@ -1169,166 +1181,167 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 			"flags": frappe._dict(),
 			"accounts": [frappe._dict(r) for r in je_prev["accounts"]],
 		})
-		validate_locked_mirrored_fields(je_submit, previous=je_prev)
+		with patch.object(frappe.db, "exists", return_value=True):
+			validate_locked_mirrored_fields(je_submit, previous=je_prev)
 
-		# Legacy LCV/remote JE where account_currency/exchange_rate/base debit were uncalculated
-		je_lcv_prev = frappe._dict({
-			**je_prev,
-			"accounts": [
-				frappe._dict({
-					"account": "Expenses - SC",
-					"account_currency": None,
-					"exchange_rate": 0.0,
-					"party_type": None,
-					"party": None,
-					"debit_in_account_currency": 450.0,
-					"credit_in_account_currency": 0.0,
-					"debit": 0.0,
-					"credit": 0.0,
-				}),
-				frappe._dict({
-					"account": "Creditors - SC",
-					"account_currency": None,
-					"exchange_rate": 0.0,
-					"party_type": "Supplier",
-					"party": "MAIN Supplier",
-					"debit_in_account_currency": 0.0,
-					"credit_in_account_currency": 450.0,
-					"debit": 0.0,
-					"credit": 0.0,
-				}),
-			],
-		})
-		je_lcv_submit = frappe._dict({
-			**je_lcv_prev,
-			"total_debit": 450.0,
-			"total_credit": 450.0,
-			"flags": frappe._dict(),
-			"accounts": [
-				frappe._dict({**je_lcv_prev["accounts"][0], "account_currency": "USD", "exchange_rate": 1.0, "debit": 450.0}),
-				frappe._dict({**je_lcv_prev["accounts"][1], "account_currency": "USD", "exchange_rate": 1.0, "credit": 450.0}),
-			],
-		})
-		validate_locked_mirrored_fields(je_lcv_submit, previous=je_lcv_prev)
+			# Legacy LCV/remote JE where account_currency/exchange_rate/base debit were uncalculated
+			je_lcv_prev = frappe._dict({
+				**je_prev,
+				"accounts": [
+					frappe._dict({
+						"account": "Expenses - SC",
+						"account_currency": None,
+						"exchange_rate": 0.0,
+						"party_type": None,
+						"party": None,
+						"debit_in_account_currency": 450.0,
+						"credit_in_account_currency": 0.0,
+						"debit": 0.0,
+						"credit": 0.0,
+					}),
+					frappe._dict({
+						"account": "Creditors - SC",
+						"account_currency": None,
+						"exchange_rate": 0.0,
+						"party_type": "Supplier",
+						"party": "MAIN Supplier",
+						"debit_in_account_currency": 0.0,
+						"credit_in_account_currency": 450.0,
+						"debit": 0.0,
+						"credit": 0.0,
+					}),
+				],
+			})
+			je_lcv_submit = frappe._dict({
+				**je_lcv_prev,
+				"total_debit": 450.0,
+				"total_credit": 450.0,
+				"flags": frappe._dict(),
+				"accounts": [
+					frappe._dict({**je_lcv_prev["accounts"][0], "account_currency": "USD", "exchange_rate": 1.0, "debit": 450.0}),
+					frappe._dict({**je_lcv_prev["accounts"][1], "account_currency": "USD", "exchange_rate": 1.0, "credit": 450.0}),
+				],
+			})
+			validate_locked_mirrored_fields(je_lcv_submit, previous=je_lcv_prev)
 
-		# Tampering row debit must still block JE
-		je_bad = frappe._dict({
-			**je_submit,
-			"flags": frappe._dict(),
-			"accounts": [
-				frappe._dict({**je_submit["accounts"][0], "debit_in_account_currency": 60000.0, "debit": 60000.0}),
-				frappe._dict(je_submit["accounts"][1]),
-			],
-		})
-		with self.assertRaises(frappe.ValidationError):
-			validate_locked_mirrored_fields(je_bad, previous=je_prev)
+			# Tampering row debit must still block JE
+			je_bad = frappe._dict({
+				**je_submit,
+				"flags": frappe._dict(),
+				"accounts": [
+					frappe._dict({**je_submit["accounts"][0], "debit_in_account_currency": 60000.0, "debit": 60000.0}),
+					frappe._dict(je_submit["accounts"][1]),
+				],
+			})
+			with self.assertRaises(frappe.ValidationError):
+				validate_locked_mirrored_fields(je_bad, previous=je_prev)
 
-		# 2. Item-based vouchers (PO/SO/SI/PI/DN/PR/SQ/Quotation) with DB amount=0
-		for dt in ("Purchase Order", "Sales Order", "Purchase Invoice", "Sales Invoice", "Delivery Note", "Purchase Receipt", "Supplier Quotation"):
-			prev_item_doc = frappe._dict({
-				"doctype": dt,
-				"name": f"{dt[:3].upper()}-0001",
-				"company": "Sister Co",
+			# 2. Item-based vouchers (PO/SO/SI/PI/DN/PR/SQ/Quotation) with DB amount=0
+			for dt in ("Purchase Order", "Sales Order", "Purchase Invoice", "Sales Invoice", "Delivery Note", "Purchase Receipt", "Supplier Quotation"):
+				prev_item_doc = frappe._dict({
+					"doctype": dt,
+					"name": f"{dt[:3].upper()}-0001",
+					"company": "Sister Co",
+					"currency": "PKR",
+					"conversion_rate": 1.0,
+					"is_intercompany": 1,
+					"intercompany_target_company": "MAIN",
+					"intercompany_linked_doc_doctype": "Sales Order",
+					"intercompany_linked_doc_name": "SRC-0001",
+					"intercompany_linked_company": "MAIN",
+					"flags": frappe._dict(),
+					"items": [frappe._dict({"item_code": "ITEM-1", "uom": "Nos", "qty": 1.0, "rate": 46000.0, "amount": 0.0})],
+				})
+				sub_item_doc = frappe._dict({
+					**prev_item_doc,
+					"flags": frappe._dict(),
+					"items": [frappe._dict({"item_code": "ITEM-1", "uom": "Nos", "qty": 1.0, "rate": 46000.0, "amount": 46000.0})],
+				})
+				validate_locked_mirrored_fields(sub_item_doc, previous=prev_item_doc)
+
+				# Rate tampering still blocked
+				bad_item_doc = frappe._dict({
+					**sub_item_doc,
+					"flags": frappe._dict(),
+					"items": [frappe._dict({"item_code": "ITEM-1", "uom": "Nos", "qty": 1.0, "rate": 50000.0, "amount": 50000.0})],
+				})
+				with self.assertRaises(frappe.ValidationError):
+					validate_locked_mirrored_fields(bad_item_doc, previous=prev_item_doc)
+
+			# Quotation checks party_name and quotation_to
+			q_prev = frappe._dict({
+				"doctype": "Quotation",
+				"name": "QTN-0001",
+				"company": "MAIN",
+				"quotation_to": "Customer",
+				"party_name": "Sister Co Customer",
 				"currency": "PKR",
 				"conversion_rate": 1.0,
 				"is_intercompany": 1,
+				"intercompany_target_company": "Sister Co",
+				"intercompany_linked_doc_doctype": "Supplier Quotation",
+				"intercompany_linked_doc_name": "SQTN-0001",
+				"intercompany_linked_company": "Sister Co",
+				"flags": frappe._dict(),
+				"items": [frappe._dict({"item_code": "ITEM-1", "uom": "Nos", "qty": 2.0, "rate": 100.0, "amount": 0.0})],
+			})
+			q_sub = frappe._dict({
+				**q_prev,
+				"flags": frappe._dict(),
+				"items": [frappe._dict({"item_code": "ITEM-1", "uom": "Nos", "qty": 2.0, "rate": 100.0, "amount": 200.0})],
+			})
+			validate_locked_mirrored_fields(q_sub, previous=q_prev)
+			with self.assertRaises(frappe.ValidationError):
+				validate_locked_mirrored_fields(frappe._dict({**q_sub, "party_name": "Other Customer"}), previous=q_prev)
+
+			# 3. Stock Entry where basic_amount=500 and amount=0 in DB -> amount=500 on submit
+			se_prev = frappe._dict({
+				"doctype": "Stock Entry",
+				"name": "MAT-STE-0002",
+				"company": "Sister Co",
+				"is_intercompany": 1,
 				"intercompany_target_company": "MAIN",
-				"intercompany_linked_doc_doctype": "Sales Order",
-				"intercompany_linked_doc_name": "SRC-0001",
+				"intercompany_linked_doc_doctype": "Stock Entry",
+				"intercompany_linked_doc_name": "MAT-STE-0001",
 				"intercompany_linked_company": "MAIN",
 				"flags": frappe._dict(),
-				"items": [frappe._dict({"item_code": "ITEM-1", "uom": "Nos", "qty": 1.0, "rate": 46000.0, "amount": 0.0})],
+				"items": [frappe._dict({"item_code": "ITEM-1", "uom": "Nos", "qty": 5.0, "basic_rate": 100.0, "basic_amount": 500.0, "amount": 0.0})],
 			})
-			sub_item_doc = frappe._dict({
-				**prev_item_doc,
+			se_sub = frappe._dict({
+				**se_prev,
 				"flags": frappe._dict(),
-				"items": [frappe._dict({"item_code": "ITEM-1", "uom": "Nos", "qty": 1.0, "rate": 46000.0, "amount": 46000.0})],
+				"items": [frappe._dict({"item_code": "ITEM-1", "uom": "Nos", "qty": 5.0, "basic_rate": 100.0, "basic_amount": 500.0, "amount": 500.0})],
 			})
-			validate_locked_mirrored_fields(sub_item_doc, previous=prev_item_doc)
-
-			# Rate tampering still blocked
-			bad_item_doc = frappe._dict({
-				**sub_item_doc,
-				"flags": frappe._dict(),
-				"items": [frappe._dict({"item_code": "ITEM-1", "uom": "Nos", "qty": 1.0, "rate": 50000.0, "amount": 50000.0})],
-			})
+			validate_locked_mirrored_fields(se_sub, previous=se_prev)
 			with self.assertRaises(frappe.ValidationError):
-				validate_locked_mirrored_fields(bad_item_doc, previous=prev_item_doc)
+				validate_locked_mirrored_fields(
+					frappe._dict({**se_sub, "items": [frappe._dict({**se_sub["items"][0], "basic_rate": 120.0})]}),
+					previous=se_prev,
+				)
 
-		# Quotation checks party_name and quotation_to
-		q_prev = frappe._dict({
-			"doctype": "Quotation",
-			"name": "QTN-0001",
-			"company": "MAIN",
-			"quotation_to": "Customer",
-			"party_name": "Sister Co Customer",
-			"currency": "PKR",
-			"conversion_rate": 1.0,
-			"is_intercompany": 1,
-			"intercompany_target_company": "Sister Co",
-			"intercompany_linked_doc_doctype": "Supplier Quotation",
-			"intercompany_linked_doc_name": "SQTN-0001",
-			"intercompany_linked_company": "Sister Co",
-			"flags": frappe._dict(),
-			"items": [frappe._dict({"item_code": "ITEM-1", "uom": "Nos", "qty": 2.0, "rate": 100.0, "amount": 0.0})],
-		})
-		q_sub = frappe._dict({
-			**q_prev,
-			"flags": frappe._dict(),
-			"items": [frappe._dict({"item_code": "ITEM-1", "uom": "Nos", "qty": 2.0, "rate": 100.0, "amount": 200.0})],
-		})
-		validate_locked_mirrored_fields(q_sub, previous=q_prev)
-		with self.assertRaises(frappe.ValidationError):
-			validate_locked_mirrored_fields(frappe._dict({**q_sub, "party_name": "Other Customer"}), previous=q_prev)
-
-		# 3. Stock Entry where basic_amount=500 and amount=0 in DB -> amount=500 on submit
-		se_prev = frappe._dict({
-			"doctype": "Stock Entry",
-			"name": "MAT-STE-0002",
-			"company": "Sister Co",
-			"is_intercompany": 1,
-			"intercompany_target_company": "MAIN",
-			"intercompany_linked_doc_doctype": "Stock Entry",
-			"intercompany_linked_doc_name": "MAT-STE-0001",
-			"intercompany_linked_company": "MAIN",
-			"flags": frappe._dict(),
-			"items": [frappe._dict({"item_code": "ITEM-1", "uom": "Nos", "qty": 5.0, "basic_rate": 100.0, "basic_amount": 500.0, "amount": 0.0})],
-		})
-		se_sub = frappe._dict({
-			**se_prev,
-			"flags": frappe._dict(),
-			"items": [frappe._dict({"item_code": "ITEM-1", "uom": "Nos", "qty": 5.0, "basic_rate": 100.0, "basic_amount": 500.0, "amount": 500.0})],
-		})
-		validate_locked_mirrored_fields(se_sub, previous=se_prev)
-		with self.assertRaises(frappe.ValidationError):
-			validate_locked_mirrored_fields(
-				frappe._dict({**se_sub, "items": [frappe._dict({**se_sub["items"][0], "basic_rate": 120.0})]}),
-				previous=se_prev,
-			)
-
-		# 4. Payment Entry with uninitialized source_exchange_rate=0 -> 1.0 on submit
-		pe_prev = frappe._dict({
-			"doctype": "Payment Entry",
-			"name": "ACC-PAY-0002",
-			"company": "Sister Co",
-			"payment_type": "Receive",
-			"party_type": "Customer",
-			"party": "MAIN Customer",
-			"paid_amount": 1000.0,
-			"received_amount": 1000.0,
-			"source_exchange_rate": 0.0,
-			"target_exchange_rate": 0.0,
-			"is_intercompany": 1,
-			"intercompany_target_company": "MAIN",
-			"intercompany_linked_doc_doctype": "Payment Entry",
-			"intercompany_linked_doc_name": "ACC-PAY-0001",
-			"intercompany_linked_company": "MAIN",
-			"flags": frappe._dict(),
-		})
-		pe_sub = frappe._dict({**pe_prev, "source_exchange_rate": 1.0, "target_exchange_rate": 1.0, "flags": frappe._dict()})
-		validate_locked_mirrored_fields(pe_sub, previous=pe_prev)
-		with self.assertRaises(frappe.ValidationError):
-			validate_locked_mirrored_fields(frappe._dict({**pe_sub, "paid_amount": 900.0}), previous=pe_prev)
+			# 4. Payment Entry with uninitialized source_exchange_rate=0 -> 1.0 on submit
+			pe_prev = frappe._dict({
+				"doctype": "Payment Entry",
+				"name": "ACC-PAY-0002",
+				"company": "Sister Co",
+				"payment_type": "Receive",
+				"party_type": "Customer",
+				"party": "MAIN Customer",
+				"paid_amount": 1000.0,
+				"received_amount": 1000.0,
+				"source_exchange_rate": 0.0,
+				"target_exchange_rate": 0.0,
+				"is_intercompany": 1,
+				"intercompany_target_company": "MAIN",
+				"intercompany_linked_doc_doctype": "Payment Entry",
+				"intercompany_linked_doc_name": "ACC-PAY-0001",
+				"intercompany_linked_company": "MAIN",
+				"flags": frappe._dict(),
+			})
+			pe_sub = frappe._dict({**pe_prev, "source_exchange_rate": 1.0, "target_exchange_rate": 1.0, "flags": frappe._dict()})
+			validate_locked_mirrored_fields(pe_sub, previous=pe_prev)
+			with self.assertRaises(frappe.ValidationError):
+				validate_locked_mirrored_fields(frappe._dict({**pe_sub, "paid_amount": 900.0}), previous=pe_prev)
 
 		# 5. Precalculation helper populates totals & amounts cleanly before initial DB insert
 		_precalculate_mirrored_doc_totals(je_prev)
