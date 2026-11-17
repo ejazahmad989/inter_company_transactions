@@ -1078,4 +1078,44 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 			# Must show ALL active leaf accounts of the selected company (not only Bank/Cash)
 			self.assertNotIn("a.account_type IN ('Bank', 'Cash') AND", captured_queries[-1])
 
+	def test_validate_locked_mirrored_fields_non_iterable_document(self):
+		"""Verify validate_locked_mirrored_fields does not raise TypeError when previous is a non-iterable Document"""
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			validate_locked_mirrored_fields,
+		)
+
+		class NonIterableDoc:
+			def __init__(self, data):
+				for k, v in data.items():
+					setattr(self, k, v)
+				self.flags = frappe._dict()
+
+			def get(self, key, default=None):
+				return getattr(self, key, default)
+
+		base_data = {
+			"doctype": "Purchase Order",
+			"name": "PUR-ORD-2026-00011",
+			"company": "ABC Company",
+			"supplier": "Main Supplier (ABC)",
+			"currency": "PKR",
+			"conversion_rate": 1.0,
+			"is_intercompany": 1,
+			"intercompany_target_company": "MAIN",
+			"intercompany_linked_doc_doctype": "Sales Order",
+			"intercompany_linked_doc_name": "SAL-ORD-2026-00012",
+			"intercompany_linked_company": "MAIN",
+			"items": [frappe._dict({"item_code": "ITEM-1", "uom": "Nos", "qty": 1, "rate": 46000, "amount": 46000})],
+		}
+		prev = NonIterableDoc(base_data)
+		doc = NonIterableDoc(base_data)
+		# Should pass cleanly with zero TypeError even though `customer`, `party_type`, etc. are absent
+		validate_locked_mirrored_fields(doc, previous=prev)
+
+		# Modifying supplier must still trigger locked-field ValidationError cleanly
+		bad_doc = NonIterableDoc({**base_data, "supplier": "Another Supplier"})
+		with self.assertRaises(frappe.ValidationError):
+			validate_locked_mirrored_fields(bad_doc, previous=prev)
+
+
 

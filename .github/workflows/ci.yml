@@ -89,14 +89,18 @@ jobs:
             ${{ runner.os }}-yarn-
 
       - name: Install MariaDB Client
-        run: sudo apt-get update && sudo apt-get install -y mariadb-client libmariadb-dev
+        run: |
+          sudo apt-get update && sudo apt-get install -y mariadb-client libmariadb-dev
+          sudo mkdir -p /etc/mysql/conf.d
+          printf "[client]\nskip-ssl\n" | sudo tee /etc/mysql/conf.d/disable-ssl.cnf > /dev/null
+          printf "[client]\nskip-ssl\n" > ~/.my.cnf
 
       - name: Setup Bench & Frappe
         run: |
           pip install frappe-bench
           bench init --skip-redis-config-generation --skip-assets --frappe-branch ${{ matrix.branch }} --python "$(which python)" ~/frappe-bench
-          mariadb --host 127.0.0.1 --port 3306 -u root -proot -e "SET GLOBAL character_set_server = 'utf8mb4'"
-          mariadb --host 127.0.0.1 --port 3306 -u root -proot -e "SET GLOBAL collation_server = 'utf8mb4_unicode_ci'"
+          mariadb --skip-ssl --host 127.0.0.1 --port 3306 -u root -proot -e "SET GLOBAL character_set_server = 'utf8mb4'"
+          mariadb --skip-ssl --host 127.0.0.1 --port 3306 -u root -proot -e "SET GLOBAL collation_server = 'utf8mb4_unicode_ci'"
 
       - name: Install ERPNext & App
         working-directory: /home/runner/frappe-bench

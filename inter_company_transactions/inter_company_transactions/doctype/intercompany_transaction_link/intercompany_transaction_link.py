@@ -4182,13 +4182,16 @@ def validate_locked_mirrored_fields(doc, previous=None):
         ("total_credit", _("Total Credit")),
     ]
 
+    def _has_field(obj, fieldname):
+        return (isinstance(obj, dict) and fieldname in obj) or hasattr(obj, fieldname)
+
     for fname, label in str_locked:
-        if hasattr(previous, fname) or fname in previous:
+        if _has_field(previous, fname):
             if _differs(doc.get(fname), previous.get(fname), is_num=False):
                 changed_fields.append(label)
 
     for fname, label in num_locked:
-        if hasattr(previous, fname) or fname in previous:
+        if _has_field(previous, fname):
             if _differs(doc.get(fname), previous.get(fname), is_num=True):
                 changed_fields.append(label)
 
