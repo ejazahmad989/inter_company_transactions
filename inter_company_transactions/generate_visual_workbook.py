@@ -663,9 +663,9 @@ def build_html(screenshots_dir: Path, logo_svg_path: Path | None = None) -> str:
 <div class="kid-box" style="margin-top:8px;padding:8px 12px;">
   <strong class="label">How Do Transit Warehouses Actually Work?</strong>
   In ERPNext, Company B is <strong>never allowed</strong> to use Company A's warehouse directly (<em>"Warehouse does not belong to company"</em>).
-  When <span class="pill pill-main">MAIN</span> submits a <strong>Stock Entry (Material Issue)</strong>, the engine strips MAIN's source warehouse and drops the stock into <span class="pill pill-abc">ABC Company</span>'s
+  When <span class="pill pill-main">MAIN</span> submits a <strong>Stock Entry (Material Issue)</strong> to a <strong>Same-Currency sister company</strong> (e.g., <code>PKR &rarr; PKR</code>), the engine strips MAIN's source warehouse and drops the stock into <span class="pill pill-abc">ABC Company</span>'s
   <strong>Other Company Transit Warehouse</strong> (<code>Goods In Transit - AC</code>) as a Draft <strong>Material Receipt</strong>.
-  <em>(On Purchase Orders &amp; Invoices, each company uses its own default warehouse and can edit it on the Draft!)</em>
+  <em>(Stock Entry only works for Same-Currency companies. For different currencies such as <code>PKR &harr; USD</code>, use <strong>Delivery Note &rarr; Purchase Receipt</strong> or <strong>Sales Invoice &rarr; Purchase Invoice</strong>!)</em>
 </div>
 
 <div class="page-break"></div>
@@ -924,7 +924,7 @@ def build_html(screenshots_dir: Path, logo_svg_path: Path | None = None) -> str:
       <tr>
         <td style="padding:4px 7px;"><strong>2</strong></td>
         <td style="padding:4px 7px;"><strong>Stock Entry Transfer</strong><br/>(Transit Warehouse!)</td>
-        <td style="padding:4px 7px;"><code>Stock Entry (Material Issue)</code> in MAIN &rarr; Mirrored <code>Material Receipt</code> landing in <code>Goods In Transit - AC</code>.</td>
+        <td style="padding:4px 7px;"><code>Stock Entry (Material Issue)</code> in MAIN &rarr; Mirrored <code>Material Receipt</code> landing in <code>Goods In Transit - AC</code> (Same-Currency only).</td>
         <td style="padding:4px 7px;">Visually proves how <code>Transit Warehouse</code> works across companies!</td>
       </tr>
       <tr>

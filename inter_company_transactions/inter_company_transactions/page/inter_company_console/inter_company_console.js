@@ -418,7 +418,7 @@ function open_quick_setup_wizard() {
 									<span class="badge badge-light border">${__('Supply Chain')}</span>
 								</div>
 								<p class="text-muted mb-1" style="font-size: 12px;">
-									${__('Internal warehouse relocations and intercompany shipments via Delivery Notes and Stock Entries (Material Issue → Receipt).')}
+									${__('Internal same-currency stock transfers via Stock Entries (Material Issue → Receipt), and cross-currency shipments via Delivery Notes.')}
 								</p>
 								<small class="text-secondary font-weight-bold"><i class="fa fa-check mr-1"></i>2 Logistics Rules</small>
 							</div>
@@ -638,7 +638,7 @@ function show_tutorial_dialog() {
 									<li><strong>Quotation &harr; Supplier Quotation:</strong> Intercompany sales estimate matched to supplier RFQ.</li>
 									<li><strong>Request for Quotation &rarr; Supplier Quotation:</strong> Generates sister-company quote response directly from RFQ.</li>
 									<li><strong>Material Request &rarr; Sales Order / Purchase Order:</strong> Stock requisition in Subsidiary B creates order in Parent A.</li>
-									<li><strong>Stock Entry (Material Issue) &rarr; Stock Entry (Material Receipt):</strong> Material Issue in Company A automatically creates Material Receipt in Company B with valuation rate preserved.</li>
+									<li><strong>Stock Entry (Material Issue) &rarr; Stock Entry (Material Receipt):</strong> Material Issue in Company A automatically creates Material Receipt in Company B with valuation rate preserved (<strong>Same-Currency companies only</strong>; use Delivery Note or Sales Invoice for different currencies).</li>
 									<li><strong>Journal Entry &harr; Journal Entry:</strong> Intercompany GL transfer voucher with auto-swapped debit/credit accounts.</li>
 									<li><strong>Payment Entry &harr; Payment Entry:</strong> Intercompany payment matched to receipt voucher.</li>
 									<li><strong>Landed Cost Voucher &rarr; Journal Entry:</strong> Automatically recharges landed cost taxes/charges into a balanced Journal Entry in the target sister company.</li>

@@ -519,8 +519,15 @@ def receive_remote_transaction(payload=None):
 	if hasattr(target_doc, "conversion_rate"):
 		target_doc.conversion_rate = target_conv_rate
 
-	# Map Stock Entry (Company 1 Material Issue -> Company 2 Material Receipt)
+	# Map Stock Entry (Company 1 Material Issue -> Company 2 Material Receipt, Same-Currency Only)
 	if target_doctype == "Stock Entry":
+		if source_company_ccy and target_company_ccy and source_company_ccy != target_company_ccy:
+			frappe.throw(
+				_(
+					"Inter-Company Stock Entry works for Same-Currency companies only ({0} uses {1}, {2} uses {3}). "
+					"Please use Delivery Note or Sales Invoice for different currencies."
+				).format(source_company, source_company_ccy, target_company, target_company_ccy)
+			)
 		target_doc.stock_entry_type = "Material Receipt"
 		target_doc.purpose = "Material Receipt"
 		target_warehouse = get_intercompany_warehouse(target_company) or get_or_create_intercompany_warehouse(target_company)
@@ -528,11 +535,9 @@ def receive_remote_transaction(payload=None):
 		target_doc.to_warehouse = target_warehouse
 		target_doc.remarks = data.get("remarks") or f"Intercompany Material Receipt synchronized from {source_company} ({source_doctype} {source_name})"
 
-		se_fx = _remote_fx(source_company_ccy, target_company_ccy)
 		for row in data.get("items", []):
 			resolved_item_code = resolve_item_code_for_remote(row.get("item_code"), target_company)
-			raw_rate = flt(row.get("basic_rate") or row.get("valuation_rate") or row.get("rate") or 0.0)
-			basic_rate = flt(raw_rate * se_fx, 4) if raw_rate > 0 else 0.0
+			basic_rate = flt(row.get("basic_rate") or row.get("valuation_rate") or row.get("rate") or 0.0, 4)
 			qty = flt(row.get("qty") or 1.0)
 			se_row = {
 				"item_code": resolved_item_code,

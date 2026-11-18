@@ -1638,10 +1638,12 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
 			check_active_downstream_transactions,
 			check_intercompany_exchange_rate,
+			check_stock_entry_same_currency,
 			get_linked_counterpart_documents,
 			get_linked_counterpart_for_form,
 			lookup_intercompany_exchange_rate,
 			validate_intercompany_cross_currency_rate,
+			validate_intercompany_document,
 		)
 
 		def strict_get_all(doctype, *args, **kwargs):
@@ -1662,9 +1664,21 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 
 		def mock_get_value(dt, name=None, fieldname=None, **kwargs):
 			if dt == "Company" and fieldname == "default_currency":
-				return "PKR" if name == "Main PKR Co" else "USD"
+				if name in ("Main PKR Co", "ABC PKR Co"):
+					return "PKR"
+				return "USD"
 			return None
 
+		sales_inv = frappe._dict({
+			"doctype": "Sales Invoice",
+			"name": "SINV-2026-0009",
+			"company": "Main PKR Co",
+			"posting_date": "14-11-2026",
+			"is_intercompany": 1,
+			"intercompany_target_company": "John USD Co",
+			"docstatus": 1,
+			"flags": frappe._dict(),
+		})
 		stock_entry = frappe._dict({
 			"doctype": "Stock Entry",
 			"name": "MAT-STE-2026-0009",
@@ -1673,7 +1687,7 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 			"posting_date": "14-11-2026",
 			"is_intercompany": 1,
 			"intercompany_target_company": "John USD Co",
-			"docstatus": 1,
+			"docstatus": 0,
 			"flags": frappe._dict(),
 		})
 
@@ -1687,12 +1701,19 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 			rate = lookup_intercompany_exchange_rate("pkr", "usd", "14-11-2026")
 			self.assertAlmostEqual(rate, 1.0 / 275.0, places=7)
 
-			validate_intercompany_cross_currency_rate(stock_entry)
+			validate_intercompany_cross_currency_rate(sales_inv)
 
 			fx_info = check_intercompany_exchange_rate("Main PKR Co", "John USD Co", "14-11-2026")
 			self.assertTrue(fx_info["required"])
 			self.assertTrue(fx_info["has_rate"])
 			self.assertEqual(fx_info["transaction_date"], "2026-11-14")
+
+			self.assertTrue(check_stock_entry_same_currency("Main PKR Co", "ABC PKR Co")["allowed"])
+			se_mismatch = check_stock_entry_same_currency("Main PKR Co", "John USD Co")
+			self.assertFalse(se_mismatch["allowed"])
+			with self.assertRaises(Exception) as ctx:
+				validate_intercompany_document(stock_entry)
+			self.assertIn("Same-Currency", str(ctx.exception))
 
 			self.assertEqual(get_linked_counterpart_documents(stock_entry), [])
 			self.assertEqual(check_active_downstream_transactions("Sales Invoice", "SINV-1", "Main PKR Co"), [])
@@ -1861,13 +1882,18 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 				), patch.object(
 					frappe.db, "get_value", side_effect=mock_get_value
 				):
+					if tgt_dt == "Stock Entry" and mode == "cross_currency":
+						with self.assertRaises(Exception) as se_ctx:
+							create_corresponding_document(src_doc, mapping_info, "main_to_other", settings=settings)
+						self.assertIn("Same-Currency", str(se_ctx.exception))
+						continue
+
 					res = create_corresponding_document(src_doc, mapping_info, "main_to_other", settings=settings)
 					self.assertIsNotNone(res, f"Failed creating counterpart for {src_dt} -> {tgt_dt} ({mode})")
 					self.assertEqual(res.company, tgt_company)
 
 					if tgt_dt == "Stock Entry":
-						expected_se_rate = 2750.0 if mode == "same_currency" else 10.0
-						self.assertAlmostEqual(res.items[0].basic_rate, expected_se_rate, places=2)
+						self.assertAlmostEqual(res.items[0].basic_rate, 2750.0, places=2)
 					elif tgt_dt == "Journal Entry":
 						expected_je_amt = 2750.0 if mode == "same_currency" else 10.0
 						self.assertAlmostEqual(sum(flt(a.debit) for a in res.accounts), expected_je_amt, places=2)
@@ -1956,6 +1982,11 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 					return [{"exchange_rate": 275.0}]
 			return []
 
+		def mock_get_value_same_ccy(dt, filters=None, fieldname=None, **kwargs):
+			if dt == "Company" and fieldname == "default_currency":
+				return "PKR"
+			return mock_get_value(dt, filters=filters, fieldname=fieldname, **kwargs)
+
 		with patch.object(frappe, "new_doc", side_effect=make_doc), patch.object(
 			frappe, "get_all", side_effect=mock_get_all
 		), patch.object(
@@ -1972,11 +2003,52 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.get_intercompany_warehouse",
 			return_value="Transit - RUSD",
 		):
+			# 1. Cross-currency remote Stock Entry must be blocked clearly
+			with self.assertRaises(Exception) as rem_se_ctx:
+				receive_remote_transaction(payload)
+			self.assertIn("Same-Currency", str(rem_se_ctx.exception))
+
+			# 2. Cross-currency Landed Cost Voucher -> Journal Entry converts PKR -> USD cleanly
+			lcv_payload = {
+				"source_doctype": "Landed Cost Voucher",
+				"source_name": "LCV-REM-1",
+				"source_company": "Main PKR Co",
+				"target_company": "Remote USD Co",
+				"target_doctype": "Journal Entry",
+				"posting_date": "2026-11-15",
+				"source_company_currency": "PKR",
+				"currency": "PKR",
+				"total_taxes_and_charges": 2750.0,
+				"taxes": [{"description": "Freight", "amount": 2750.0, "base_amount": 2750.0}],
+			}
+			lcv_resp = receive_remote_transaction(lcv_payload)
+			self.assertTrue(lcv_resp["success"])
+			je_created = created[-1]
+			self.assertAlmostEqual(sum(flt(a.debit) for a in je_created.accounts), 10.0, places=2)
+			self.assertAlmostEqual(sum(flt(a.credit) for a in je_created.accounts), 10.0, places=2)
+
+		# 3. Same-currency remote Stock Entry succeeds cleanly
+		with patch.object(frappe, "new_doc", side_effect=make_doc), patch.object(
+			frappe, "get_all", side_effect=mock_get_all
+		), patch.object(
+			frappe, "has_permission", return_value=True
+		), patch.object(
+			frappe, "get_cached_doc", return_value=frappe._dict({"auto_submit_target_doc": 0})
+		), patch.object(
+			frappe.db, "exists", side_effect=lambda dt, name=None, **kw: dt in ("Company", "Item", "Journal Entry Type", "Warehouse") or (dt == "DocType" and name == "Currency Exchange")
+		), patch.object(
+			frappe.db, "get_value", side_effect=mock_get_value_same_ccy
+		), patch(
+			"inter_company_transactions.sync.create_remote_document_reference"
+		), patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.get_intercompany_warehouse",
+			return_value="Transit - RPKR",
+		):
 			resp = receive_remote_transaction(payload)
 			self.assertTrue(resp["success"])
 			se_created = created[-1]
-			self.assertAlmostEqual(se_created.items[0].basic_rate, 10.0, places=2)
-			self.assertAlmostEqual(se_created.items[0].basic_amount, 20.0, places=2)
+			self.assertAlmostEqual(se_created.items[0].basic_rate, 2750.0, places=2)
+			self.assertAlmostEqual(se_created.items[0].basic_amount, 5500.0, places=2)
 
 	def test_diagnose_and_heal_workflow_and_safe_eval_conditions(self):
 		"""Verify Workflow Transition and Notification Python conditions are auto-healed or flagged clearly"""

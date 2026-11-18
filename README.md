@@ -51,7 +51,7 @@ Automatically creates, submits, or cancels reciprocal mirror documents in real-t
 - **Sales Order ↔ Purchase Order**
 - **Sales Invoice ↔ Purchase Invoice** (with full Credit Note & Debit Note return synchronization)
 - **Delivery Note ↔ Purchase Receipt**
-- **Stock Entry (Material Issue / Transfer) ↔ Stock Entry (Material Receipt)**
+- **Stock Entry (Material Issue / Transfer) ↔ Stock Entry (Material Receipt)** *(Same-Currency companies only; use Delivery Note or Sales Invoice for cross-currency transfers)*
 - **Journal Entry ↔ Journal Entry** (Inverted Debit/Credit intercompany clearing)
 - **Payment Entry ↔ Payment Entry** (Bi-directional intercompany settlement matching)
 - **Quotation ↔ Supplier Quotation**
@@ -148,7 +148,7 @@ Automatically creates, submits, or cancels reciprocal mirror documents in real-t
 6. Click **Save**.
 
 ### 2. Multi-Currency Setup (e.g., PKR ↔ USD)
-When transacting across companies using different base currencies, ensure a valid **Currency Exchange** record exists for the transaction date. On submit of a Sales Order, Invoice, Stock Entry, Journal Entry, or Payment Entry, the built-in rate assistant detects any missing exchange rate and lets you save it right from Desk before continuing.
+When transacting across companies using different base currencies, ensure a valid **Currency Exchange** record exists for the transaction date. On submit of a Sales Order, Invoice, Delivery Note, Journal Entry, or Payment Entry, the built-in rate assistant detects any missing exchange rate and lets you save it right from Desk before continuing. *(Note: **Stock Entry** is supported for **Same-Currency companies only**; use Delivery Note → Purchase Receipt or Sales Invoice → Purchase Invoice when currencies differ.)*
 
 ### 3. Test Automated Document Creation
 Create a Sales Order in Company A for the mapped intercompany customer. The system will automatically check `Is Intercompany` and set Company B as the target company. Upon submitting, a matching Purchase Order in Company B is instantly generated!

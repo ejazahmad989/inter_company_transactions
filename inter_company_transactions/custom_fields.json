@@ -444,7 +444,7 @@
             "fieldtype": "Link",
             "options": "Company",
             "insert_after": "is_intercompany",
-            "description": "Target company for inter-company transaction (editable only when Is Intercompany is checked)",
+            "description": "Target company for inter-company Stock Entry (Same-Currency companies only; editable only when Is Intercompany is checked). Use Delivery Note or Sales Invoice for different currencies.",
             "in_list_view": 1,
             "in_standard_filter": 1,
             "ignore_user_permissions": 1

@@ -1934,6 +1934,50 @@ def check_intercompany_exchange_rate(
     }
 
 
+def validate_stock_entry_same_currency(source_company, target_company):
+    """
+    Restricts intercompany Stock Entry strictly to companies sharing the same default currency.
+    """
+    if not source_company or not target_company or source_company == target_company:
+        return
+    if not (hasattr(frappe, "db") and frappe.db):
+        return
+
+    src_ccy = frappe.db.get_value("Company", source_company, "default_currency")
+    tgt_ccy = frappe.db.get_value("Company", target_company, "default_currency")
+    if src_ccy and tgt_ccy and src_ccy != tgt_ccy:
+        frappe.throw(
+            _(
+                "Inter-Company <b>Stock Entry</b> works for <b>Same-Currency companies only</b>.<br><br>"
+                "<b>{0}</b> uses <b>{1}</b> while <b>{2}</b> uses <b>{3}</b>.<br><br>"
+                "Because ERPNext Stock Entry has no currency or exchange rate field, please use "
+                "<b>Delivery Note &rarr; Purchase Receipt</b> or <b>Sales Invoice &rarr; Purchase Invoice</b> "
+                "for transfers between companies with different currencies."
+            ).format(source_company, src_ccy, target_company, tgt_ccy),
+            title=_("Same-Currency Only for Stock Entry"),
+        )
+
+
+@frappe.whitelist()
+def check_stock_entry_same_currency(source_company, target_company):
+    """
+    Client-callable check confirming both companies share the same currency for Stock Entry.
+    """
+    if not source_company or not target_company or source_company == target_company:
+        return {"allowed": True}
+    if not (hasattr(frappe, "db") and frappe.db):
+        return {"allowed": True}
+
+    src_ccy = frappe.db.get_value("Company", source_company, "default_currency")
+    tgt_ccy = frappe.db.get_value("Company", target_company, "default_currency")
+    allowed = not (src_ccy and tgt_ccy and src_ccy != tgt_ccy)
+    return {
+        "allowed": allowed,
+        "source_currency": src_ccy,
+        "target_currency": tgt_ccy,
+    }
+
+
 @frappe.whitelist()
 def save_intercompany_currency_exchange(from_currency, to_currency, exchange_rate, date=None):
     """
@@ -3083,16 +3127,16 @@ def sanitize_intercompany_stock_entry(doc, method=None):
     Ensures that an intercompany Material Receipt Stock Entry never contains
     cross-company source warehouses which trigger ERPNext's 'Warehouse does not belong to company' error.
     """
-    if doc.purpose == "Material Receipt":
-        if doc.from_warehouse:
-            from_wh_comp = frappe.db.get_value("Warehouse", doc.from_warehouse, "company")
-            if from_wh_comp and from_wh_comp != doc.company:
+    if (doc.get("purpose") or doc.get("stock_entry_type")) == "Material Receipt":
+        if doc.get("from_warehouse"):
+            from_wh_comp = frappe.db.get_value("Warehouse", doc.get("from_warehouse"), "company")
+            if from_wh_comp and from_wh_comp != doc.get("company"):
                 doc.from_warehouse = None
 
         for d in doc.get("items", []):
-            if d.s_warehouse:
-                s_wh_comp = frappe.db.get_value("Warehouse", d.s_warehouse, "company")
-                if s_wh_comp and s_wh_comp != doc.company:
+            if d.get("s_warehouse"):
+                s_wh_comp = frappe.db.get_value("Warehouse", d.get("s_warehouse"), "company")
+                if s_wh_comp and s_wh_comp != doc.get("company"):
                     d.s_warehouse = None
 
 
@@ -3123,13 +3167,12 @@ def create_stock_entry(source_stock_entry, mapping, linked_company, direction, s
         f"Intercompany Material Receipt from {source_stock_entry.doctype} {source_stock_entry.name} ({source_stock_entry.company})"
     )
 
-    # Resolve currency conversion if source and target company default currencies differ
+    # Inter-Company Stock Entry is restricted strictly to Same-Currency companies
     source_company_currency = frappe.db.get_value("Company", source_stock_entry.company, "default_currency")
     target_company_currency = frappe.db.get_value("Company", se.company, "default_currency")
-    fx_rate = (
-        extract_document_exchange_rate(source_stock_entry, source_company_currency, target_company_currency)
-        or get_intercompany_exchange_rate(source_company_currency, target_company_currency, se.posting_date)
-    )
+    if source_company_currency and target_company_currency and source_company_currency != target_company_currency:
+        validate_stock_entry_same_currency(source_stock_entry.company, se.company)
+    fx_rate = 1.0
 
     if not target_warehouse:
         target_warehouse = get_intercompany_warehouse(target_warehouse_company)
@@ -4700,7 +4743,9 @@ def validate_intercompany_document(doc, method=None):
     if cint(doc.get("is_intercompany")) and doc.get("intercompany_target_company"):
         if doc.get("intercompany_target_company") == doc.get("company"):
             frappe.throw(_("Intercompany Target Company cannot be the same as Source Company ({0}).").format(doc.get("company")))
-        if cint(doc.get("docstatus")) == 1:
+        if getattr(doc, "doctype", None) == "Stock Entry":
+            validate_stock_entry_same_currency(doc.get("company"), doc.get("intercompany_target_company"))
+        elif cint(doc.get("docstatus")) == 1:
             validate_intercompany_cross_currency_rate(doc)
 
 

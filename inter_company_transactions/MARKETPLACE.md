@@ -64,7 +64,7 @@ Seamless bidirectional mirroring for every operational document:
 2. **Sales Invoice ↔ Purchase Invoice** (with full Credit/Debit Note return sync)
 3. **Delivery Note ↔ Purchase Receipt**
 4. **Quotation ↔ Supplier Quotation**
-5. **Stock Entry ↔ Stock Entry (Transit Warehouses)**
+5. **Stock Entry ↔ Stock Entry (Same-Currency Transit Warehouses)**
 6. **Journal Entry ↔ Journal Entry (Debit/Credit Inversion)**
 7. **Payment Entry ↔ Payment Entry (Payment to Receipt Matching)**
 8. **Material Request → Purchase Order**

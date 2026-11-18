@@ -519,8 +519,72 @@
 		update_preview();
 	}
 
+	function check_stock_entry_same_currency_ui(frm, clear_on_mismatch, on_result) {
+		if (!frm || !frm.doc || frm.doc.doctype !== 'Stock Entry' || frm.doc.docstatus !== 0 || is_mirrored_counterpart(frm)) {
+			if (typeof on_result === 'function') on_result(true);
+			return;
+		}
+		if (!cint(frm.doc.is_intercompany) || !frm.doc.company || !frm.doc.intercompany_target_company) {
+			if (typeof on_result === 'function') on_result(true);
+			return;
+		}
+		if (frm.doc.company === frm.doc.intercompany_target_company) {
+			if (typeof on_result === 'function') on_result(false);
+			return;
+		}
+
+		const esc = frappe.utils.escape_html;
+		frappe.call({
+			method: 'inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.check_stock_entry_same_currency',
+			args: {
+				source_company: frm.doc.company,
+				target_company: frm.doc.intercompany_target_company
+			},
+			callback: function(r) {
+				const info = r && r.message;
+				if (!info || info.allowed) {
+					frm._ict_se_currency_mismatch = false;
+					if (typeof on_result === 'function') on_result(true);
+					return;
+				}
+
+				frm._ict_se_currency_mismatch = info;
+				const msg = __(
+					'<b>Stock Entry</b> only works for <b>Same-Currency companies</b>.<br><br>' +
+					'<b>{0}</b> uses <b>{1}</b> while <b>{2}</b> uses <b>{3}</b>.<br><br>' +
+					'For different currencies, please use <b>Delivery Note &rarr; Purchase Receipt</b> or <b>Sales Invoice &rarr; Purchase Invoice</b>.',
+					[
+						esc(frm.doc.company),
+						esc(info.source_currency),
+						esc(frm.doc.intercompany_target_company),
+						esc(info.target_currency)
+					]
+				);
+				if (frm.dashboard && frm.dashboard.set_headline_alert) {
+					frm.dashboard.set_headline_alert(msg, 'orange');
+				}
+				if (clear_on_mismatch) {
+					frappe.msgprint({
+						title: __('Same-Currency Only for Stock Entry'),
+						indicator: 'orange',
+						message: msg
+					});
+					frm.set_value('intercompany_target_company', '');
+				}
+				if (typeof on_result === 'function') on_result(false);
+			},
+			error: function() {
+				if (typeof on_result === 'function') on_result(true);
+			}
+		});
+	}
+
 	function check_and_update_exchange_rate_ui(frm) {
 		if (!frm || !frm.doc || frm.doc.docstatus !== 0 || is_mirrored_counterpart(frm)) return;
+		if (frm.doc.doctype === 'Stock Entry') {
+			check_stock_entry_same_currency_ui(frm, false);
+			return;
+		}
 		if (!cint(frm.doc.is_intercompany) || !frm.doc.company || !frm.doc.intercompany_target_company) return;
 		if (frm.doc.company === frm.doc.intercompany_target_company) return;
 
@@ -618,7 +682,7 @@
 					if (frm.dashboard && frm.dashboard.set_headline_alert) {
 						if (frm.doc.doctype === 'Stock Entry') {
 							frm.dashboard.set_headline_alert(
-								__('Inter-Company Stock Transfer: Submit as Material Issue in {0}; a matching Material Receipt will be auto-created in {1}.', [
+								__('Inter-Company Stock Transfer (Same-Currency Companies Only): Submit as Material Issue in {0}; a matching Material Receipt will be auto-created in {1}. Use Delivery Note or Sales Invoice for different currencies.', [
 									frm.doc.company || __('Source Company'),
 									frm.doc.intercompany_target_company || __('Target Sister Company')
 								]),
@@ -702,7 +766,7 @@
 					check_and_update_exchange_rate_ui(frm);
 					let msg = __('Intercompany mode enabled: Select target sister company in Intercompany Target Company.');
 					if (frm.doc.doctype === 'Stock Entry') {
-						msg = __('Intercompany Stock Transfer enabled (Material Issue -> Material Receipt in target sister company).');
+						msg = __('Intercompany Stock Transfer enabled (Same-Currency companies only: Material Issue -> Material Receipt).');
 					} else if (frm.doc.doctype === 'Landed Cost Voucher') {
 						msg = __('Intercompany Landed Cost Recharge enabled (mirrors balanced Journal Entry in target sister company).');
 					}
@@ -736,7 +800,11 @@
 			intercompany_target_company: function(frm) {
 				if (is_mirrored_counterpart(frm)) return;
 				sync_intercompany_state(frm);
-				check_and_update_exchange_rate_ui(frm);
+				if (frm.doc.doctype === 'Stock Entry') {
+					check_stock_entry_same_currency_ui(frm, true);
+				} else {
+					check_and_update_exchange_rate_ui(frm);
+				}
 			},
 			posting_date: function(frm) {
 				check_and_update_exchange_rate_ui(frm);
@@ -756,7 +824,11 @@
 					}
 				}
 				sync_intercompany_state(frm);
-				check_and_update_exchange_rate_ui(frm);
+				if (frm.doc.doctype === 'Stock Entry') {
+					check_stock_entry_same_currency_ui(frm, true);
+				} else {
+					check_and_update_exchange_rate_ui(frm);
+				}
 			},
 			validate: function(frm) {
 				if (is_mirrored_counterpart(frm)) {
@@ -803,6 +875,17 @@
 					frm.doc.company === frm.doc.intercompany_target_company
 				) {
 					return;
+				}
+
+				if (frm.doc.doctype === 'Stock Entry') {
+					return new Promise(function(resolve) {
+						check_stock_entry_same_currency_ui(frm, true, function(allowed) {
+							if (!allowed) {
+								frappe.validated = false;
+							}
+							resolve();
+						});
+					});
 				}
 
 				return new Promise(function(resolve) {

@@ -117,7 +117,7 @@ The engine supports real-time, automated document mirroring across all standard 
 | 8 | **Supplier Quotation** | **Quotation** | Bi-directional | Vendor quote from sister company creates sales quotation. |
 | 9 | **Material Request** | **Sales Order / Purchase Order** | Forward | Stock replenishment requisition in a branch automatically initiates order creation in the central warehouse company. |
 | 10 | **Request for Quotation** | **Supplier Quotation** | Bi-directional | Formal procurement inquiry creates supplier quote in sister sales department. |
-| 11 | **Stock Entry** | **Stock Entry** | Bi-directional | *Material Issue* in Company A triggers an automated *Material Receipt* in Company B at the designated transfer valuation rate. |
+| 11 | **Stock Entry** | **Stock Entry** | Bi-directional | **Same-Currency Companies Only:** *Material Issue* in Company A triggers an automated *Material Receipt* in Company B's transit warehouse. *(For different currencies, use Delivery Note → Purchase Receipt or Sales Invoice → Purchase Invoice.)* |
 | 12 | **Journal Entry** | **Journal Entry** | Bi-directional | Cross-entity fund transfers or expense allocations automatically generate balancing voucher with reversed debit/credit accounts. |
 | 13 | **Payment Entry** | **Payment Entry** | Bi-directional | Payment made from Company A to Company B creates a matching Receipt voucher in Company B linked to the open intercompany invoice. |
 | 14 | **Landed Cost Voucher** | **Journal Entry** | Forward | Intercompany freight/customs recharge automatically creates a balanced payable/expense Journal Entry in the target sister company. |
@@ -131,7 +131,7 @@ When defining transaction pairings in `Intercompany Transaction Link` -> `Transa
   - **Purchase Invoice** &rarr; **Sales Invoice**
   - **Delivery Note** &rarr; **Purchase Receipt**
   - **Purchase Receipt** &rarr; **Delivery Note**
-  - **Stock Entry** &rarr; **Stock Entry**
+  - **Stock Entry** &rarr; **Stock Entry** *(Same-Currency companies only)*
   - **Journal Entry** &rarr; **Journal Entry**
   - **Payment Entry** &rarr; **Payment Entry**
   - **Quotation** &rarr; **Supplier Quotation**
@@ -156,7 +156,7 @@ In enterprise multi-company accounting, certain ERPNext DocTypes **cannot and mu
    - *Why It Cannot Be Mirrored Directly:* A Subcontracting Order in ERPNext v15 is bound to a single entity's internal Bill of Materials (BOM), supplied raw material tracking, and subcontracting receipt valuation algorithms. Sister entities operate independent inventory ledgers and separate tax jurisdictions.
    - *What Is a MUST:* Intercompany subcontracting must be conducted via:
      - Step 1: Subcontracting entity creates a standard **Purchase Order** (Subcontracted) &rarr; mirrored to **Sales Order** (Job Work) in the manufacturing sister company.
-     - Step 2: Raw materials transferred using **Stock Entry** (Material Transfer) &rarr; mirrored to **Stock Entry** (Material Receipt) in the manufacturer.
+     - Step 2: Raw materials transferred using **Stock Entry** (Material Transfer) &rarr; mirrored to **Stock Entry** (Material Receipt) in the manufacturer *(when both companies share the same currency; otherwise ship via Delivery Note &rarr; Purchase Receipt)*.
      - Step 3: Finished items delivered via **Delivery Note** &rarr; **Subcontracting Receipt**.
 
 3. **Fixed Asset Movements & Depreciation Entries**
