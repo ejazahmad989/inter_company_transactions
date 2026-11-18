@@ -1929,8 +1929,11 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 						self.assertAlmostEqual(res.items[0].basic_rate, 2750.0, places=2)
 					elif tgt_dt == "Journal Entry":
 						expected_je_amt = 2750.0 if mode == "same_currency" else 10.0
-						self.assertAlmostEqual(sum(flt(a.debit) for a in res.accounts), expected_je_amt, places=2)
-						self.assertAlmostEqual(sum(flt(a.credit) for a in res.accounts), expected_je_amt, places=2)
+						total_dr = sum(flt(a.get("debit") if hasattr(a, "get") else getattr(a, "debit", 0)) for a in res.accounts)
+						total_cr = sum(flt(a.get("credit") if hasattr(a, "get") else getattr(a, "credit", 0)) for a in res.accounts)
+						self.assertAlmostEqual(total_dr, expected_je_amt, places=2)
+						self.assertAlmostEqual(total_cr, expected_je_amt, places=2)
+
 					elif tgt_dt == "Payment Entry":
 						expected_pe_amt = 2750.0 if mode == "same_currency" else 10.0
 						self.assertAlmostEqual(res.paid_amount, expected_pe_amt, places=2)
@@ -2315,5 +2318,4 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 		self.assertEqual(po.items[0].base_rate, 100.0)
 		self.assertEqual(po.items[0].base_amount, 400.0)
 		self.assertEqual(po.grand_total, 200.0)
-
 
