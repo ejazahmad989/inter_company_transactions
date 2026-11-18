@@ -211,10 +211,18 @@ def create_custom_fields():
                         for prop in sync_props:
                             if prop in field:
                                 target_val = field[prop]
-                                current_val = getattr(cf_doc, prop, None)
-                                if str(target_val or "") != str(current_val or ""):
-                                    setattr(cf_doc, prop, target_val)
-                                    updated = True
+                            elif prop in ("depends_on", "mandatory_depends_on", "read_only_depends_on"):
+                                target_val = ""
+                            elif prop == "default" and field["fieldname"] == "intercompany_target_company":
+                                target_val = None
+                            elif prop == "fetch_if_empty" and field["fieldname"] == "intercompany_target_company":
+                                target_val = 0
+                            else:
+                                continue
+                            current_val = getattr(cf_doc, prop, None)
+                            if str(target_val or "") != str(current_val or ""):
+                                setattr(cf_doc, prop, target_val)
+                                updated = True
                         if updated:
                             cf_doc.flags.ignore_permissions = True
                             cf_doc.save(ignore_permissions=True)

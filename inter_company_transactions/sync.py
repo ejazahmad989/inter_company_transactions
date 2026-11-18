@@ -350,6 +350,24 @@ def log_remote_sync_failure(doc, target_company, site_url, payload_json, error_m
 		frappe.logger().error(f"Failed to log remote sync error: {e!s}")
 
 
+def _get_request_raw_data_safe():
+	try:
+		if getattr(frappe, "request", None):
+			return frappe.request.get_data(as_text=True)
+	except RuntimeError:
+		pass
+	return None
+
+
+def _get_request_header_safe(header_name):
+	try:
+		if getattr(frappe, "request", None) and hasattr(frappe, "get_request_header"):
+			return frappe.get_request_header(header_name)
+	except RuntimeError:
+		pass
+	return None
+
+
 @frappe.whitelist(allow_guest=False)
 def receive_remote_transaction(payload=None):
 	"""
@@ -358,7 +376,7 @@ def receive_remote_transaction(payload=None):
 	"""
 	raw_data = payload
 	if not raw_data:
-		raw_data = frappe.request.get_data(as_text=True) if hasattr(frappe, "request") and frappe.request else None
+		raw_data = _get_request_raw_data_safe()
 
 	if isinstance(raw_data, (bytes, bytearray)):
 		raw_data = raw_data.decode("utf-8")
@@ -376,7 +394,7 @@ def receive_remote_transaction(payload=None):
 		frappe.throw(_("No payload provided."))
 
 	# Optional HMAC signature verification on raw HTTP payload bytes first
-	incoming_sig = frappe.get_request_header("X-Intercompany-Signature") if hasattr(frappe, "get_request_header") else None
+	incoming_sig = _get_request_header_safe("X-Intercompany-Signature")
 	settings = frappe.get_cached_doc("Inter Company Settings")
 	if incoming_sig and settings.get("remote_sites"):
 		verified = False
@@ -860,7 +878,7 @@ def cancel_remote_transaction(payload=None):
 	"""
 	raw_data = payload
 	if not raw_data:
-		raw_data = frappe.request.get_data(as_text=True) if hasattr(frappe, "request") and frappe.request else None
+		raw_data = _get_request_raw_data_safe()
 
 	if isinstance(raw_data, (bytes, bytearray)):
 		raw_data = raw_data.decode("utf-8")
@@ -872,7 +890,7 @@ def cancel_remote_transaction(payload=None):
 	else:
 		data = raw_data or {}
 
-	incoming_sig = frappe.get_request_header("X-Intercompany-Signature") if hasattr(frappe, "get_request_header") else None
+	incoming_sig = _get_request_header_safe("X-Intercompany-Signature")
 	settings = frappe.get_cached_doc("Inter Company Settings")
 	if incoming_sig and settings.get("remote_sites"):
 		raw_bytes = (

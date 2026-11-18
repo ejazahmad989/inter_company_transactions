@@ -1991,12 +1991,23 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 				return "PKR"
 			return mock_get_value(dt, filters=filters, fieldname=fieldname, **kwargs)
 
+		class UnboundProxy:
+			def __bool__(self):
+				return True
+
+			def __getattr__(self, _name):
+				raise RuntimeError("object is not bound")
+
 		with patch.object(frappe, "new_doc", side_effect=make_doc), patch.object(
 			frappe, "get_all", side_effect=mock_get_all
 		), patch.object(
 			frappe, "has_permission", return_value=True
 		), patch.object(
 			frappe, "get_cached_doc", return_value=frappe._dict({"auto_submit_target_doc": 0})
+		), patch.object(
+			frappe, "request", UnboundProxy(), create=True
+		), patch.object(
+			frappe, "get_request_header", side_effect=RuntimeError("object is not bound"), create=True
 		), patch.object(
 			frappe.db, "exists", side_effect=lambda dt, name=None, **kw: dt in ("Company", "Item", "Journal Entry Type", "Warehouse") or (dt == "DocType" and name == "Currency Exchange")
 		), patch.object(
@@ -2073,21 +2084,36 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 			},
 		}
 
+		# Core Frappe/HRMS DocField JS expressions with trailing ';' must NOT emit false-positive warnings
+		store["DocField"] = {
+			"1tnlldgotp": {"name": "1tnlldgotp", "mandatory_depends_on": "eval:doc.status=='Scheduled';"},
+			"t0jj04vopg": {"name": "t0jj04vopg", "mandatory_depends_on": "eval:(doc.report == 'Accounts Receivable');"},
+		}
+
 		def mock_get_all(dt, filters=None, or_filters=None, fields=None):
 			if dt not in store:
 				return []
 			rows = []
 			for rec in store[dt].values():
-				if filters and "condition" in filters and isinstance(filters["condition"], list):
-					op = filters["condition"][0]
-					if op == "is" and not rec.get("condition"):
+				if filters:
+					matched = True
+					for fk, fv in filters.items():
+						val = rec.get(fk) or ""
+						if isinstance(fv, list):
+							op = fv[0]
+							if op == "is" and not val:
+								matched = False
+								break
+							if op == "like" and fv[1].strip("%") not in val:
+								matched = False
+								break
+						elif val != fv:
+							matched = False
+							break
+					if not matched:
 						continue
-					if op == "like":
-						needle = filters["condition"][1].strip("%")
-						if needle not in (rec.get("condition") or ""):
-							continue
 				elif or_filters:
-					cond = rec.get("condition") or ""
+					cond = rec.get("condition") or rec.get("mandatory_depends_on") or ""
 					if not any(f[2].strip("%") in cond for f in or_filters):
 						continue
 				rows.append(frappe._dict(rec))
@@ -2119,6 +2145,71 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 			self.assertEqual(invalid[0]["name"], "WT-BAD")
 			self.assertEqual(invalid[0]["expression"], "show true")
 			self.assertTrue(any("WT-BAD" in msg for msg in logs))
+			self.assertFalse(any("1tnlldgotp" in msg for msg in logs))
+			self.assertFalse(any("t0jj04vopg" in msg for msg in logs))
+
+	def test_sanitize_stock_entry_custom_fields_self_heals(self):
+		"""Verify sanitize_intercompany_stock_entry self-heals broken Custom Field & Property Setter eval expressions"""
+		from unittest.mock import patch
+
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			sanitize_intercompany_stock_entry,
+		)
+
+		cf_store = {
+			"Stock Entry-intercompany_target_company": {
+				"name": "Stock Entry-intercompany_target_company",
+				"dt": "Stock Entry",
+				"fieldname": "intercompany_target_company",
+				"depends_on": "eval:1or(doc.is_intercompany)",
+				"mandatory_depends_on": "eval:",
+				"read_only_depends_on": "",
+				"default": "eval:frappe.db.get_value('Company', doc.company, 'name')",
+				"fetch_if_empty": 1,
+			}
+		}
+		ps_store = {
+			"Stock Entry-is_intercompany-depends_on": {
+				"name": "Stock Entry-is_intercompany-depends_on",
+				"doc_type": "Stock Entry",
+				"field_name": "is_intercompany",
+				"property": "depends_on",
+				"value": "eval:doc.purpose ===",
+			}
+		}
+
+		def mock_get_all(dt, filters=None, fields=None):
+			if dt == "Custom Field":
+				return [frappe._dict(r) for r in cf_store.values()]
+			if dt == "Property Setter":
+				return [frappe._dict(r) for r in ps_store.values()]
+			return []
+
+		def mock_set_value(dt, name, field_or_dict, val=None, **kwargs):
+			if dt == "Custom Field" and name in cf_store:
+				if isinstance(field_or_dict, dict):
+					cf_store[name].update(field_or_dict)
+				else:
+					cf_store[name][field_or_dict] = val
+
+		def mock_delete(dt, filters=None, **kwargs):
+			if dt == "Property Setter" and isinstance(filters, dict) and filters.get("name") in ps_store:
+				ps_store.pop(filters["name"], None)
+
+		frappe.flags.ict_se_cf_sanitized = False
+		se_doc = frappe._dict({"doctype": "Stock Entry", "purpose": "Material Issue", "company": "Company A", "items": []})
+		with patch.object(frappe.db, "table_exists", return_value=True), patch.object(
+			frappe, "get_all", side_effect=mock_get_all
+		), patch.object(frappe.db, "set_value", side_effect=mock_set_value), patch.object(
+			frappe.db, "delete", side_effect=mock_delete
+		):
+			sanitize_intercompany_stock_entry(se_doc)
+			repaired_cf = cf_store["Stock Entry-intercompany_target_company"]
+			self.assertEqual(repaired_cf["depends_on"], "")
+			self.assertEqual(repaired_cf["mandatory_depends_on"], "")
+			self.assertIsNone(repaired_cf["default"])
+			self.assertEqual(repaired_cf["fetch_if_empty"], 0)
+			self.assertEqual(ps_store, {})
 
 	def test_precalculate_mirrored_doc_totals_real_document_rows(self):
 		"""Verify _precalculate_mirrored_doc_totals works on Frappe Document child rows (no __setitem__)"""

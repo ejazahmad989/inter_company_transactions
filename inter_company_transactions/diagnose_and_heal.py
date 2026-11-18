@@ -116,10 +116,11 @@ def find_invalid_safe_eval_expressions():
 					})
 
 	eval_field_targets = [
-		("DocField", ["depends_on", "mandatory_depends_on", "read_only_depends_on"]),
 		("Custom Field", ["depends_on", "mandatory_depends_on", "read_only_depends_on"]),
 		("Property Setter", ["value"]),
+		("DocField", ["depends_on", "mandatory_depends_on", "read_only_depends_on"]),
 	]
+	corrupted_tokens = ("__islocaland", "anddoc.", "and!", "or!", "1or(", "0or(", ")or(", "1and(", "0and(")
 	for dt, cols in eval_field_targets:
 		if not frappe.db.table_exists(dt):
 			continue
@@ -130,22 +131,28 @@ def find_invalid_safe_eval_expressions():
 				query_filters = {col: ["like", "eval:%"]}
 				if dt == "Property Setter":
 					query_filters["property"] = ["in", ["depends_on", "mandatory_depends_on", "read_only_depends_on"]]
-				rows = frappe.get_all(dt, filters=query_filters, fields=["name", col])
+				fields_to_fetch = ["name", col]
+				if dt == "Custom Field" and frappe.db.has_column(dt, "dt"):
+					fields_to_fetch.append("dt")
+				rows = frappe.get_all(dt, filters=query_filters, fields=fields_to_fetch)
 			except Exception:
 				continue
 			for row in rows or []:
 				raw = (row.get(col) or "").strip()
 				if not raw.startswith("eval:"):
 					continue
+				# Standard core DocField expressions (e.g. HRMS / ERPNext UI JS with trailing ';' or JS syntax)
+				# should only be flagged if they contain actual glued-operator corruption.
+				if dt == "DocField":
+					compact = raw.replace(" ", "").lower()
+					if not any(tok in compact for tok in corrupted_tokens):
+						continue
 				py_candidate = raw[5:].strip().rstrip(";").strip()
 				if not py_candidate:
 					continue
-				# Note: depends_on supports JS syntax in client UI; mandatory_depends_on &
-				# read_only_depends_on are also evaluated on server via Python safe_eval.
 				if col in ("mandatory_depends_on", "read_only_depends_on") or dt == "Property Setter":
 					ok, err = _is_valid_python_eval(py_candidate)
 					if not ok:
-						# Accept valid JS-style depends_on only if it isn't a corrupted glued token
 						from inter_company_transactions.safe_eval_patch import sanitize_for_python
 						sanitized = (sanitize_for_python(raw) or "").strip().rstrip(";").strip()
 						ok_after, _ = _is_valid_python_eval(sanitized)

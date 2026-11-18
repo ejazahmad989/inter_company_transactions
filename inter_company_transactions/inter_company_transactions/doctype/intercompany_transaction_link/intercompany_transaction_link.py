@@ -3122,11 +3122,95 @@ def get_or_create_intercompany_warehouse(company):
         return get_default_warehouse(company)
 
 
+def _is_corrupted_or_invalid_eval_expr(raw_val):
+    """Return True if a field expression contains glued operators or an invalid Python eval: body."""
+    val = (raw_val or "").strip()
+    if not val:
+        return False
+    compact = val.replace(" ", "").lower()
+    if any(tok in compact for tok in ("__islocaland", "anddoc.", "and!", "or!", "1or(", "0or(", ")or(", "1and(", "0and(")):
+        return True
+    if val.lower().startswith("eval:"):
+        expr = val[5:].strip().rstrip(";").strip()
+        if not expr:
+            return True
+        try:
+            import ast
+            ast.parse(expr, mode="eval")
+        except SyntaxError:
+            return True
+    return False
+
+
+def _sanitize_intercompany_stock_entry_custom_fields(force=False):
+    """Idempotent self-healing repair of corrupted depends_on/default expressions on Stock Entry ICT fields."""
+    if not force and getattr(frappe.flags, "ict_se_cf_sanitized", False):
+        return 0
+    if not (hasattr(frappe, "db") and frappe.db):
+        return 0
+
+    ict_fields = (
+        "is_intercompany",
+        "intercompany_target_company",
+        "intercompany_linked_doc_doctype",
+        "intercompany_linked_doc_name",
+        "intercompany_linked_company",
+    )
+    repaired = 0
+    try:
+        if frappe.db.table_exists("Custom Field"):
+            cf_rows = frappe.get_all(
+                "Custom Field",
+                filters={"dt": ["in", ["Stock Entry", "Stock Entry Detail"]], "fieldname": ["in", list(ict_fields)]},
+                fields=["name", "fieldname", "depends_on", "mandatory_depends_on", "read_only_depends_on", "default", "fetch_if_empty"],
+            )
+            for row in cf_rows or []:
+                updates = {}
+                for col in ("depends_on", "mandatory_depends_on", "read_only_depends_on"):
+                    if _is_corrupted_or_invalid_eval_expr(row.get(col)):
+                        updates[col] = ""
+                if row.get("fieldname") == "intercompany_target_company":
+                    if row.get("default") not in (None, ""):
+                        updates["default"] = None
+                    if cint(row.get("fetch_if_empty")):
+                        updates["fetch_if_empty"] = 0
+                elif _is_corrupted_or_invalid_eval_expr(row.get("default")):
+                    updates["default"] = None
+                if updates:
+                    frappe.db.set_value("Custom Field", row["name"], updates, update_modified=False)
+                    repaired += 1
+
+        if frappe.db.table_exists("Property Setter"):
+            ps_rows = frappe.get_all(
+                "Property Setter",
+                filters={
+                    "doc_type": ["in", ["Stock Entry", "Stock Entry Detail"]],
+                    "field_name": ["in", list(ict_fields)],
+                    "property": ["in", ["depends_on", "mandatory_depends_on", "read_only_depends_on", "default"]],
+                },
+                fields=["name", "field_name", "property", "value"],
+            )
+            for ps in ps_rows or []:
+                if (ps.get("property") == "default" and ps.get("field_name") == "intercompany_target_company") or _is_corrupted_or_invalid_eval_expr(ps.get("value")):
+                    frappe.db.delete("Property Setter", {"name": ps["name"]})
+                    repaired += 1
+
+        frappe.flags.ict_se_cf_sanitized = True
+        if repaired and hasattr(frappe, "clear_cache"):
+            frappe.clear_cache(doctype="Stock Entry")
+    except Exception:
+        pass
+    return repaired
+
+
 def sanitize_intercompany_stock_entry(doc, method=None):
     """
     Ensures that an intercompany Material Receipt Stock Entry never contains
     cross-company source warehouses which trigger ERPNext's 'Warehouse does not belong to company' error.
+    Also self-heals corrupted eval/depends_on expressions on Stock Entry ICT custom fields.
     """
+    _sanitize_intercompany_stock_entry_custom_fields()
+
     if (doc.get("purpose") or doc.get("stock_entry_type")) == "Material Receipt":
         if doc.get("from_warehouse"):
             from_wh_comp = frappe.db.get_value("Warehouse", doc.get("from_warehouse"), "company")
@@ -3769,6 +3853,7 @@ def fix_legacy_custom_fields(force=False):
         # 1. Permanently repair corrupted depends_on expressions across DocField, Custom Field, and Property Setter
         from inter_company_transactions.diagnose_and_heal import repair_database_text
         repair_database_text(lambda *args, **kwargs: None)
+        _sanitize_intercompany_stock_entry_custom_fields(force=True)
 
         # 2. Remove intrusive custom fields on Tree DocTypes and Master DocTypes
         if frappe.db.table_exists("Custom Field"):
