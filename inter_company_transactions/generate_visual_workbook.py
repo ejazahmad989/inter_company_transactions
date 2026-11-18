@@ -9,11 +9,7 @@ Usage:
 """
 
 import base64
-import os
 import shutil
-import subprocess
-import sys
-import tempfile
 from pathlib import Path
 
 
@@ -971,42 +967,37 @@ def build_html(screenshots_dir: Path, logo_svg_path: Path | None = None) -> str:
 
 
 def render_pdf_with_playwright(html_content: str, output_pdf: Path):
-    pw_mod = "/usr/local/share/bun-global/node_modules/playwright-core"
-    exec_path = "/ms-playwright/chromium_headless_shell-1247/chrome-headless-shell-linux64/chrome-headless-shell"
-    if not os.path.exists(pw_mod) or not os.path.exists(exec_path):
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError as exc:
         raise RuntimeError(
-            "Playwright or headless Chromium binary not found for HTML->PDF rendering."
-        )
+            "Python 'playwright' package is required for HTML->PDF generation."
+        ) from exc
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        html_file = Path(tmpdir) / "workbook.html"
-        js_file = Path(tmpdir) / "render.js"
-        html_file.write_text(html_content, encoding="utf-8")
+    footer_html = (
+        '<div style="width:100%;font-size:8px;color:#64748b;padding:0 14mm;'
+        'display:flex;justify-content:space-between;font-family:sans-serif;">'
+        "<span>Inter-Company Transactions &mdash; Visual Workbook (Ejaz Tech)</span>"
+        '<span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>'
+        "</div>"
+    )
 
-        js_code = f"""
-const {{ chromium }} = require('{pw_mod}');
-const path = require('path');
-(async () => {{
-  const browser = await chromium.launch({{
-    executablePath: '{exec_path}',
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
-  }});
-  const page = await browser.newPage();
-  await page.goto('file://{html_file}', {{ waitUntil: 'networkidle' }});
-  await page.pdf({{
-    path: '{output_pdf}',
-    format: 'A4',
-    printBackground: true,
-    displayHeaderFooter: true,
-    headerTemplate: '<div></div>',
-    footerTemplate: '<div style="width:100%;font-size:8px;color:#64748b;padding:0 14mm;display:flex;justify-content:space-between;font-family:sans-serif;"><span>Inter-Company Transactions &mdash; Visual Workbook (Ejaz Tech)</span><span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span></div>',
-    margin: {{ top: '12mm', right: '13mm', bottom: '15mm', left: '13mm' }}
-  }});
-  await browser.close();
-}})();
-"""
-        js_file.write_text(js_code, encoding="utf-8")
-        subprocess.run(["node", str(js_file)], check=True)
+    with sync_playwright() as p:
+        browser = p.chromium.launch(args=["--no-sandbox", "--disable-setuid-sandbox"])
+        try:
+            page = browser.new_page()
+            page.set_content(html_content, wait_until="networkidle")
+            page.pdf(
+                path=str(output_pdf),
+                format="A4",
+                print_background=True,
+                display_header_footer=True,
+                header_template="<div></div>",
+                footer_template=footer_html,
+                margin={"top": "12mm", "right": "13mm", "bottom": "15mm", "left": "13mm"},
+            )
+        finally:
+            browser.close()
 
 
 def main():

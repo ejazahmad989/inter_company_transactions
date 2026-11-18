@@ -12,6 +12,13 @@ def after_migrate():
     # Ensure ICT Notification Setting exists for active users
     ensure_ict_notification_settings_for_all_users()
 
+    # Heal any corrupted depends_on or Python condition expressions in MariaDB
+    try:
+        from inter_company_transactions.diagnose_and_heal import repair_database_text
+        repair_database_text(lambda *args, **kwargs: None)
+    except Exception as e:
+        frappe.log_error(f"Error repairing database expressions: {e!s}", "ICT After Migrate")
+
     # Ensure sister company names and titles are populated for all links
     try:
         from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (

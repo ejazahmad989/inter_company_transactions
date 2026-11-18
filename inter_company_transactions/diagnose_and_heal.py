@@ -47,6 +47,119 @@ def run_full_healing(verbose=True):
 	}
 
 
+def _is_valid_python_eval(expr):
+	"""Return (True, None) if Python eval syntax compiles cleanly, else (False, error_msg)."""
+	try:
+		compile((expr or "").strip(), "<safe_eval>", "eval")
+		return True, None
+	except SyntaxError as exc:
+		return False, f"line {exc.lineno}, col {exc.offset}: {exc.msg}"
+
+
+def _try_repair_python_condition(expr):
+	"""Attempt deterministic repair of a broken Python safe_eval condition string."""
+	from inter_company_transactions.safe_eval_patch import sanitize_for_python
+
+	candidate = sanitize_for_python(expr)
+	if isinstance(candidate, str):
+		# Also fix missing spaces before 'and'/'or' glued to words without '!'
+		candidate = re.sub(r"([a-zA-Z0-9_'\")\]])(and|or)(?=[(\s'!])", r"\1 \2 ", candidate)
+		candidate = re.sub(r"\b(and|or)([a-zA-Z_][a-zA-Z0-9_]*\.)", r"\1 \2", candidate)
+		candidate = re.sub(r"\s{2,}", " ", candidate).strip()
+	return candidate
+
+
+def find_invalid_safe_eval_expressions():
+	"""
+	Inspect all Python-evaluated condition and eval: depends_on expressions in MariaDB
+	and return a list of dicts for any expressions that currently fail Python compilation.
+	"""
+	if not (hasattr(frappe, "db") and frappe.db):
+		return []
+
+	invalid = []
+	python_condition_targets = [
+		("Workflow Transition", ["condition"]),
+		("Notification", ["condition"]),
+		("Assignment Rule", ["assign_condition", "unassign_condition", "close_condition"]),
+		("Webhook", ["condition"]),
+		("Energy Point Rule", ["condition"]),
+	]
+
+	for dt, cols in python_condition_targets:
+		if not frappe.db.table_exists(dt):
+			continue
+		for col in cols:
+			if not frappe.db.has_column(dt, col):
+				continue
+			try:
+				rows = frappe.get_all(
+					dt,
+					filters={col: ["is", "set"]},
+					fields=["name", col],
+				)
+			except Exception:
+				continue
+			for row in rows or []:
+				val = (row.get(col) or "").strip()
+				if not val:
+					continue
+				ok, err = _is_valid_python_eval(val)
+				if not ok:
+					invalid.append({
+						"doctype": dt,
+						"name": row.get("name"),
+						"field": col,
+						"expression": val,
+						"error": err,
+					})
+
+	eval_field_targets = [
+		("DocField", ["depends_on", "mandatory_depends_on", "read_only_depends_on"]),
+		("Custom Field", ["depends_on", "mandatory_depends_on", "read_only_depends_on"]),
+		("Property Setter", ["value"]),
+	]
+	for dt, cols in eval_field_targets:
+		if not frappe.db.table_exists(dt):
+			continue
+		for col in cols:
+			if not frappe.db.has_column(dt, col):
+				continue
+			try:
+				query_filters = {col: ["like", "eval:%"]}
+				if dt == "Property Setter":
+					query_filters["property"] = ["in", ["depends_on", "mandatory_depends_on", "read_only_depends_on"]]
+				rows = frappe.get_all(dt, filters=query_filters, fields=["name", col])
+			except Exception:
+				continue
+			for row in rows or []:
+				raw = (row.get(col) or "").strip()
+				if not raw.startswith("eval:"):
+					continue
+				py_candidate = raw[5:].strip()
+				if not py_candidate:
+					continue
+				# Note: depends_on supports JS syntax in client UI; mandatory_depends_on &
+				# read_only_depends_on are also evaluated on server via Python safe_eval.
+				if col in ("mandatory_depends_on", "read_only_depends_on") or dt == "Property Setter":
+					ok, err = _is_valid_python_eval(py_candidate)
+					if not ok:
+						# Accept valid JS-style depends_on only if it isn't a corrupted glued token
+						from inter_company_transactions.safe_eval_patch import sanitize_for_python
+						sanitized = sanitize_for_python(raw)
+						ok_after, _ = _is_valid_python_eval(sanitized)
+						if not ok_after:
+							invalid.append({
+								"doctype": dt,
+								"name": row.get("name"),
+								"field": col,
+								"expression": raw,
+								"error": err,
+							})
+
+	return invalid
+
+
 def repair_database_text(log):
 	"""Scan and replace corrupted expressions across all relevant MariaDB tables using ORM queries."""
 	if not (hasattr(frappe, "db") and frappe.db):
@@ -60,6 +173,11 @@ def repair_database_text(log):
 		("Client Script", ["script"]),
 		("Custom Script", ["script"]),
 		("DocType", ["description"]),
+		("Workflow Transition", ["condition"]),
+		("Notification", ["condition"]),
+		("Assignment Rule", ["assign_condition", "unassign_condition", "close_condition"]),
+		("Webhook", ["condition"]),
+		("Energy Point Rule", ["condition"]),
 	]
 
 	replacements = [
@@ -118,6 +236,50 @@ def repair_database_text(log):
 							log(f"  Fixed glued operator in {dt}.{col} ({gr.get('name')})")
 			except Exception as e:
 				log(f"  Notice fixing glued operator in {dt}.{col}: {e}")
+
+	# Repair Python-only safe_eval condition fields (Workflow Transition, Notification, Assignment Rule, etc.)
+	python_condition_targets = [
+		("Workflow Transition", ["condition"]),
+		("Notification", ["condition"]),
+		("Assignment Rule", ["assign_condition", "unassign_condition", "close_condition"]),
+		("Webhook", ["condition"]),
+		("Energy Point Rule", ["condition"]),
+	]
+	for dt, cols in python_condition_targets:
+		if not frappe.db.table_exists(dt):
+			continue
+		for col in cols:
+			if not frappe.db.has_column(dt, col):
+				continue
+			try:
+				rows = frappe.get_all(dt, filters={col: ["is", "set"]}, fields=["name", col])
+			except Exception:
+				continue
+			for row in rows or []:
+				orig = (row.get(col) or "").strip()
+				if not orig:
+					continue
+				ok, _ = _is_valid_python_eval(orig)
+				if ok:
+					continue
+				fixed = _try_repair_python_condition(orig)
+				if fixed and fixed != orig:
+					ok_fixed, _ = _is_valid_python_eval(fixed)
+					if ok_fixed:
+						try:
+							frappe.db.set_value(dt, row.get("name"), col, fixed, update_modified=False)
+							total_updates += 1
+							log(f"  Repaired Python condition in {dt}.{col} ({row.get('name')})")
+						except Exception as e:
+							log(f"  Notice saving repaired condition in {dt}.{col}: {e}")
+
+	# Log any remaining unrepairable Python safe_eval expressions for administrator visibility
+	remaining_invalid = find_invalid_safe_eval_expressions()
+	for item in remaining_invalid:
+		log(
+			f"  WARNING: Unparseable Python condition in {item['doctype']} '{item['name']}' "
+			f"({item['field']}): {item['expression']!r} -> {item['error']}"
+		)
 
 	return total_updates
 

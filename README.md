@@ -38,7 +38,7 @@ An enterprise-grade, comprehensive Frappe / ERPNext application engineered for c
 
 ### Why It Runs Flawlessly Across Both v15 and v16:
 1. **Zero Core Monkey-Patching**: The app does NOT tamper with or override core Frappe classes or prototypes (`safe_eval`, `Layout`, `GridRow`, etc.). All business logic executes through standard, public extension hooks (`doc_events`, `scheduler_events`, `on_session_creation`, and custom Desk Pages).
-2. **Safe Migration Safeguards**: Custom fields are injected via an idempotent `after_migrate` routine that checks `frappe.db.exists("Custom Field", ...)` before insertion. Running `bench migrate` on v15 or v16 will never crash or overwrite existing customizations.
+2. **Safe Migration Safeguards**: Custom fields are injected via an idempotent `after_migrate` routine that checks `frappe.db.exists("Custom Field", ...)` before insertion, ensuring schema upgrades on v15 or v16 never crash or overwrite existing customizations.
 3. **Pure Python Standard Library Cryptography**: Payload integrity verification uses standard `hmac`, `hashlib`, and `urllib` without volatile native C-extensions.
 4. **Universal Desk UI**: Form extensions and the Interactive Desk Console utilize vanilla Frappe standard components compatible with both Frappe 15 and Frappe 16 Desk engines.
 
@@ -137,40 +137,25 @@ Automatically creates, submits, or cancels reciprocal mirror documents in real-t
 
 ---
 
-## 🚀 Installation & Quickstart
+## 🚀 Quickstart & Desk Configuration
 
-### 1. Install via Bench
-```bash
-bench get-app https://github.com/ejazahmad989/inter_company_transactions.git
-bench --site [your-site-name] install-app inter_company_transactions
-bench --site [your-site-name] migrate
-```
-
-### 2. Configure Linked Companies (Single-Bench)
+### 1. Configure Linked Companies (Single-Bench)
 1. In Frappe Desk, search for **Intercompany Transaction Link**.
 2. Click **Add Intercompany Transaction Link**.
 3. Select your **Main Company**.
-4. In **Linked Companies**, add your sister companies along with internal customer and supplier accounts.
-5. In **Transaction Types**, define which transactions to mirror.
+4. In **Linked Companies**, add your sister companies along with internal customer, supplier, transit warehouse, and `TMP-*` clearing accounts.
+5. In **Transaction Types**, define which transactions to mirror (all 16 pairs can be populated in one click).
 6. Click **Save**.
+
+### 2. Multi-Currency Setup (e.g., PKR ↔ USD)
+When transacting across companies using different base currencies, ensure a valid **Currency Exchange** record exists for the transaction date. On submit of a Sales Order, Invoice, Stock Entry, Journal Entry, or Payment Entry, the built-in rate assistant detects any missing exchange rate and lets you save it right from Desk before continuing.
 
 ### 3. Test Automated Document Creation
 Create a Sales Order in Company A for the mapped intercompany customer. The system will automatically check `Is Intercompany` and set Company B as the target company. Upon submitting, a matching Purchase Order in Company B is instantly generated!
 
-### 4. Run Automated Unit Tests & Marketplace Safety Audit
-```bash
-# Run unit tests
-bench --site [your-site-name] run-tests --app inter_company_transactions
-
-# Run automated 8-point marketplace readiness & safety audit
-bench --site [your-site-name] execute inter_company_transactions.commands.verify_marketplace_readiness
-```
-
-### 5. Zero-Residual Clean Uninstall Guarantee
-When evaluating or removing the application, the app's registered hooks completely wipe all custom fields, property setters, and permissions, leaving standard ERPNext in a 100% vanilla state:
-```bash
-bench --site [your-site-name] uninstall-app inter_company_transactions
-```
+### 4. Automated Readiness Verification & Clean Uninstall
+- **Marketplace Readiness**: The integrated verification suite (`inter_company_transactions.commands.verify_marketplace_readiness`) validates schema integrity, zero core overrides, and multi-currency parity.
+- **Zero-Residual Clean Uninstall Guarantee**: When removing the application via Frappe Cloud Marketplace or app management hooks, all registered custom fields, property setters, and permissions are cleanly purged, leaving standard ERPNext in a 100% vanilla state.
 
 ---
 

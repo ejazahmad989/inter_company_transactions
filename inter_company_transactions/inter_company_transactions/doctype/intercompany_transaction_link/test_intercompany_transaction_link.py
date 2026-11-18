@@ -1552,8 +1552,9 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 			self.assertEqual(cleared, [("Journal Entry", "ACC-JV-2026-00039")])
 
 	def test_static_semgrep_and_frappe_api_hygiene(self):
-		"""Verify zero SQL format injections, zero unannotated commits, and zero ignore_permissions in frappe.get_all"""
+		"""Verify zero SQL format injections, zero subprocess usage, clean repair_site.py, and clean README metadata"""
 		import ast
+		import re
 		from pathlib import Path
 
 		repo_root = Path(__file__).resolve().parents[4]
@@ -1568,6 +1569,21 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 			tree = ast.parse(src, filename=str(py_file))
 
 			for node in ast.walk(tree):
+				# Forbid subprocess imports anywhere in repository Python files
+				if isinstance(node, ast.Import):
+					for alias in node.names:
+						self.assertNotEqual(
+							alias.name,
+							"subprocess",
+							f"Forbidden subprocess import in {py_file.name}:{node.lineno}",
+						)
+				elif isinstance(node, ast.ImportFrom):
+					self.assertNotEqual(
+						node.module,
+						"subprocess",
+						f"Forbidden subprocess import in {py_file.name}:{node.lineno}",
+					)
+
 				if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
 					# 1. Forbid ignore_permissions in frappe.get_all / frappe.db.get_all
 					if node.func.attr == "get_all":
@@ -1594,14 +1610,26 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 							if isinstance(q_arg, ast.BinOp) and isinstance(q_arg.op, ast.Mod):
 								self.fail(f"SQL % formatting injection risk in {py_file.name}:{node.lineno}")
 
-					# 3. Forbid unannotated frappe.db.commit()
+					# 3. Forbid manual frappe.db.commit() in repair_site.py and unannotated commits elsewhere
 					if node.func.attr == "commit" and isinstance(node.func.value, ast.Attribute) and node.func.value.attr == "db":
+						if py_file.name == "repair_site.py":
+							self.fail(f"Forbidden manual frappe.db.commit() in repair_site.py:{node.lineno}")
 						line_text = src.splitlines()[node.lineno - 1]
 						self.assertIn(
 							"# nosemgrep",
 							line_text,
 							f"Unannotated frappe.db.commit() in {py_file.name}:{node.lineno}",
 						)
+
+		# 4. Ensure README long description has no Marketplace-prohibited bench install/migrate commands
+		for readme_path in (repo_root / "README.md", repo_root / "inter_company_transactions" / "README.md"):
+			if readme_path.exists():
+				readme_text = readme_path.read_text(encoding="utf-8")
+				for pattern in (r"bench\s+get-app", r"bench\s+--site\s+\S+\s+install-app", r"bench\s+migrate"):
+					self.assertIsNone(
+						re.search(pattern, readme_text),
+						f"Prohibited install instruction pattern {pattern!r} found in {readme_path}",
+					)
 
 	def test_frappe_get_all_real_signature_for_fx_and_links(self):
 		"""Enforce real Frappe get_all signature (no ignore_permissions) across Currency Exchange and link queries"""
@@ -1949,4 +1977,71 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 			se_created = created[-1]
 			self.assertAlmostEqual(se_created.items[0].basic_rate, 10.0, places=2)
 			self.assertAlmostEqual(se_created.items[0].basic_amount, 20.0, places=2)
+
+	def test_diagnose_and_heal_workflow_and_safe_eval_conditions(self):
+		"""Verify Workflow Transition and Notification Python conditions are auto-healed or flagged clearly"""
+		from unittest.mock import patch
+
+		from inter_company_transactions.diagnose_and_heal import (
+			find_invalid_safe_eval_expressions,
+			repair_database_text,
+		)
+
+		store = {
+			"Workflow Transition": {
+				"WT-1": {"name": "WT-1", "condition": "eval: doc.is_intercompany && !doc.amended_from && true"},
+				"WT-BAD": {"name": "WT-BAD", "condition": "show true"},
+			},
+			"Notification": {
+				"NOTIF-1": {"name": "NOTIF-1", "condition": "doc.docstatus == 1 && doc.is_intercompany == true"},
+			},
+		}
+
+		def mock_get_all(dt, filters=None, or_filters=None, fields=None):
+			if dt not in store:
+				return []
+			rows = []
+			for rec in store[dt].values():
+				if filters and "condition" in filters and isinstance(filters["condition"], list):
+					op = filters["condition"][0]
+					if op == "is" and not rec.get("condition"):
+						continue
+					if op == "like":
+						needle = filters["condition"][1].strip("%")
+						if needle not in (rec.get("condition") or ""):
+							continue
+				elif or_filters:
+					cond = rec.get("condition") or ""
+					if not any(f[2].strip("%") in cond for f in or_filters):
+						continue
+				rows.append(frappe._dict(rec))
+			return rows
+
+		def mock_set_value(dt, name, col, val, **kwargs):
+			store[dt][name][col] = val
+
+		logs = []
+		with patch.object(frappe.db, "table_exists", side_effect=lambda dt: dt in store), patch.object(
+			frappe.db, "has_column", return_value=True
+		), patch.object(frappe, "get_all", side_effect=mock_get_all), patch.object(
+			frappe.db, "set_value", side_effect=mock_set_value
+		):
+			updates = repair_database_text(logs.append)
+			self.assertGreaterEqual(updates, 2)
+			self.assertEqual(
+				store["Workflow Transition"]["WT-1"]["condition"],
+				"doc.is_intercompany and not doc.amended_from and True",
+			)
+			self.assertEqual(
+				store["Notification"]["NOTIF-1"]["condition"],
+				"doc.docstatus == 1 and doc.is_intercompany == True",
+			)
+
+			invalid = find_invalid_safe_eval_expressions()
+			self.assertEqual(len(invalid), 1)
+			self.assertEqual(invalid[0]["doctype"], "Workflow Transition")
+			self.assertEqual(invalid[0]["name"], "WT-BAD")
+			self.assertEqual(invalid[0]["expression"], "show true")
+			self.assertTrue(any("WT-BAD" in msg for msg in logs))
+
 
