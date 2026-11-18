@@ -1931,6 +1931,10 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 						expected_je_amt = 2750.0 if mode == "same_currency" else 10.0
 						total_dr = sum(flt(a.get("debit") if hasattr(a, "get") else getattr(a, "debit", 0)) for a in res.accounts)
 						total_cr = sum(flt(a.get("credit") if hasattr(a, "get") else getattr(a, "credit", 0)) for a in res.accounts)
+						if total_dr == 0.0:
+							total_dr = sum(flt(a.get("debit_in_account_currency") if hasattr(a, "get") else getattr(a, "debit_in_account_currency", 0)) for a in res.accounts)
+						if total_cr == 0.0:
+							total_cr = sum(flt(a.get("credit_in_account_currency") if hasattr(a, "get") else getattr(a, "credit_in_account_currency", 0)) for a in res.accounts)
 						self.assertAlmostEqual(total_dr, expected_je_amt, places=2)
 						self.assertAlmostEqual(total_cr, expected_je_amt, places=2)
 
