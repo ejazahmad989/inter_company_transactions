@@ -611,13 +611,42 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 
 		with patch.object(frappe.db, "get_value", side_effect=mock_get_value_create), patch(
 			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.get_parent_clearing_account",
-			return_value="Bank Accounts - MC",
+			return_value="ICT_ACC - MC",
 		), patch.object(frappe, "get_doc", side_effect=mock_new_account):
 			acc = get_or_create_intercompany_clearing_account("Main Company", "John Company")
 			self.assertEqual(acc, "TMP-JC - MC")
 			self.assertEqual(len(created_docs), 1)
 			self.assertEqual(created_docs[0].account_type, "Bank")
 			self.assertEqual(created_docs[0].account_name, "TMP-JC")
+			self.assertEqual(created_docs[0].parent_account, "ICT_ACC - MC")
+
+		# Case 3: Auto-creates dedicated ICT_ACC folder under Current Assets when missing
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			get_parent_clearing_account,
+		)
+		ict_created = []
+
+		def mock_get_value_ict_folder(dt, filters=None, fieldname=None, **kwargs):
+			if dt == "Account" and isinstance(filters, dict):
+				if filters.get("account_name") == ["in", ["Current Assets", "Current Asset"]]:
+					return "Current Assets - MC"
+			return None
+
+		def mock_insert_ict(data):
+			doc = frappe._dict(data)
+			doc.name = f"{data['account_name']} - MC"
+			doc.flags = frappe._dict()
+			doc.insert = MagicMock(side_effect=lambda **kw: ict_created.append(doc))
+			return doc
+
+		with patch.object(frappe.db, "get_value", side_effect=mock_get_value_ict_folder), patch.object(
+			frappe, "get_doc", side_effect=mock_insert_ict
+		):
+			folder = get_parent_clearing_account("Main Company")
+			self.assertEqual(folder, "ICT_ACC - MC")
+			self.assertEqual(len(ict_created), 1)
+			self.assertEqual(ict_created[0].is_group, 1)
+			self.assertEqual(ict_created[0].parent_account, "Current Assets - MC")
 
 	def test_scan_linked_company_defaults_pair_matching(self):
 		"""Verify scan_linked_company_defaults auto-populates internal parties and TMP-<ABBR> clearing accounts"""

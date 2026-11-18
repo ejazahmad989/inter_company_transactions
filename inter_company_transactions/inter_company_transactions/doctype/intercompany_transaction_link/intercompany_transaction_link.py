@@ -1188,15 +1188,95 @@ def validate_intercompany_items(doc, mapping):
         )
 
 
-def get_parent_clearing_account(company):
+def get_or_create_ict_parent_group(company):
     """
-    Finds the appropriate parent group account for an Intercompany TMP Clearing account
-    under Bank Accounts -> Current Assets -> Asset for the given company.
+    Finds or creates a dedicated 'ICT_ACC' (Inter Company Transaction Accounts) group folder
+    under Current Assets -> Asset for organizing single all-in-one Bank-typed TMP-<ABBR> accounts.
     """
     if not company or not (hasattr(frappe, "db") and frappe.db):
         return None
 
-    # 1. Prefer 'Bank Accounts' group under Asset so child Bank accounts align with ERPNext CoA
+    # 1. Reuse existing ICT_ACC / Inter Company Transaction Accounts group folder if present
+    existing = frappe.db.get_value(
+        "Account",
+        {
+            "company": company,
+            "is_group": 1,
+            "root_type": "Asset",
+            "account_name": ["in", ["ICT_ACC", "Inter Company Transaction Accounts"]],
+        },
+        "name",
+    )
+    if existing:
+        return existing
+
+    # 2. Locate Current Assets (or fallback Asset group) as parent for ICT_ACC folder
+    current_assets = (
+        frappe.db.get_value(
+            "Account",
+            {
+                "company": company,
+                "is_group": 1,
+                "root_type": "Asset",
+                "account_name": ["in", ["Current Assets", "Current Asset"]],
+            },
+            "name",
+        )
+        or frappe.db.get_value(
+            "Account",
+            {
+                "company": company,
+                "is_group": 1,
+                "root_type": "Asset",
+                "account_name": ["like", "%Current Asset%"],
+            },
+            "name",
+        )
+        or frappe.db.get_value(
+            "Account",
+            {
+                "company": company,
+                "is_group": 1,
+                "root_type": "Asset",
+                "parent_account": ["is", "set"],
+            },
+            "name",
+        )
+    )
+    if not current_assets:
+        return None
+
+    try:
+        grp = frappe.get_doc({
+            "doctype": "Account",
+            "account_name": "ICT_ACC",
+            "company": company,
+            "parent_account": current_assets,
+            "root_type": "Asset",
+            "account_type": "",
+            "is_group": 1,
+        })
+        grp.flags.ignore_permissions = True
+        grp.flags.ignore_mandatory = True
+        grp.insert()
+        return grp.name
+    except Exception:
+        return None
+
+
+def get_parent_clearing_account(company):
+    """
+    Finds or provisions the dedicated 'ICT_ACC' group account under Current Assets,
+    falling back to Bank Accounts / Current Assets for Intercompany Bank-typed TMP-<ABBR> accounts.
+    """
+    if not company or not (hasattr(frappe, "db") and frappe.db):
+        return None
+
+    ict_group = get_or_create_ict_parent_group(company)
+    if ict_group:
+        return ict_group
+
+    # Fallback: 'Bank Accounts' group under Asset
     parent = frappe.db.get_value(
         "Account",
         {
@@ -1219,7 +1299,7 @@ def get_parent_clearing_account(company):
             "name",
         )
 
-    # 2. Fallback to 'Current Assets' group
+    # Fallback: 'Current Assets' group
     if not parent:
         parent = frappe.db.get_value(
             "Account",
@@ -1243,7 +1323,7 @@ def get_parent_clearing_account(company):
             "name",
         )
 
-    # 3. Final fallback to any non-root Asset group account
+    # Final fallback: any non-root Asset group account
     if not parent:
         parent = frappe.db.get_value(
             "Account",
@@ -2109,7 +2189,7 @@ def resolve_intercompany_currency_and_rate(source_doc, target_company, party_typ
         if not rate_factor or rate_factor <= 0:
             rate_factor = 1.0
 
-    return target_currency, flt(conversion_rate, 9), flt(rate_factor, 9)
+    return target_currency, (flt(conversion_rate, 9) or 1.0), (flt(rate_factor, 9) or 1.0)
 
 
 def ensure_item_exists(item_code, item_name=None, description=None, uom="Nos", item_group=None):
@@ -2430,6 +2510,7 @@ def _preserve_intercompany_currency_after_defaults(target_doc, target_currency, 
     """Re-apply exact intercompany currency and conversion_rate after ERPNext set_missing_values."""
     if not target_doc:
         return
+    conversion_rate = flt(conversion_rate, 9) or 1.0
     if hasattr(target_doc, "currency") or isinstance(target_doc, dict):
         target_doc.currency = target_currency
     if hasattr(target_doc, "conversion_rate") or isinstance(target_doc, dict):
