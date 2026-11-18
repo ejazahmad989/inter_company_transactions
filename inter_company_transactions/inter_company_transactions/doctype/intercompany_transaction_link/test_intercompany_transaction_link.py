@@ -2120,4 +2120,80 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 			self.assertEqual(invalid[0]["expression"], "show true")
 			self.assertTrue(any("WT-BAD" in msg for msg in logs))
 
+	def test_precalculate_mirrored_doc_totals_real_document_rows(self):
+		"""Verify _precalculate_mirrored_doc_totals works on Frappe Document child rows (no __setitem__)"""
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			_precalculate_mirrored_doc_totals,
+		)
+
+		class NonDictDoc:
+			def __init__(self, **kw):
+				for k, v in kw.items():
+					setattr(self, k, v)
+
+			def get(self, key, default=None):
+				return getattr(self, key, default)
+
+		# 1. Stock Entry Detail (non-dict Document object)
+		se = NonDictDoc(
+			doctype="Stock Entry",
+			purpose="Material Receipt",
+			total_amount=0.0,
+			total_incoming_value=0.0,
+			items=[NonDictDoc(qty=3.0, basic_rate=100.0, basic_amount=0.0, amount=0.0, additional_cost=0.0)],
+		)
+		_precalculate_mirrored_doc_totals(se)
+		self.assertEqual(se.items[0].basic_amount, 300.0)
+		self.assertEqual(se.items[0].amount, 300.0)
+		self.assertEqual(se.total_amount, 300.0)
+		self.assertEqual(se.total_incoming_value, 300.0)
+
+		# 2. Journal Entry Account (non-dict Document object)
+		je = NonDictDoc(
+			doctype="Journal Entry",
+			company="ABC Co",
+			total_debit=0.0,
+			total_credit=0.0,
+			accounts=[
+				NonDictDoc(
+					account="TMP - ABC",
+					account_currency="PKR",
+					exchange_rate=0.0,
+					debit_in_account_currency=500.0,
+					credit_in_account_currency=0.0,
+					debit=0.0,
+					credit=0.0,
+				),
+				NonDictDoc(
+					account="Creditors - ABC",
+					account_currency="PKR",
+					exchange_rate=0.0,
+					debit_in_account_currency=0.0,
+					credit_in_account_currency=500.0,
+					debit=0.0,
+					credit=0.0,
+				),
+			],
+		)
+		_precalculate_mirrored_doc_totals(je)
+		self.assertEqual(je.accounts[0].debit, 500.0)
+		self.assertEqual(je.accounts[1].credit, 500.0)
+		self.assertEqual(je.total_debit, 500.0)
+		self.assertEqual(je.total_credit, 500.0)
+
+		# 3. Trading DocType Item (non-dict Document object)
+		po = NonDictDoc(
+			doctype="Purchase Order",
+			conversion_rate=2.0,
+			total=0.0,
+			net_total=0.0,
+			grand_total=0.0,
+			items=[NonDictDoc(qty=4.0, rate=50.0, amount=0.0, base_rate=0.0, base_amount=0.0)],
+		)
+		_precalculate_mirrored_doc_totals(po)
+		self.assertEqual(po.items[0].amount, 200.0)
+		self.assertEqual(po.items[0].base_rate, 100.0)
+		self.assertEqual(po.items[0].base_amount, 400.0)
+		self.assertEqual(po.grand_total, 200.0)
+
 

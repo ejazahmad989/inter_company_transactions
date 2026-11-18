@@ -4409,6 +4409,17 @@ def resolve_party_target_company(party_name, party_type=None, current_company=No
     return None
 
 
+def _set_row_value(row, key, value):
+    if isinstance(row, dict):
+        row[key] = value
+    else:
+        setattr(row, key, value)
+
+
+def _has_row_field(row, key):
+    return (isinstance(row, dict) and key in row) or hasattr(row, key)
+
+
 def _precalculate_mirrored_doc_totals(doc):
     """
     Pre-calculates ERPNext derived line amounts and document totals on mirrored drafts
@@ -4437,14 +4448,14 @@ def _precalculate_mirrored_doc_totals(doc):
                     except Exception:
                         acc_ccy = None
                 if acc_ccy or company_ccy:
-                    row["account_currency"] = acc_ccy or company_ccy
+                    _set_row_value(row, "account_currency", acc_ccy or company_ccy)
             if abs(flt(row.get("exchange_rate"))) <= 0.0001:
-                row["exchange_rate"] = 1.0
+                _set_row_value(row, "exchange_rate", 1.0)
             fx = flt(row.get("exchange_rate") or 1.0)
             if abs(flt(row.get("debit"))) <= 0.0001 and abs(flt(row.get("debit_in_account_currency"))) > 0.0001:
-                row["debit"] = flt(flt(row.get("debit_in_account_currency")) * fx, 2)
+                _set_row_value(row, "debit", flt(flt(row.get("debit_in_account_currency")) * fx, 2))
             if abs(flt(row.get("credit"))) <= 0.0001 and abs(flt(row.get("credit_in_account_currency"))) > 0.0001:
-                row["credit"] = flt(flt(row.get("credit_in_account_currency")) * fx, 2)
+                _set_row_value(row, "credit", flt(flt(row.get("credit_in_account_currency")) * fx, 2))
 
         try:
             if hasattr(doc, "set_amounts_in_company_currency"):
@@ -4474,15 +4485,15 @@ def _precalculate_mirrored_doc_totals(doc):
             qty = flt(row.get("qty"))
             brate = flt(row.get("basic_rate"))
             if abs(flt(row.get("basic_amount"))) <= 0.0001 and qty and brate:
-                row["basic_amount"] = flt(qty * brate, 2)
+                _set_row_value(row, "basic_amount", flt(qty * brate, 2))
             if abs(flt(row.get("amount"))) <= 0.0001 and (flt(row.get("basic_amount")) or flt(row.get("additional_cost"))):
-                row["amount"] = flt(flt(row.get("basic_amount")) + flt(row.get("additional_cost")), 2)
+                _set_row_value(row, "amount", flt(flt(row.get("basic_amount")) + flt(row.get("additional_cost")), 2))
         if items and abs(flt(doc.get("total_amount"))) <= 0.0001:
             total_val = flt(sum(flt(r.get("amount") or r.get("basic_amount")) for r in items), 2)
-            if hasattr(doc, "total_amount"):
-                doc.total_amount = total_val
-            if doc.get("purpose") == "Material Receipt" and hasattr(doc, "total_incoming_value"):
-                doc.total_incoming_value = total_val
+            if _has_row_field(doc, "total_amount"):
+                _set_row_value(doc, "total_amount", total_val)
+            if doc.get("purpose") == "Material Receipt" and _has_row_field(doc, "total_incoming_value"):
+                _set_row_value(doc, "total_incoming_value", total_val)
         return
 
     if dt == "Payment Entry":
@@ -4506,19 +4517,19 @@ def _precalculate_mirrored_doc_totals(doc):
         rate = flt(row.get("rate"))
         if abs(flt(row.get("amount"))) <= 0.0001 and qty and rate:
             amt = flt(qty * rate, 2)
-            row["amount"] = amt
-            if "base_rate" in row or hasattr(row, "base_rate"):
-                row["base_rate"] = flt(rate * conv_rate, 2)
-            if "base_amount" in row or hasattr(row, "base_amount"):
-                row["base_amount"] = flt(amt * conv_rate, 2)
+            _set_row_value(row, "amount", amt)
+            if _has_row_field(row, "base_rate"):
+                _set_row_value(row, "base_rate", flt(rate * conv_rate, 2))
+            if _has_row_field(row, "base_amount"):
+                _set_row_value(row, "base_amount", flt(amt * conv_rate, 2))
     if items and abs(flt(doc.get("total"))) <= 0.0001:
         total_amt = flt(sum(flt(r.get("amount")) for r in items), 2)
-        if hasattr(doc, "total") or isinstance(doc, dict):
-            doc.total = total_amt
-        if hasattr(doc, "net_total") or isinstance(doc, dict):
-            doc.net_total = total_amt
-        if hasattr(doc, "grand_total") or isinstance(doc, dict):
-            doc.grand_total = total_amt
+        if _has_row_field(doc, "total"):
+            _set_row_value(doc, "total", total_amt)
+        if _has_row_field(doc, "net_total"):
+            _set_row_value(doc, "net_total", total_amt)
+        if _has_row_field(doc, "grand_total"):
+            _set_row_value(doc, "grand_total", total_amt)
 
 
 def validate_locked_mirrored_fields(doc, previous=None):

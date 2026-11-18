@@ -137,7 +137,7 @@ def find_invalid_safe_eval_expressions():
 				raw = (row.get(col) or "").strip()
 				if not raw.startswith("eval:"):
 					continue
-				py_candidate = raw[5:].strip()
+				py_candidate = raw[5:].strip().rstrip(";").strip()
 				if not py_candidate:
 					continue
 				# Note: depends_on supports JS syntax in client UI; mandatory_depends_on &
@@ -147,7 +147,7 @@ def find_invalid_safe_eval_expressions():
 					if not ok:
 						# Accept valid JS-style depends_on only if it isn't a corrupted glued token
 						from inter_company_transactions.safe_eval_patch import sanitize_for_python
-						sanitized = sanitize_for_python(raw)
+						sanitized = (sanitize_for_python(raw) or "").strip().rstrip(";").strip()
 						ok_after, _ = _is_valid_python_eval(sanitized)
 						if not ok_after:
 							invalid.append({
