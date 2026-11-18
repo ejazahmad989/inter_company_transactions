@@ -1,6 +1,7 @@
 # Copyright (c) 2026, Inter Company Transactions and contributors
 # For license information, please see license.txt
 
+import ast
 import re
 import frappe
 
@@ -47,10 +48,10 @@ def run_full_healing(verbose=True):
 	}
 
 
-def _is_valid_python_eval(expr):
-	"""Return (True, None) if Python eval syntax compiles cleanly, else (False, error_msg)."""
+def _is_valid_python_eval(expr, mode="eval"):
+	"""Return (True, None) if Python syntax parses cleanly via ast.parse, else (False, error_msg)."""
 	try:
-		compile((expr or "").strip(), "<safe_eval>", "eval")
+		ast.parse((expr or "").strip(), mode=mode)
 		return True, None
 	except SyntaxError as exc:
 		return False, f"line {exc.lineno}, col {exc.offset}: {exc.msg}"
@@ -157,7 +158,38 @@ def find_invalid_safe_eval_expressions():
 								"error": err,
 							})
 
+	# Also inspect Document Naming Rule & Server Script if present
+	if frappe.db.table_exists("Server Script") and frappe.db.has_column("Server Script", "script"):
+		try:
+			ss_rows = frappe.get_all(
+				"Server Script",
+				filters={"disabled": 0},
+				fields=["name", "script", "reference_doctype"],
+			)
+			for row in ss_rows or []:
+				code = (row.get("script") or "").strip()
+				if not code:
+					continue
+				ok, err = _is_valid_python_eval(code, mode="exec")
+				if not ok:
+					invalid.append({
+						"doctype": "Server Script",
+						"name": row.get("name"),
+						"field": f"script ({row.get('reference_doctype') or ''})",
+						"expression": code[:120],
+						"error": err,
+					})
+		except Exception:
+			pass
+
 	return invalid
+
+
+@frappe.whitelist()
+def get_invalid_safe_eval_expressions():
+	"""Diagnostic endpoint for System Managers to list any invalid Python safe_eval expressions in the site DB."""
+	frappe.only_for("System Manager")
+	return find_invalid_safe_eval_expressions()
 
 
 def repair_database_text(log):

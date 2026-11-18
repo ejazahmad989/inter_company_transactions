@@ -1584,6 +1584,10 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 						f"Forbidden subprocess import in {py_file.name}:{node.lineno}",
 					)
 
+				if isinstance(node, ast.Call):
+					if isinstance(node.func, ast.Name) and node.func.id in ("eval", "compile", "exec"):
+						self.fail(f"Forbidden dynamic code evaluation call '{node.func.id}()' in {py_file.name}:{node.lineno}")
+
 				if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
 					# 1. Forbid ignore_permissions in frappe.get_all / frappe.db.get_all
 					if node.func.attr == "get_all":

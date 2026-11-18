@@ -15,7 +15,10 @@ def after_migrate():
     # Heal any corrupted depends_on or Python condition expressions in MariaDB
     try:
         from inter_company_transactions.diagnose_and_heal import repair_database_text
-        repair_database_text(lambda *args, **kwargs: None)
+        def _migration_log(msg):
+            if "WARNING:" in str(msg):
+                print(msg)
+        repair_database_text(_migration_log)
     except Exception as e:
         frappe.log_error(f"Error repairing database expressions: {e!s}", "ICT After Migrate")
 

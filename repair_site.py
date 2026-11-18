@@ -3,13 +3,14 @@
 # Run via: bench --site <your-site> run-script repair_site.py
 # Or paste into: bench --site <your-site> console
 
+import ast
 import re
 import frappe
 
 
 def _is_valid_python_eval(expr):
 	try:
-		compile((expr or "").strip(), "<safe_eval>", "eval")
+		ast.parse((expr or "").strip(), mode="eval")
 		return True, None
 	except SyntaxError as exc:
 		return False, f"line {exc.lineno}, col {exc.offset}: {exc.msg}"

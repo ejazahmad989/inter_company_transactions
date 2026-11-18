@@ -37,7 +37,7 @@ scheduler_events = {
 
 # Migration & Install Hooks
 # Custom fields are safely created in the backend only if not already existing,
-# ensuring bench migrate never overwrites user customizations or triggers fixture conflicts.
+# ensuring database migrations never overwrite user customizations or trigger fixture conflicts.
 fixtures = []
 after_install = "inter_company_transactions.install.after_install"
 before_migrate = "inter_company_transactions.patches.before_migrate.before_migrate"
