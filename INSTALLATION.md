@@ -1,67 +1,48 @@
-# Installation Guide for Inter-Company Transactions App
+# Setup & Configuration Guide — Inter-Company Transactions
 
-This guide will help you install and set up the Inter-Company Transactions app in your ERPNext installation.
+This guide helps you install the app via **Frappe Cloud Marketplace** and configure inter-company mirroring across ERPNext v15 and v16.
 
 ## Prerequisites
 
-- ERPNext v13 or higher
-- Frappe Framework v13 or higher
-- Administrator access to your ERPNext instance
+- ERPNext v15 or v16
+- Frappe Framework v15 or v16
+- System Manager / Administrator access to your ERPNext site
 
-## Installation Steps
+## Marketplace Installation
 
-### Step 1: Get the App
+1. Install **Inter-Company Transactions** directly from the **Frappe Cloud Marketplace** on your target site/bench.
+2. Open your ERPNext Desk after installation completes.
 
-Clone the repository or download the zip file:
+## Desk Configuration
 
-```bash
-cd /home/frappe/frappe-bench
-bench get-app inter_company_transactions https://github.com/your-repo/inter_company_transactions
-```
+### Step 1: Configure Intercompany Transaction Link
 
-### Step 2: Install the App on Your Site
+1. Search for **Intercompany Transaction Link** in Frappe Desk and click **Add Intercompany Transaction Link**.
+2. Select your **Main Company**.
+3. In **Linked Companies**, add each sister company and map the internal **Customer**, **Supplier**, `TMP-*` Bank clearing account (or click **Auto-Create Clearing Accounts**), and transit **Warehouse**.
+4. In **Transaction Types**, click **Populate Default Transaction Types** to add all supported reciprocal pairs, or add specific rules as needed.
+5. Click **Save**.
 
-```bash
-bench --site your-site.local install-app inter_company_transactions
-```
+### Step 2: Configure Inter Company Settings
 
-### Step 3: Run Migrations
+Open **Inter Company Settings** in Desk to choose:
+- **Execution Mode** (*Synchronous* or *Asynchronous Background Job*)
+- **Auto-Submit Target Document** (create Drafts vs auto-submit)
+- **Cancellation Authority** (*Source Company Only* vs *Bidirectional*)
+- **Default Transfer Pricing Rule** (*Source Document Rate*, *Cost / Valuation Rate*, or *Cost + Markup %*)
+- **Remote Federated Sites** (optional cross-server synchronization)
 
-```bash
-bench --site your-site.local migrate
-```
+### Step 3: Test Automated Mirroring
 
-### Step 4: Restart the Server
-
-```bash
-bench restart
-```
-
-## Configuration
-
-### Step 1: Create Inter-Company Transaction Map
-
-1. Go to **Inter Company Transactions > Inter Company Transaction Map**
-2. Create a new record
-3. Select your main company
-4. Add transaction mappings for each transaction type and company combination
-5. Save the document
-
-### Step 2: Test the Configuration
-
-1. Create a transaction (e.g., Sales Order) in your main company
-2. When you submit the transaction, a corresponding transaction will be created in the linked company
-3. Verify that the transaction was created correctly
+1. Create a **Sales Order** in Company A for Company B's internal customer (the form automatically marks **Is Intercompany** and sets Company B as target).
+2. Submit the document to generate the mirrored **Purchase Order** in Company B automatically.
 
 ## Troubleshooting
 
-If you encounter any issues:
-
-1. Check the Frappe Error Logs
-2. Ensure that the companies are correctly set up
-3. Verify that the customers and suppliers are correctly linked
-4. Make sure the accounts are mapped correctly between companies
+1. Review **Inter Company Error Log** and **Error Log** in Desk for any sync or missing-account messages.
+2. Ensure Companies, internal Customers/Suppliers, Currency Exchange rates (for multi-currency entities), and TMP Bank accounts are properly configured.
 
 ## Support
 
-For support, please open an issue on the GitHub repository or contact us at support@example.com.
+- **Publisher:** Ejaz Tech (`ejazahmad989@gmail.com`)
+- **Support:** `rahilali3311@gmail.com`

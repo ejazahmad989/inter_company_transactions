@@ -1654,15 +1654,30 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 							f"Unannotated frappe.db.commit() in {py_file.name}:{node.lineno}",
 						)
 
-		# 4. Ensure README long description has no Marketplace-prohibited bench install/migrate commands
-		for readme_path in (repo_root / "README.md", repo_root / "inter_company_transactions" / "README.md"):
-			if readme_path.exists():
-				readme_text = readme_path.read_text(encoding="utf-8")
+		# 4. Ensure README and doc files have no Marketplace-prohibited bench install/migrate commands
+		for doc_path in (
+			repo_root / "README.md",
+			repo_root / "inter_company_transactions" / "README.md",
+			repo_root / "INSTALLATION.md",
+		):
+			if doc_path.exists():
+				doc_text = doc_path.read_text(encoding="utf-8")
 				for pattern in (r"bench\s+get-app", r"bench\s+--site\s+\S+\s+install-app", r"bench\s+migrate"):
 					self.assertIsNone(
-						re.search(pattern, readme_text),
-						f"Prohibited install instruction pattern {pattern!r} found in {readme_path}",
+						re.search(pattern, doc_text),
+						f"Prohibited install instruction pattern {pattern!r} found in {doc_path}",
 					)
+
+		# 5. Keep all Python modules concise to avoid Marketplace Semgrep timeouts
+		ict_pkg_dir = Path(__file__).resolve().parent
+		for mod_file in ict_pkg_dir.glob("*.py"):
+			if not mod_file.name.startswith("test_"):
+				line_count = len(mod_file.read_text(encoding="utf-8").splitlines())
+				self.assertLessEqual(
+					line_count,
+					1000,
+					f"{mod_file.name} has {line_count} lines (> 1000); split further to avoid Semgrep timeout",
+				)
 
 	def test_frappe_get_all_real_signature_for_fx_and_links(self):
 		"""Enforce real Frappe get_all signature (no ignore_permissions) across Currency Exchange and link queries"""
@@ -1909,6 +1924,8 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 				with patch.object(frappe, "new_doc", side_effect=lambda dt: FakeTargetDoc(dt)), patch.object(
 					frappe, "get_all", side_effect=mock_get_all
 				), patch.object(
+					frappe, "get_system_settings", side_effect=lambda k: "Banker's Rounding" if k == "rounding_method" else None
+				), patch.object(
 					frappe.db, "exists", side_effect=lambda dt, name=None, **kw: dt in ("Item", "DocType", "Journal Entry Type")
 				), patch.object(
 					frappe.db, "has_column", return_value=False
@@ -1929,12 +1946,8 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 						self.assertAlmostEqual(res.items[0].basic_rate, 2750.0, places=2)
 					elif tgt_dt == "Journal Entry":
 						expected_je_amt = 2750.0 if mode == "same_currency" else 10.0
-						total_dr = sum(flt(a.get("debit") if hasattr(a, "get") else getattr(a, "debit", 0)) for a in res.accounts)
-						total_cr = sum(flt(a.get("credit") if hasattr(a, "get") else getattr(a, "credit", 0)) for a in res.accounts)
-						if total_dr == 0.0:
-							total_dr = sum(flt(a.get("debit_in_account_currency") if hasattr(a, "get") else getattr(a, "debit_in_account_currency", 0)) for a in res.accounts)
-						if total_cr == 0.0:
-							total_cr = sum(flt(a.get("credit_in_account_currency") if hasattr(a, "get") else getattr(a, "credit_in_account_currency", 0)) for a in res.accounts)
+						total_dr = sum(flt(a.debit) for a in res.accounts)
+						total_cr = sum(flt(a.credit) for a in res.accounts)
 						self.assertAlmostEqual(total_dr, expected_je_amt, places=2)
 						self.assertAlmostEqual(total_cr, expected_je_amt, places=2)
 
@@ -2322,4 +2335,110 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 		self.assertEqual(po.items[0].base_rate, 100.0)
 		self.assertEqual(po.items[0].base_amount, 400.0)
 		self.assertEqual(po.grand_total, 200.0)
+
+	def test_safe_flt_recovers_when_system_settings_uncached(self):
+		"""Verify JE, PE, and FX calculations never zero out if flt(x, precision) encounters uncached System Settings (Frappe v16)"""
+		from unittest.mock import patch
+
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			_safe_flt,
+			create_journal_entry,
+			create_payment_entry,
+			resolve_intercompany_currency_and_rate,
+		)
+
+		def strict_get_system_settings(key):
+			raise KeyError(f"Uncached System Settings: {key}")
+
+		class FakeDoc:
+			def __init__(self, dt):
+				self.doctype = dt
+				self.items = []
+				self.accounts = []
+				self.flags = frappe._dict()
+				self.company = None
+
+			def append(self, tbl, row):
+				getattr(self, tbl).append(frappe._dict(row))
+
+			def get(self, key, default=None):
+				return getattr(self, key, default)
+
+		src_je = frappe._dict({
+			"doctype": "Journal Entry",
+			"name": "JV-V16-001",
+			"company": "EUR Main Co",
+			"posting_date": "2026-11-18",
+			"total_debit": 2750.0,
+			"total_credit": 2750.0,
+			"currency": "EUR",
+			"accounts": [
+				frappe._dict({
+					"party_type": "Supplier",
+					"party": "Sister Supp",
+					"account_currency": "EUR",
+					"exchange_rate": 1.0,
+					"debit_in_account_currency": 2750.0,
+					"debit": 2750.0,
+					"credit_in_account_currency": 0.0,
+					"credit": 0.0,
+				})
+			],
+		})
+		src_pe = frappe._dict({
+			"doctype": "Payment Entry",
+			"name": "PE-V16-001",
+			"company": "EUR Main Co",
+			"posting_date": "2026-11-18",
+			"payment_type": "Pay",
+			"paid_amount": 2750.0,
+			"received_amount": 2750.0,
+			"paid_from_account_currency": "EUR",
+			"paid_to_account_currency": "EUR",
+		})
+		mapping = frappe._dict({"main_company": "EUR Main Co"})
+		linked_co = frappe._dict({
+			"company": "EUR Sister Co",
+			"other_company_customer": "Main Cust",
+			"other_company_supplier": "Main Supp",
+			"other_company_account": "TMP-MAIN - EURS",
+		})
+
+		def mock_get_value(dt, filters=None, fieldname=None, **kwargs):
+			if dt == "Company" and fieldname == "default_currency":
+				return "EUR"
+			if dt == "Company" and fieldname in ("default_receivable_account", "default_payable_account"):
+				return "Control - EURS"
+			if dt == "Account" and fieldname == "account_currency":
+				return "EUR"
+			if dt == "Account" and fieldname == "account_type":
+				return "Bank"
+			if dt == "Company" and fieldname == "cost_center":
+				return "Main - EURS"
+			return None
+
+		with patch.object(frappe, "get_system_settings", side_effect=strict_get_system_settings), patch.object(
+			frappe, "new_doc", side_effect=lambda dt: FakeDoc(dt)
+		), patch.object(
+			frappe.db, "exists", return_value=True
+		), patch.object(
+			frappe.db, "get_value", side_effect=mock_get_value
+		):
+			self.assertEqual(_safe_flt(2750.0, 2), 2750.0)
+			self.assertAlmostEqual(_safe_flt(1.0 / 275.0, 9), 0.003636364, places=9)
+			self.assertEqual(_safe_flt(0.0, 2), 0.0)
+
+			je = create_journal_entry(src_je, mapping, linked_co, "main_to_other")
+			self.assertAlmostEqual(sum(r.debit for r in je.accounts), 2750.0, places=2)
+			self.assertAlmostEqual(sum(r.credit for r in je.accounts), 2750.0, places=2)
+
+			pe = create_payment_entry(src_pe, mapping, linked_co, "main_to_other")
+			self.assertAlmostEqual(pe.paid_amount, 2750.0, places=2)
+			self.assertAlmostEqual(pe.received_amount, 2750.0, places=2)
+
+			ccy, conv_rate, rate_factor = resolve_intercompany_currency_and_rate(src_je, "EUR Sister Co")
+			self.assertEqual(ccy, "EUR")
+			self.assertEqual(conv_rate, 1.0)
+			self.assertEqual(rate_factor, 1.0)
+
 
