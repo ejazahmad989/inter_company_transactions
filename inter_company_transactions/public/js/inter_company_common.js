@@ -550,9 +550,7 @@
 
 				frm._ict_se_currency_mismatch = info;
 				const msg = __(
-					'<b>Stock Entry</b> only works for <b>Same-Currency companies</b>.<br><br>' +
-					'<b>{0}</b> uses <b>{1}</b> while <b>{2}</b> uses <b>{3}</b>.<br><br>' +
-					'For different currencies, please use <b>Delivery Note &rarr; Purchase Receipt</b> or <b>Sales Invoice &rarr; Purchase Invoice</b>.',
+					'<b>Stock Entry</b> only works for <b>Same-Currency companies</b>.<br><br><b>{0}</b> uses <b>{1}</b> while <b>{2}</b> uses <b>{3}</b>.<br><br>For different currencies, please use <b>Delivery Note &rarr; Purchase Receipt</b> or <b>Sales Invoice &rarr; Purchase Invoice</b>.',
 					[
 						esc(frm.doc.company),
 						esc(info.source_currency),

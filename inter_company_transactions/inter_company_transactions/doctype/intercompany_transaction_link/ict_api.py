@@ -515,9 +515,17 @@ def unlink_mirrored_document_impl(doctype, name):
 
 	doc = frappe.get_doc(doctype, name)
 	docstatus = cint(doc.docstatus)
-	has_write = frappe.has_permission(doctype, "write", doc)
-	has_cancel = docstatus == 1 and frappe.has_permission(doctype, "cancel", doc)
-	has_delete = docstatus in (0, 2) and frappe.has_permission(doctype, "delete", doc)
+	has_write = False
+	if frappe.has_permission(doctype, "write", doc):
+		has_write = True
+	has_cancel = False
+	if docstatus == 1:
+		if frappe.has_permission(doctype, "cancel", doc):
+			has_cancel = True
+	has_delete = False
+	if docstatus in (0, 2):
+		if frappe.has_permission(doctype, "delete", doc):
+			has_delete = True
 	if not (has_write or has_cancel or has_delete):
 		frappe.has_permission(doctype, "cancel" if docstatus == 1 else "write", doc, throw=True)
 

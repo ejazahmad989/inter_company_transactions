@@ -358,29 +358,43 @@ class IntercompanyTransactionLink(Document):
 
 
 @frappe.whitelist()
-def scan_linked_company_defaults(main_company, other_company):
+def scan_linked_company_defaults(main_company: str, other_company: str):
 	return ict_api.scan_linked_company_defaults_impl(main_company, other_company)
 
 
 @frappe.whitelist()
 @frappe.validate_and_sanitize_search_inputs
-def intercompany_party_query(doctype, txt, searchfield, start, page_len, filters):
+def intercompany_party_query(
+	doctype: str,
+	txt: str,
+	searchfield: str,
+	start: int | str,
+	page_len: int | str,
+	filters: dict | str | list | None,
+):
 	return ict_api.intercompany_party_query_impl(doctype, txt, searchfield, start, page_len, filters)
 
 
 @frappe.whitelist()
 @frappe.validate_and_sanitize_search_inputs
-def intercompany_account_query(doctype, txt, searchfield, start, page_len, filters):
+def intercompany_account_query(
+	doctype: str,
+	txt: str,
+	searchfield: str,
+	start: int | str,
+	page_len: int | str,
+	filters: dict | str | list | None,
+):
 	return ict_api.intercompany_account_query_impl(doctype, txt, searchfield, start, page_len, filters)
 
 
 @frappe.whitelist()
 def check_intercompany_exchange_rate(
-	source_company,
-	target_company,
-	transaction_date=None,
-	doc_currency=None,
-	conversion_rate=None,
+	source_company: str,
+	target_company: str,
+	transaction_date: str | None = None,
+	doc_currency: str | None = None,
+	conversion_rate: float | int | str | None = None,
 ):
 	return ict_currency.check_intercompany_exchange_rate_impl(
 		source_company,
@@ -392,37 +406,42 @@ def check_intercompany_exchange_rate(
 
 
 @frappe.whitelist()
-def check_stock_entry_same_currency(source_company, target_company):
+def check_stock_entry_same_currency(source_company: str, target_company: str):
 	return ict_currency.check_stock_entry_same_currency_impl(source_company, target_company)
 
 
 @frappe.whitelist()
-def save_intercompany_currency_exchange(from_currency, to_currency, exchange_rate, date=None):
+def save_intercompany_currency_exchange(
+	from_currency: str,
+	to_currency: str,
+	exchange_rate: float | int | str,
+	date: str | None = None,
+):
 	return ict_currency.save_intercompany_currency_exchange_impl(from_currency, to_currency, exchange_rate, date=date)
 
 
 @frappe.whitelist()
-def trigger_manual_intercompany_sync(doctype, name):
+def trigger_manual_intercompany_sync(doctype: str, name: str):
 	return ict_api.trigger_manual_intercompany_sync_impl(doctype, name)
 
 
 @frappe.whitelist()
-def get_linked_counterpart_for_form(doctype, name):
+def get_linked_counterpart_for_form(doctype: str, name: str):
 	return ict_api.get_linked_counterpart_for_form_impl(doctype, name)
 
 
 @frappe.whitelist()
-def delete_mirrored_draft(doctype, name):
+def delete_mirrored_draft(doctype: str, name: str):
 	return ict_api.delete_mirrored_draft_impl(doctype, name)
 
 
 @frappe.whitelist()
-def unlink_mirrored_document(doctype, name):
+def unlink_mirrored_document(doctype: str, name: str):
 	return ict_api.unlink_mirrored_document_impl(doctype, name)
 
 
 @frappe.whitelist()
-def bulk_create_linked_documents(doc_names, doctype):
+def bulk_create_linked_documents(doc_names: list | str, doctype: str):
 	return ict_api.bulk_create_linked_documents_impl(doc_names, doctype)
 
 
@@ -432,7 +451,7 @@ def reconcile_intercompany_accounts():
 
 
 @frappe.whitelist()
-def get_intercompany_dashboard_data(company):
+def get_intercompany_dashboard_data(company: str):
 	return ict_api.get_intercompany_dashboard_data_impl(company)
 
 
@@ -442,10 +461,14 @@ def download_user_guide_pdf():
 
 
 @frappe.whitelist()
-def get_party_target_company(party_name, party_type=None, current_company=None):
+def get_party_target_company(
+	party_name: str,
+	party_type: str | None = None,
+	current_company: str | None = None,
+):
 	return ict_api.get_party_target_company_impl(party_name, party_type=party_type, current_company=current_company)
 
 
 @frappe.whitelist()
-def get_intercompany_party_map(company=None):
+def get_intercompany_party_map(company: str | None = None):
 	return ict_validation.get_intercompany_party_map_impl(company=company)

@@ -352,7 +352,7 @@ function preload_standard_transaction_types(frm) {
 
 	frm.refresh_field('transaction_types');
 	frappe.show_alert({
-		message: __(`Loaded ${count} standard transaction types.`),
+		message: __('Loaded {0} standard transaction types.', [count]),
 		indicator: 'green'
 	});
 }

@@ -1,4 +1,5 @@
 import frappe
+from frappe import _
 from frappe.model.document import Document
 
 
@@ -10,15 +11,15 @@ class InterCompanyDocumentReference(Document):
     def validate_companies(self):
         """Ensure source and target companies are different"""
         if self.source_company == self.target_company:
-            frappe.throw("Source and Target companies cannot be the same")
+            frappe.throw(_("Source and Target companies cannot be the same"))
 
     def validate_documents(self):
         """Validate document references"""
         if not frappe.db.exists(self.source_doctype, self.source_name):
-            frappe.throw(f"Source document {self.source_doctype} {self.source_name} does not exist")
+            frappe.throw(_("Source document {0} {1} does not exist").format(self.source_doctype, self.source_name))
 
         if not self.get("is_remote") and not frappe.db.exists(self.target_doctype, self.target_name):
-            frappe.throw(f"Target document {self.target_doctype} {self.target_name} does not exist")
+            frappe.throw(_("Target document {0} {1} does not exist").format(self.target_doctype, self.target_name))
 
     def on_trash(self):
         """When an Inter Company Document Reference is deleted, unlink mirrored fields on the target document

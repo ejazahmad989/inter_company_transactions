@@ -369,7 +369,7 @@ def _get_request_header_safe(header_name):
 
 
 @frappe.whitelist(allow_guest=False)
-def receive_remote_transaction(payload=None):
+def receive_remote_transaction(payload: dict | str | bytes | None = None):
 	"""
 	Inbound REST API endpoint on receiving instance.
 	Validates authentication, ensures idempotency, and creates mirrored transaction.
@@ -872,7 +872,7 @@ def get_or_create_intercompany_clearing_account(company):
 
 
 @frappe.whitelist(allow_guest=False)
-def cancel_remote_transaction(payload=None):
+def cancel_remote_transaction(payload: dict | str | bytes | None = None):
 	"""
 	Inbound cancellation endpoint. Cancels mirrored document on remote instance.
 	"""
@@ -941,7 +941,12 @@ def cancel_remote_transaction(payload=None):
 
 
 @frappe.whitelist()
-def diagnose_remote_site_connectivity(site_url, api_key=None, api_secret=None, timeout=5):
+def diagnose_remote_site_connectivity(
+	site_url: str,
+	api_key: str | None = None,
+	api_secret: str | None = None,
+	timeout: int | float = 5,
+):
 	"""
 	Comprehensive Multi-Layer Network, Port & Firewall Diagnostic Engine.
 	Executes 6 verification layers:

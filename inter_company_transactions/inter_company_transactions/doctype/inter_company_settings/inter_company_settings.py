@@ -78,7 +78,7 @@ def get_enterprise_health_check():
 
 
 @frappe.whitelist()
-def test_remote_site_connection(site_url, api_key, api_secret):
+def test_remote_site_connection(site_url: str, api_key: str, api_secret: str):
 	"""
 	Tests REST API handshake with an external federated ERPNext instance.
 	Delegates to diagnose_remote_site_connectivity for deep diagnostic.
@@ -89,7 +89,7 @@ def test_remote_site_connection(site_url, api_key, api_secret):
 
 
 @frappe.whitelist()
-def diagnose_network_and_firewall(site_url, api_key=None, api_secret=None):
+def diagnose_network_and_firewall(site_url: str, api_key: str | None = None, api_secret: str | None = None):
 	"""
 	Runs full multi-layer socket, DNS, SSL, and firewall diagnostics.
 	"""
@@ -99,7 +99,7 @@ def diagnose_network_and_firewall(site_url, api_key=None, api_secret=None):
 
 
 @frappe.whitelist(allow_guest=False)
-def receive_intercompany_webhook(payload):
+def receive_intercompany_webhook(payload: str | dict):
 	"""
 	Receives cross-site intercompany transaction payloads via REST API/Webhook,
 	delegating to idempotent sync receiver.
@@ -237,7 +237,12 @@ def _ensure_allowed_to_transact_with(party_name, party_doctype, allowed_company)
 
 
 @frappe.whitelist()
-def quick_setup_intercompany_pair(main_company, counterparty_company, preset="full", custom_rules=None):
+def quick_setup_intercompany_pair(
+	main_company: str,
+	counterparty_company: str,
+	preset: str = "full",
+	custom_rules: list | dict | str | None = None,
+):
 	"""
 	1-Click Setup Wizard:
 	Effortlessly connects two sister companies, configures internal customer/supplier
