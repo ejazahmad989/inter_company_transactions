@@ -1,109 +1,153 @@
 # Copyright (c) 2024-2026, Ejaz Tech and contributors
 # For license information, please see license.txt
 
+import importlib
+import sys
+
 import frappe
 from frappe import _
 from frappe.model.document import Document
 
-from .ict_accounting_builders import (
-	_build_je_row,
-	_has_row_field,
-	_precalculate_mirrored_doc_totals,
-	_set_row_value,
-	create_journal_entry,
-	create_journal_entry_from_lcv,
-	create_payment_entry,
-	create_stock_entry,
+_pkg = __package__
+ict_accounting_builders = importlib.import_module(f"{_pkg}.ict_accounting_builders")
+ict_api = importlib.import_module(f"{_pkg}.ict_api")
+ict_builders = importlib.import_module(f"{_pkg}.ict_builders")
+ict_currency = importlib.import_module(f"{_pkg}.ict_currency")
+ict_lifecycle = importlib.import_module(f"{_pkg}.ict_lifecycle")
+ict_pricing = importlib.import_module(f"{_pkg}.ict_pricing")
+ict_utils = importlib.import_module(f"{_pkg}.ict_utils")
+ict_validation = importlib.import_module(f"{_pkg}.ict_validation")
+
+_EXPORT_MAP = (
+	(
+		ict_accounting_builders,
+		(
+			"_build_je_row",
+			"_has_row_field",
+			"_precalculate_mirrored_doc_totals",
+			"_set_row_value",
+			"create_journal_entry",
+			"create_journal_entry_from_lcv",
+			"create_payment_entry",
+			"create_stock_entry",
+		),
+	),
+	(
+		ict_api,
+		(
+			"_SUPPORTED_INTERCOMPANY_DOCTYPES",
+			"bulk_create_linked_documents_impl",
+			"delete_mirrored_draft_impl",
+			"download_user_guide_pdf_impl",
+			"get_intercompany_balance",
+			"get_intercompany_dashboard_data_impl",
+			"get_linked_counterpart_for_form_impl",
+			"get_party_target_company_impl",
+			"intercompany_account_query_impl",
+			"intercompany_party_query_impl",
+			"reconcile_intercompany_accounts_impl",
+			"scan_linked_company_defaults_impl",
+			"trigger_manual_intercompany_sync_impl",
+			"unlink_mirrored_document_impl",
+		),
+	),
+	(
+		ict_builders,
+		(
+			"_resolve_party_control_account",
+			"create_corresponding_document",
+			"create_delivery_note",
+			"create_purchase_invoice",
+			"create_purchase_order",
+			"create_purchase_receipt",
+			"create_quotation",
+			"create_sales_invoice",
+			"create_sales_order",
+			"create_supplier_quotation",
+		),
+	),
+	(
+		ict_currency,
+		(
+			"_normalize_tx_date",
+			"_preserve_intercompany_currency_after_defaults",
+			"check_intercompany_exchange_rate_impl",
+			"check_stock_entry_same_currency_impl",
+			"extract_document_exchange_rate",
+			"get_intercompany_exchange_rate",
+			"lookup_intercompany_exchange_rate",
+			"resolve_intercompany_currency_and_rate",
+			"save_intercompany_currency_exchange_impl",
+			"validate_intercompany_cross_currency_rate",
+			"validate_stock_entry_same_currency",
+		),
+	),
+	(
+		ict_lifecycle,
+		(
+			"_clear_mirrored_link_markers",
+			"_execute_linked_documents",
+			"cancel_linked_documents",
+			"check_active_downstream_transactions",
+			"cleanup_intercompany_links_on_trash",
+			"create_document_reference",
+			"create_linked_documents",
+			"find_applicable_mappings",
+			"get_linked_counterpart_documents",
+			"resolve_target_doctype",
+			"validate_intercompany_cancellation",
+			"validate_intercompany_items",
+			"validate_required_parties",
+		),
+	),
+	(
+		ict_pricing,
+		(
+			"_get_item_valuation_rate",
+			"calculate_transfer_rate",
+			"ensure_item_exists",
+			"resolve_intercompany_target_item",
+		),
+	),
+	(
+		ict_utils,
+		(
+			"_get_company_abbr_token",
+			"_get_intercompany_settings",
+			"_is_corrupted_or_invalid_eval_expr",
+			"_log_local_mirror_error",
+			"_safe_flt",
+			"_sanitize_intercompany_stock_entry_custom_fields",
+			"backfill_sister_company_names",
+			"find_existing_clearing_account",
+			"fix_legacy_custom_fields",
+			"get_default_cost_center",
+			"get_default_warehouse",
+			"get_intercompany_warehouse",
+			"get_mapped_account",
+			"get_or_create_ict_parent_group",
+			"get_or_create_intercompany_clearing_account",
+			"get_or_create_intercompany_warehouse",
+			"get_parent_clearing_account",
+			"sanitize_intercompany_stock_entry",
+		),
+	),
+	(
+		ict_validation,
+		(
+			"auto_detect_intercompany_party",
+			"get_intercompany_party_map_impl",
+			"resolve_party_target_company",
+			"validate_intercompany_document",
+			"validate_locked_mirrored_fields",
+		),
+	),
 )
-from .ict_api import (
-	_SUPPORTED_INTERCOMPANY_DOCTYPES,
-	bulk_create_linked_documents_impl,
-	delete_mirrored_draft_impl,
-	download_user_guide_pdf_impl,
-	get_intercompany_balance,
-	get_intercompany_dashboard_data_impl,
-	get_linked_counterpart_for_form_impl,
-	get_party_target_company_impl,
-	intercompany_account_query_impl,
-	intercompany_party_query_impl,
-	reconcile_intercompany_accounts_impl,
-	scan_linked_company_defaults_impl,
-	trigger_manual_intercompany_sync_impl,
-	unlink_mirrored_document_impl,
-)
-from .ict_builders import (
-	_resolve_party_control_account,
-	create_corresponding_document,
-	create_delivery_note,
-	create_purchase_invoice,
-	create_purchase_order,
-	create_purchase_receipt,
-	create_quotation,
-	create_sales_invoice,
-	create_sales_order,
-	create_supplier_quotation,
-)
-from .ict_currency import (
-	_normalize_tx_date,
-	_preserve_intercompany_currency_after_defaults,
-	check_intercompany_exchange_rate_impl,
-	check_stock_entry_same_currency_impl,
-	extract_document_exchange_rate,
-	get_intercompany_exchange_rate,
-	lookup_intercompany_exchange_rate,
-	resolve_intercompany_currency_and_rate,
-	save_intercompany_currency_exchange_impl,
-	validate_intercompany_cross_currency_rate,
-	validate_stock_entry_same_currency,
-)
-from .ict_lifecycle import (
-	_clear_mirrored_link_markers,
-	_execute_linked_documents,
-	cancel_linked_documents,
-	check_active_downstream_transactions,
-	cleanup_intercompany_links_on_trash,
-	create_document_reference,
-	create_linked_documents,
-	find_applicable_mappings,
-	get_linked_counterpart_documents,
-	resolve_target_doctype,
-	validate_intercompany_cancellation,
-	validate_intercompany_items,
-	validate_required_parties,
-)
-from .ict_pricing import (
-	_get_item_valuation_rate,
-	calculate_transfer_rate,
-	ensure_item_exists,
-	resolve_intercompany_target_item,
-)
-from .ict_utils import (
-	_get_company_abbr_token,
-	_get_intercompany_settings,
-	_is_corrupted_or_invalid_eval_expr,
-	_log_local_mirror_error,
-	_safe_flt,
-	_sanitize_intercompany_stock_entry_custom_fields,
-	backfill_sister_company_names,
-	find_existing_clearing_account,
-	fix_legacy_custom_fields,
-	get_default_cost_center,
-	get_default_warehouse,
-	get_intercompany_warehouse,
-	get_mapped_account,
-	get_or_create_ict_parent_group,
-	get_or_create_intercompany_clearing_account,
-	get_or_create_intercompany_warehouse,
-	get_parent_clearing_account,
-	sanitize_intercompany_stock_entry,
-)
-from .ict_validation import (
-	auto_detect_intercompany_party,
-	get_intercompany_party_map_impl,
-	resolve_party_target_company,
-	validate_intercompany_document,
-	validate_locked_mirrored_fields,
-)
+
+_this_module = sys.modules[__name__]
+for _submod, _attrs in _EXPORT_MAP:
+	for _attr in _attrs:
+		setattr(_this_module, _attr, getattr(_submod, _attr))
 
 
 class IntercompanyTransactionLink(Document):
@@ -278,7 +322,7 @@ class IntercompanyTransactionLink(Document):
 				else None
 			)
 			if not main_acc or main_acc_type not in ("Bank", "Cash"):
-				acc = get_or_create_intercompany_clearing_account(self.main_company, row.company)
+				acc = ict_utils.get_or_create_intercompany_clearing_account(self.main_company, row.company)
 				if acc and acc != main_acc:
 					row.main_company_account = acc
 					created_count += 1
@@ -294,7 +338,7 @@ class IntercompanyTransactionLink(Document):
 				else None
 			)
 			if not other_acc or other_acc_type not in ("Bank", "Cash"):
-				acc = get_or_create_intercompany_clearing_account(row.company, self.main_company)
+				acc = ict_utils.get_or_create_intercompany_clearing_account(row.company, self.main_company)
 				if acc and acc != other_acc:
 					row.other_company_account = acc
 					created_count += 1
@@ -315,19 +359,19 @@ class IntercompanyTransactionLink(Document):
 
 @frappe.whitelist()
 def scan_linked_company_defaults(main_company, other_company):
-	return scan_linked_company_defaults_impl(main_company, other_company)
+	return ict_api.scan_linked_company_defaults_impl(main_company, other_company)
 
 
 @frappe.whitelist()
 @frappe.validate_and_sanitize_search_inputs
 def intercompany_party_query(doctype, txt, searchfield, start, page_len, filters):
-	return intercompany_party_query_impl(doctype, txt, searchfield, start, page_len, filters)
+	return ict_api.intercompany_party_query_impl(doctype, txt, searchfield, start, page_len, filters)
 
 
 @frappe.whitelist()
 @frappe.validate_and_sanitize_search_inputs
 def intercompany_account_query(doctype, txt, searchfield, start, page_len, filters):
-	return intercompany_account_query_impl(doctype, txt, searchfield, start, page_len, filters)
+	return ict_api.intercompany_account_query_impl(doctype, txt, searchfield, start, page_len, filters)
 
 
 @frappe.whitelist()
@@ -338,7 +382,7 @@ def check_intercompany_exchange_rate(
 	doc_currency=None,
 	conversion_rate=None,
 ):
-	return check_intercompany_exchange_rate_impl(
+	return ict_currency.check_intercompany_exchange_rate_impl(
 		source_company,
 		target_company,
 		transaction_date=transaction_date,
@@ -349,59 +393,59 @@ def check_intercompany_exchange_rate(
 
 @frappe.whitelist()
 def check_stock_entry_same_currency(source_company, target_company):
-	return check_stock_entry_same_currency_impl(source_company, target_company)
+	return ict_currency.check_stock_entry_same_currency_impl(source_company, target_company)
 
 
 @frappe.whitelist()
 def save_intercompany_currency_exchange(from_currency, to_currency, exchange_rate, date=None):
-	return save_intercompany_currency_exchange_impl(from_currency, to_currency, exchange_rate, date=date)
+	return ict_currency.save_intercompany_currency_exchange_impl(from_currency, to_currency, exchange_rate, date=date)
 
 
 @frappe.whitelist()
 def trigger_manual_intercompany_sync(doctype, name):
-	return trigger_manual_intercompany_sync_impl(doctype, name)
+	return ict_api.trigger_manual_intercompany_sync_impl(doctype, name)
 
 
 @frappe.whitelist()
 def get_linked_counterpart_for_form(doctype, name):
-	return get_linked_counterpart_for_form_impl(doctype, name)
+	return ict_api.get_linked_counterpart_for_form_impl(doctype, name)
 
 
 @frappe.whitelist()
 def delete_mirrored_draft(doctype, name):
-	return delete_mirrored_draft_impl(doctype, name)
+	return ict_api.delete_mirrored_draft_impl(doctype, name)
 
 
 @frappe.whitelist()
 def unlink_mirrored_document(doctype, name):
-	return unlink_mirrored_document_impl(doctype, name)
+	return ict_api.unlink_mirrored_document_impl(doctype, name)
 
 
 @frappe.whitelist()
 def bulk_create_linked_documents(doc_names, doctype):
-	return bulk_create_linked_documents_impl(doc_names, doctype)
+	return ict_api.bulk_create_linked_documents_impl(doc_names, doctype)
 
 
 @frappe.whitelist()
 def reconcile_intercompany_accounts():
-	return reconcile_intercompany_accounts_impl()
+	return ict_api.reconcile_intercompany_accounts_impl()
 
 
 @frappe.whitelist()
 def get_intercompany_dashboard_data(company):
-	return get_intercompany_dashboard_data_impl(company)
+	return ict_api.get_intercompany_dashboard_data_impl(company)
 
 
 @frappe.whitelist()
 def download_user_guide_pdf():
-	return download_user_guide_pdf_impl()
+	return ict_api.download_user_guide_pdf_impl()
 
 
 @frappe.whitelist()
 def get_party_target_company(party_name, party_type=None, current_company=None):
-	return get_party_target_company_impl(party_name, party_type=party_type, current_company=current_company)
+	return ict_api.get_party_target_company_impl(party_name, party_type=party_type, current_company=current_company)
 
 
 @frappe.whitelist()
 def get_intercompany_party_map(company=None):
-	return get_intercompany_party_map_impl(company=company)
+	return ict_validation.get_intercompany_party_map_impl(company=company)

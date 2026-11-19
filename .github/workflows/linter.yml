@@ -2,6 +2,12 @@
 name: Linters
 
 on:
+  push:
+    branches:
+      - develop
+      - main
+      - version-15
+      - version-16
   pull_request:
   workflow_dispatch:
 
@@ -13,6 +19,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  semgrep:
+    name: 'Frappe Semgrep Rules'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: pip
+
+      - name: Download Semgrep rules
+        run: git clone --depth 1 https://github.com/frappe/semgrep-rules.git frappe-semgrep-rules
+
+      - name: Run Semgrep rules
+        run: |
+          pip install semgrep
+          semgrep scan --error --config ./frappe-semgrep-rules/rules --config r/python.lang.correctness inter_company_transactions
+
   linter:
     name: 'Frappe Linter'
     runs-on: ubuntu-latest
@@ -25,14 +50,6 @@ jobs:
           python-version: '3.10'
           cache: pip
       - uses: pre-commit/action@v3.0.0
-
-      - name: Download Semgrep rules
-        run: git clone --depth 1 https://github.com/frappe/semgrep-rules.git frappe-semgrep-rules
-
-      - name: Run Semgrep rules
-        run: |
-          pip install semgrep
-          semgrep ci --config ./frappe-semgrep-rules/rules --config r/python.lang.correctness
 
   deps-vulnerable-check:
     name: 'Vulnerable Dependency Check'
