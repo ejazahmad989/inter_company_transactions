@@ -70,12 +70,32 @@ def ensure_ict_notification_settings_for_all_users():
 
 
 def ensure_page_and_workspace():
-    """Ensure Page inter-company-console and Workspace Inter Company exist via JSON reload."""
+    """Ensure Page inter-company-console and Workspace Inter Company exist and have card breaks."""
     try:
         if not frappe.db.exists("Page", "inter-company-console"):
             frappe.reload_doc("inter_company_transactions", "page", "inter_company_console")
 
-        if not frappe.db.exists("Workspace", "Inter Company"):
-            frappe.reload_doc("inter_company_transactions", "workspace", "inter_company")
+        if frappe.db.table_exists("Workspace") and frappe.db.table_exists("Workspace Link"):
+            stale_private = frappe.get_all(
+                "Workspace",
+                filters={"title": "Inter Company", "for_user": ["!=", ""]},
+                pluck="name",
+            )
+            for ws_name in stale_private:
+                if not frappe.db.exists("Workspace Link", {"parent": ws_name, "type": "Card Break"}):
+                    frappe.delete_doc("Workspace", ws_name, ignore_permissions=True, force=True)
+
+        needs_workspace_sync = not frappe.db.exists("Workspace", "Inter Company")
+        if not needs_workspace_sync and frappe.db.table_exists("Workspace Link"):
+            has_card_breaks = frappe.db.exists(
+                "Workspace Link",
+                {"parent": "Inter Company", "type": "Card Break"},
+            )
+            if not has_card_breaks:
+                needs_workspace_sync = True
+
+        if needs_workspace_sync:
+            frappe.reload_doc("inter_company_transactions", "workspace", "inter_company", force=True)
+            frappe.clear_cache()
     except Exception as e:
         frappe.log_error(f"Error ensuring page or workspace: {e!s}", "ICT After Migrate")

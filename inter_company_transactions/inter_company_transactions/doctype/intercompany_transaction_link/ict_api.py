@@ -44,7 +44,7 @@ def scan_linked_company_defaults_impl(main_company, other_company):
 	"""
 	Read-only CoA & Party scanner for Intercompany Linked Company rows.
 	Finds matching internal Customers/Suppliers, existing Bank/Cash TMP-<ABBR> clearing accounts,
-	and transit warehouses for the exact (main_company, other_company) pair.
+	and transit warehouses (only when both companies share the same base currency).
 	"""
 	result = {
 		"main_company_customer": None,
@@ -55,11 +55,21 @@ def scan_linked_company_defaults_impl(main_company, other_company):
 		"other_company_supplier": None,
 		"other_company_account": None,
 		"other_company_warehouse": None,
+		"main_currency": None,
+		"other_currency": None,
+		"same_currency": True,
 		"main_suggested_tmp": f"TMP-{_get_company_abbr_token(other_company)}" if other_company else None,
 		"other_suggested_tmp": f"TMP-{_get_company_abbr_token(main_company)}" if main_company else None,
 	}
 	if not main_company or not other_company or not (hasattr(frappe, "db") and frappe.db):
 		return result
+
+	main_currency = frappe.db.get_value("Company", main_company, "default_currency")
+	other_currency = frappe.db.get_value("Company", other_company, "default_currency")
+	same_currency = not (main_currency and other_currency and main_currency != other_currency)
+	result["main_currency"] = main_currency
+	result["other_currency"] = other_currency
+	result["same_currency"] = bool(same_currency)
 
 	def _find_internal_party(owner_co, counterparty_co, party_dt):
 		if not frappe.db.table_exists(party_dt):
@@ -116,10 +126,27 @@ def scan_linked_company_defaults_impl(main_company, other_company):
 
 	result["main_company_account"] = find_acct_fn(main_company, other_company)
 	result["other_company_account"] = find_acct_fn(other_company, main_company)
-	result["main_company_warehouse"] = get_wh_fn(main_company)
-	result["other_company_warehouse"] = get_wh_fn(other_company)
+	if same_currency:
+		result["main_company_warehouse"] = get_wh_fn(main_company)
+		result["other_company_warehouse"] = get_wh_fn(other_company)
 
 	return result
+
+
+def get_company_currencies_impl(companies=None):
+	"""Return {company_name: default_currency} for the requested list of companies."""
+	if isinstance(companies, str):
+		companies = frappe.parse_json(companies) or []
+	if not isinstance(companies, (list, tuple, set)):
+		return {}
+	currencies = {}
+	if not (hasattr(frappe, "db") and frappe.db):
+		return currencies
+	for comp in companies:
+		name = (comp or "").strip() if isinstance(comp, str) else ""
+		if name and name not in currencies:
+			currencies[name] = frappe.db.get_value("Company", name, "default_currency")
+	return currencies
 
 
 def intercompany_party_query_impl(doctype, txt, searchfield, start, page_len, filters):

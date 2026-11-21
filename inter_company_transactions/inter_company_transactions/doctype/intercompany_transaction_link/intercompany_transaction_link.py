@@ -39,6 +39,7 @@ _EXPORT_MAP = (
 			"bulk_create_linked_documents_impl",
 			"delete_mirrored_draft_impl",
 			"download_user_guide_pdf_impl",
+			"get_company_currencies_impl",
 			"get_intercompany_balance",
 			"get_intercompany_dashboard_data_impl",
 			"get_linked_counterpart_for_form_impl",
@@ -203,6 +204,7 @@ class IntercompanyTransactionLink(Document):
 		self.set_sister_company()
 		self.validate_companies()
 		self.validate_parties()
+		self.validate_cross_currency_warehouses()
 		self.validate_transaction_types_child_table()
 
 	def validate_companies(self):
@@ -213,6 +215,24 @@ class IntercompanyTransactionLink(Document):
 
 		if len(linked_companies) != len(set(linked_companies)):
 			frappe.throw(_("Duplicate companies found in Linked Companies"))
+
+	def validate_cross_currency_warehouses(self):
+		"""Clear transit warehouse fields when main and linked company currencies differ."""
+		if not self.main_company or not (hasattr(frappe, "db") and frappe.db):
+			return
+		main_currency = frappe.db.get_value("Company", self.main_company, "default_currency")
+		if not main_currency:
+			return
+		for linked_company in (self.get("linked_companies") or []):
+			other_company = getattr(linked_company, "company", None)
+			if not other_company:
+				continue
+			other_currency = frappe.db.get_value("Company", other_company, "default_currency")
+			if other_currency and other_currency != main_currency:
+				if getattr(linked_company, "main_company_warehouse", None):
+					linked_company.main_company_warehouse = None
+				if getattr(linked_company, "other_company_warehouse", None):
+					linked_company.other_company_warehouse = None
 
 	def validate_parties(self):
 		"""Validate that customers and suppliers are properly mapped between companies."""
@@ -360,6 +380,11 @@ class IntercompanyTransactionLink(Document):
 @frappe.whitelist()
 def scan_linked_company_defaults(main_company: str, other_company: str):
 	return ict_api.scan_linked_company_defaults_impl(main_company, other_company)
+
+
+@frappe.whitelist()
+def get_company_currencies(companies: list | str | None = None):
+	return ict_api.get_company_currencies_impl(companies=companies)
 
 
 @frappe.whitelist()

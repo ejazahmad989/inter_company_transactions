@@ -1,7 +1,7 @@
 {
   "category": "Modules",
   "charts": [],
-  "content": "[{\"id\":\"b_header\",\"type\":\"header\",\"data\":{\"text\":\"Inter-Company Central Hub\",\"level\":3}},{\"id\":\"b_card_setup\",\"type\":\"card\",\"data\":{\"card_name\":\"Setup & Configuration\"}},{\"id\":\"b_card_trans\",\"type\":\"card\",\"data\":{\"card_name\":\"Operations & Tracking\"}},{\"id\":\"b_card_enterprise\",\"type\":\"card\",\"data\":{\"card_name\":\"Netting, Pricing & Elimination\"}},{\"id\":\"b_card_recon\",\"type\":\"card\",\"data\":{\"card_name\":\"Reconciliation & Disputes\"}}]",
+  "content": "[{\"id\":\"b_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Inter-Company Central Hub</b></span>\",\"col\":12}},{\"id\":\"sc_console\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Control Console\",\"col\":3}},{\"id\":\"sc_links\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Transaction Links\",\"col\":3}},{\"id\":\"sc_netting\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Netting Cycles\",\"col\":3}},{\"id\":\"sc_tp\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Transfer Pricing\",\"col\":3}},{\"id\":\"sc_elim\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Elimination Runs\",\"col\":3}},{\"id\":\"sc_dispute\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Dispute Center\",\"col\":3}},{\"id\":\"sc_recon\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Balance Reconciliation\",\"col\":3}},{\"id\":\"sc_settings\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Global Settings\",\"col\":3}},{\"id\":\"sp_cards\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"b_card_setup\",\"type\":\"card\",\"data\":{\"card_name\":\"Setup & Configuration\",\"col\":6}},{\"id\":\"b_card_trans\",\"type\":\"card\",\"data\":{\"card_name\":\"Operations & Tracking\",\"col\":6}},{\"id\":\"b_card_enterprise\",\"type\":\"card\",\"data\":{\"card_name\":\"Netting, Pricing & Elimination\",\"col\":6}},{\"id\":\"b_card_recon\",\"type\":\"card\",\"data\":{\"card_name\":\"Reconciliation & Disputes\",\"col\":6}}]",
   "creation": "2024-03-14 00:00:00.000000",
   "custom_blocks": [],
   "docstatus": 0,
@@ -15,10 +15,18 @@
     {
       "hidden": 0,
       "is_query_report": 0,
-      "label": "Inter-Company Control Console",
+      "label": "Setup & Configuration",
+      "link_count": 4,
+      "onboard": 0,
+      "type": "Card Break"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "Intercompany Transaction Link",
       "link_count": 0,
-      "link_to": "inter-company-console",
-      "link_type": "Page",
+      "link_to": "Intercompany Transaction Link",
+      "link_type": "DocType",
       "onboard": 1,
       "type": "Link"
     },
@@ -35,12 +43,58 @@
     {
       "hidden": 0,
       "is_query_report": 0,
-      "label": "Intercompany Transaction Link",
+      "label": "Inter-Company Control Console",
       "link_count": 0,
-      "link_to": "Intercompany Transaction Link",
+      "link_to": "inter-company-console",
+      "link_type": "Page",
+      "onboard": 1,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "ICT Notification Setting",
+      "link_count": 0,
+      "link_to": "ICT Notification Setting",
+      "link_type": "DocType",
+      "onboard": 0,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "Operations & Tracking",
+      "link_count": 2,
+      "onboard": 0,
+      "type": "Card Break"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "Inter Company Document Reference",
+      "link_count": 0,
+      "link_to": "Inter Company Document Reference",
       "link_type": "DocType",
       "onboard": 1,
       "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "Inter Company Error Log",
+      "link_count": 0,
+      "link_to": "Inter Company Error Log",
+      "link_type": "DocType",
+      "onboard": 0,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "Netting, Pricing & Elimination",
+      "link_count": 3,
+      "onboard": 0,
+      "type": "Card Break"
     },
     {
       "hidden": 0,
@@ -75,31 +129,19 @@
     {
       "hidden": 0,
       "is_query_report": 0,
+      "label": "Reconciliation & Disputes",
+      "link_count": 3,
+      "onboard": 0,
+      "type": "Card Break"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
       "label": "Inter Company Dispute",
       "link_count": 0,
       "link_to": "Inter Company Dispute",
       "link_type": "DocType",
-      "onboard": 0,
-      "type": "Link"
-    },
-    {
-      "hidden": 0,
-      "is_query_report": 0,
-      "label": "Inter Company Document Reference",
-      "link_count": 0,
-      "link_to": "Inter Company Document Reference",
-      "link_type": "DocType",
-      "onboard": 0,
-      "type": "Link"
-    },
-    {
-      "hidden": 0,
-      "is_query_report": 0,
-      "label": "Inter Company Error Log",
-      "link_count": 0,
-      "link_to": "Inter Company Error Log",
-      "link_type": "DocType",
-      "onboard": 0,
+      "onboard": 1,
       "type": "Link"
     },
     {
@@ -121,19 +163,9 @@
       "link_type": "Report",
       "onboard": 1,
       "type": "Link"
-    },
-    {
-      "hidden": 0,
-      "is_query_report": 0,
-      "label": "ICT Notification Setting",
-      "link_count": 0,
-      "link_to": "ICT Notification Setting",
-      "link_type": "DocType",
-      "onboard": 0,
-      "type": "Link"
     }
   ],
-  "modified": "2024-03-14 00:00:00.000000",
+  "modified": "2026-11-21 20:00:00.000000",
   "modified_by": "Administrator",
   "module": "Inter Company Transactions",
   "name": "Inter Company",
@@ -150,6 +182,9 @@
     },
     {
       "role": "System Manager"
+    },
+    {
+      "role": "Inter Company User"
     }
   ],
   "sequence_id": 20.0,

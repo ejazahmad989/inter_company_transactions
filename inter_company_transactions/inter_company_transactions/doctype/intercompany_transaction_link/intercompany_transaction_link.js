@@ -201,17 +201,32 @@ frappe.ui.form.on('Intercompany Transaction Link', {
 			update_sister_company_field(frm);
 		}
 
+		// Lock transit warehouse fields per row when currencies differ from Main Company
+		sync_linked_company_warehouse_locks(frm, false);
+
 		// Render informative helper banner above transaction types grid
 		render_transaction_types_guide(frm);
+	},
+
+	main_company: function(frm) {
+		sync_linked_company_warehouse_locks(frm, true);
+	},
+
+	linked_companies_on_form_rendered: function(frm, cdt, cdn) {
+		apply_row_warehouse_lock(frm, cdt, cdn);
 	}
 });
 
 // Real-time synchronization & smart CoA/party scan when linked companies table changes
 frappe.ui.form.on('Intercompany Linked Company', {
+	form_render: function(frm, cdt, cdn) {
+		apply_row_warehouse_lock(frm, cdt, cdn);
+	},
 	company: function(frm, cdt, cdn) {
 		update_sister_company_field(frm);
 		let row = locals[cdt] && locals[cdt][cdn];
 		if (!row || !row.company || !frm.doc.main_company || row.company === frm.doc.main_company) {
+			sync_linked_company_warehouse_locks(frm, false);
 			return;
 		}
 		frappe.call({
@@ -223,16 +238,34 @@ frappe.ui.form.on('Intercompany Linked Company', {
 			callback: function(r) {
 				if (!r || !r.message) return;
 				let d = r.message;
+				frm._ict_company_currencies = frm._ict_company_currencies || {};
+				if (d.main_currency) {
+					frm._ict_company_currencies[frm.doc.main_company] = d.main_currency;
+				}
+				if (d.other_currency) {
+					frm._ict_company_currencies[row.company] = d.other_currency;
+				}
+
+				const is_same_currency = d.same_currency !== false;
 				const auto_fields = [
 					'main_company_customer',
 					'main_company_supplier',
 					'main_company_account',
-					'main_company_warehouse',
 					'other_company_customer',
 					'other_company_supplier',
-					'other_company_account',
-					'other_company_warehouse'
+					'other_company_account'
 				];
+				if (is_same_currency) {
+					auto_fields.push('main_company_warehouse', 'other_company_warehouse');
+				} else {
+					if (row.main_company_warehouse) {
+						frappe.model.set_value(cdt, cdn, 'main_company_warehouse', '');
+					}
+					if (row.other_company_warehouse) {
+						frappe.model.set_value(cdt, cdn, 'other_company_warehouse', '');
+					}
+				}
+
 				let filled = 0;
 				auto_fields.forEach(fn => {
 					if (!row[fn] && d[fn]) {
@@ -240,6 +273,19 @@ frappe.ui.form.on('Intercompany Linked Company', {
 						filled++;
 					}
 				});
+
+				sync_linked_company_warehouse_locks(frm, false);
+
+				if (!is_same_currency) {
+					frappe.show_alert({
+						message: __('Stock Entry transit warehouses for {0} are locked (read-only) because currencies differ ({1} vs {2}).', [
+							frappe.utils.escape_html(row.company),
+							frappe.utils.escape_html(d.main_currency || ''),
+							frappe.utils.escape_html(d.other_currency || '')
+						]),
+						indicator: 'orange'
+					}, 8);
+				}
 
 				let missing_tmp = [];
 				if (!d.main_company_account && !row.main_company_account && d.main_suggested_tmp) {
@@ -271,6 +317,7 @@ frappe.ui.form.on('Intercompany Linked Company', {
 	},
 	linked_companies_remove: function(frm) {
 		update_sister_company_field(frm);
+		sync_linked_company_warehouse_locks(frm, false);
 	}
 });
 
@@ -283,6 +330,136 @@ function update_sister_company_field(frm) {
 	if (frm.doc.sister_company !== sister_str) {
 		frm.set_value('sister_company', sister_str);
 	}
+}
+
+function get_row_currency_parity(frm, row) {
+	let cache = frm._ict_company_currencies || {};
+	let main_ccy = frm.doc.main_company ? cache[frm.doc.main_company] : null;
+	let other_ccy = row && row.company ? cache[row.company] : null;
+	let same_currency = !(main_ccy && other_ccy && main_ccy !== other_ccy);
+	return {
+		same_currency: same_currency,
+		main_currency: main_ccy,
+		other_currency: other_ccy
+	};
+}
+
+function apply_row_warehouse_lock(frm, cdt, cdn) {
+	let row = locals[cdt] && locals[cdt][cdn];
+	let field_wrap = frm.fields_dict && frm.fields_dict.linked_companies;
+	let grid = field_wrap && field_wrap.grid;
+	if (!row || !grid) return;
+
+	let parity = get_row_currency_parity(frm, row);
+	let is_editable = parity.same_currency;
+
+	if (!is_editable) {
+		if (row.main_company_warehouse) {
+			frappe.model.set_value(cdt, cdn, 'main_company_warehouse', '');
+		}
+		if (row.other_company_warehouse) {
+			frappe.model.set_value(cdt, cdn, 'other_company_warehouse', '');
+		}
+	}
+
+	let grid_row = grid.grid_rows_by_docname && grid.grid_rows_by_docname[cdn];
+	if (!grid_row) return;
+
+	if (typeof grid_row.toggle_editable === 'function') {
+		grid_row.toggle_editable('main_company_warehouse', is_editable);
+		grid_row.toggle_editable('other_company_warehouse', is_editable);
+	}
+
+	const default_desc = {
+		main_company_warehouse: __('Transit / Intercompany warehouse in main company for this pair'),
+		other_company_warehouse: __('Transit / Intercompany warehouse in linked company for this pair')
+	};
+	const locked_desc = __('Disabled: Stock Entry transit warehouses require same base currency ({0} vs {1}).', [
+		parity.main_currency || '',
+		parity.other_currency || ''
+	]);
+
+	if (grid_row.grid_form && grid_row.grid_form.fields_dict) {
+		['main_company_warehouse', 'other_company_warehouse'].forEach(fn => {
+			let field = grid_row.grid_form.fields_dict[fn];
+			if (field && field.df) {
+				field.df.read_only = is_editable ? 0 : 1;
+				field.df.description = is_editable ? default_desc[fn] : locked_desc;
+				if (typeof field.refresh === 'function') {
+					field.refresh();
+				}
+			}
+		});
+	}
+}
+
+function render_linked_companies_currency_banner(frm, mismatches) {
+	let field_wrap = frm.fields_dict && frm.fields_dict.linked_companies;
+	if (!field_wrap || !field_wrap.$wrapper) return;
+
+	field_wrap.$wrapper.find('.ict-currency-warehouse-note').remove();
+	if (!mismatches || mismatches.length === 0) return;
+
+	let labels = mismatches.map(m =>
+		frappe.utils.escape_html(`${m.company} (${m.main_currency} vs ${m.other_currency})`)
+	);
+	let note_text = __('Transit warehouses are read-only for cross-currency companies ({0}). Stock Entry mirroring only supports same-currency companies.', [
+		labels.join(', ')
+	]);
+
+	let html = `<div class="ict-currency-warehouse-note alert alert-warning" style="margin-bottom: 10px; font-size: 12px; padding: 8px 12px; border-left: 4px solid #e67e22;"><strong><i class="fa fa-lock"></i> ${note_text}</strong></div>`;
+	field_wrap.$wrapper.prepend(html);
+}
+
+function sync_linked_company_warehouse_locks(frm, notify_mismatch) {
+	frm._ict_company_currencies = frm._ict_company_currencies || {};
+	let needed = [];
+	if (frm.doc.main_company && !(frm.doc.main_company in frm._ict_company_currencies)) {
+		needed.push(frm.doc.main_company);
+	}
+	(frm.doc.linked_companies || []).forEach(r => {
+		if (r.company && !(r.company in frm._ict_company_currencies) && !needed.includes(r.company)) {
+			needed.push(r.company);
+		}
+	});
+
+	const apply_all = function() {
+		let mismatches = [];
+		(frm.doc.linked_companies || []).forEach(r => {
+			apply_row_warehouse_lock(frm, r.doctype, r.name);
+			let parity = get_row_currency_parity(frm, r);
+			if (r.company && !parity.same_currency) {
+				mismatches.push({
+					company: r.company,
+					main_currency: parity.main_currency,
+					other_currency: parity.other_currency
+				});
+			}
+		});
+		render_linked_companies_currency_banner(frm, mismatches);
+		if (notify_mismatch && mismatches.length > 0) {
+			frappe.show_alert({
+				message: __('Cleared and locked transit warehouses for cross-currency linked company rows because Stock Entry requires same base currency.'),
+				indicator: 'orange'
+			}, 7);
+		}
+	};
+
+	if (needed.length === 0) {
+		apply_all();
+		return;
+	}
+
+	frappe.call({
+		method: 'inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.get_company_currencies',
+		args: { companies: needed },
+		callback: function(r) {
+			if (r && r.message) {
+				Object.assign(frm._ict_company_currencies, r.message);
+			}
+			apply_all();
+		}
+	});
 }
 
 // Auto-fill Target Type intelligently when Source Type is selected in child table

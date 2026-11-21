@@ -2441,4 +2441,122 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 			self.assertEqual(conv_rate, 1.0)
 			self.assertEqual(rate_factor, 1.0)
 
+	def test_cross_currency_warehouse_guard_and_scanner(self):
+		"""Verify cross-currency pairs lock/clear transit warehouses in scanner and IntercompanyTransactionLink.validate()"""
+		from unittest.mock import patch
+
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			IntercompanyTransactionLink,
+			get_company_currencies,
+			scan_linked_company_defaults,
+		)
+
+		currencies = {
+			"Main PKR Co": "PKR",
+			"Sister PKR Co": "PKR",
+			"Sister USD Co": "USD",
+		}
+
+		def mock_get_value(dt, filters=None, fieldname=None, **kwargs):
+			if dt == "Company" and fieldname == "default_currency":
+				return currencies.get(filters)
+			if dt == "Company" and fieldname == "abbr":
+				return "CO"
+			return None
+
+		# 1. Cross-currency scan omits transit warehouses and reports same_currency=False
+		with patch.object(frappe.db, "table_exists", return_value=True), patch.object(
+			frappe.db, "sql", return_value=[]
+		), patch.object(frappe.db, "get_value", side_effect=mock_get_value), patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.find_existing_clearing_account",
+			return_value="TMP - CO",
+		), patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.get_intercompany_warehouse",
+			side_effect=lambda c: f"Transit - {c}",
+		):
+			cross_res = scan_linked_company_defaults("Main PKR Co", "Sister USD Co")
+			self.assertFalse(cross_res["same_currency"])
+			self.assertEqual(cross_res["main_currency"], "PKR")
+			self.assertEqual(cross_res["other_currency"], "USD")
+			self.assertIsNone(cross_res["main_company_warehouse"])
+			self.assertIsNone(cross_res["other_company_warehouse"])
+
+			same_res = scan_linked_company_defaults("Main PKR Co", "Sister PKR Co")
+			self.assertTrue(same_res["same_currency"])
+			self.assertEqual(same_res["main_company_warehouse"], "Transit - Main PKR Co")
+			self.assertEqual(same_res["other_company_warehouse"], "Transit - Sister PKR Co")
+
+			ccy_map = get_company_currencies(["Main PKR Co", "Sister USD Co"])
+			self.assertEqual(ccy_map, {"Main PKR Co": "PKR", "Sister USD Co": "USD"})
+
+		# 2. Server-side validate() clears warehouses on mismatched currency row while keeping same-currency row
+		doc = IntercompanyTransactionLink.__new__(IntercompanyTransactionLink)
+		doc.main_company = "Main PKR Co"
+		doc.sister_company = ""
+		doc.linked_companies = [
+			frappe._dict({
+				"company": "Sister PKR Co",
+				"main_company_customer": "Sister PKR (C)",
+				"other_company_supplier": "Main PKR (S)",
+				"main_company_supplier": None,
+				"other_company_customer": None,
+				"main_company_warehouse": "Transit - Main PKR",
+				"other_company_warehouse": "Transit - Sister PKR",
+			}),
+			frappe._dict({
+				"company": "Sister USD Co",
+				"main_company_customer": "Sister USD (C)",
+				"other_company_supplier": "Main PKR (S)",
+				"main_company_supplier": None,
+				"other_company_customer": None,
+				"main_company_warehouse": "Transit - Main PKR",
+				"other_company_warehouse": "Transit - Sister USD",
+			}),
+		]
+		doc.transaction_types = []
+
+		with patch.object(frappe.db, "get_value", side_effect=mock_get_value):
+			doc.validate()
+
+		self.assertEqual(doc.linked_companies[0].main_company_warehouse, "Transit - Main PKR")
+		self.assertEqual(doc.linked_companies[0].other_company_warehouse, "Transit - Sister PKR")
+		self.assertIsNone(doc.linked_companies[1].main_company_warehouse)
+		self.assertIsNone(doc.linked_companies[1].other_company_warehouse)
+
+	def test_workspace_central_hub_has_card_breaks_and_doctypes(self):
+		"""Verify Inter-Company Central Hub workspace links include Card Breaks matching every content card"""
+		import json
+		from pathlib import Path
+
+		ws_path = (
+			Path(__file__).resolve().parents[2] / "workspace" / "inter_company" / "inter_company.json"
+		)
+		ws = json.loads(ws_path.read_text(encoding="utf-8"))
+		blocks = json.loads(ws["content"])
+
+		card_names = [b["data"]["card_name"] for b in blocks if b.get("type") == "card"]
+		self.assertEqual(len(card_names), 4)
+
+		links = ws.get("links", [])
+		card_breaks = [row for row in links if row.get("type") == "Card Break"]
+		self.assertEqual([cb["label"] for cb in card_breaks], card_names)
+
+		# Verify each Card Break link_count matches the following Link rows
+		idx = 0
+		for cb in card_breaks:
+			while idx < len(links) and links[idx] is not cb:
+				idx += 1
+			idx += 1
+			count = 0
+			while idx < len(links) and links[idx].get("type") == "Link":
+				count += 1
+				idx += 1
+			self.assertEqual(cb["link_count"], count, f"Mismatch link_count for card {cb['label']}")
+
+		linked_targets = {row.get("link_to") for row in links if row.get("type") == "Link"}
+		self.assertIn("Intercompany Transaction Link", linked_targets)
+		self.assertIn("Inter Company Settings", linked_targets)
+		self.assertIn("Inter Company Document Reference", linked_targets)
+
+
 
