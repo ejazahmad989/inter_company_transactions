@@ -93,6 +93,48 @@ def get_columns():
 	]
 
 
+def _get_doc_summary(doctype, name, column_cache, default_date=None):
+	"""Safely fetch amount and date for any DocType without querying non-existent SQL columns."""
+	if not doctype or not name or not frappe.db.exists(doctype, name):
+		return 0.0, default_date
+
+	amt_candidates = (
+		"grand_total",
+		"total",
+		"total_amount",
+		"paid_amount",
+		"total_debit",
+		"total_credit",
+		"total_taxes_and_charges",
+	)
+	date_candidates = ("posting_date", "transaction_date")
+
+	if doctype not in column_cache:
+		amt_cols = [c for c in amt_candidates if frappe.db.has_column(doctype, c)]
+		date_cols = [c for c in date_candidates if frappe.db.has_column(doctype, c)]
+		column_cache[doctype] = (amt_cols, date_cols)
+
+	amt_cols, date_cols = column_cache[doctype]
+	fields = ["name", *amt_cols, *date_cols]
+	doc = frappe.db.get_value(doctype, name, fields, as_dict=True)
+	if not doc:
+		return 0.0, default_date
+
+	amount = 0.0
+	for col in amt_cols:
+		if doc.get(col) is not None:
+			amount = flt(doc.get(col))
+			break
+
+	tx_date = default_date
+	for col in date_cols:
+		if doc.get(col):
+			tx_date = doc.get(col)
+			break
+
+	return amount, tx_date
+
+
 def get_data(filters):
 	data = []
 	cond = {}
@@ -117,9 +159,10 @@ def get_data(filters):
 			"creation",
 		],
 		order_by="creation desc",
-		limit=500
+		limit=500,
 	)
 
+	column_cache = {}
 	for r in refs:
 		created_date = getdate(r.creation)
 		if filters.get("from_date") and created_date < getdate(filters.from_date):
@@ -127,30 +170,12 @@ def get_data(filters):
 		if filters.get("to_date") and created_date > getdate(filters.to_date):
 			continue
 
-		source_amount = 0.0
-		posting_date = created_date
-		target_amount = 0.0
-
-		if frappe.db.exists(r.source_doctype, r.source_name):
-			doc = frappe.get_value(
-				r.source_doctype,
-				r.source_name,
-				["grand_total", "total", "posting_date", "transaction_date"],
-				as_dict=1
-			)
-			if doc:
-				source_amount = flt(doc.get("grand_total") or doc.get("total"))
-				posting_date = doc.get("posting_date") or doc.get("transaction_date") or created_date
-
-		if r.target_doctype and r.target_name and frappe.db.exists(r.target_doctype, r.target_name):
-			tdoc = frappe.get_value(
-				r.target_doctype,
-				r.target_name,
-				["grand_total", "total"],
-				as_dict=1
-			)
-			if tdoc:
-				target_amount = flt(tdoc.get("grand_total") or tdoc.get("total"))
+		source_amount, posting_date = _get_doc_summary(
+			r.source_doctype, r.source_name, column_cache, default_date=created_date
+		)
+		target_amount, _unused = _get_doc_summary(
+			r.target_doctype, r.target_name, column_cache, default_date=created_date
+		)
 
 		variance = round(abs(source_amount - target_amount), 2)
 		status = "Synchronized"

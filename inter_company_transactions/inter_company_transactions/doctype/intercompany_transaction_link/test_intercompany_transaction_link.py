@@ -2558,5 +2558,61 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 		self.assertIn("Inter Company Settings", linked_targets)
 		self.assertIn("Inter Company Document Reference", linked_targets)
 
+	def test_transaction_matrix_report_multi_doctype_columns(self):
+		"""Verify Inter Company Transaction Matrix checks actual columns per DocType (no Unknown column 'grand_total')"""
+		from unittest.mock import patch
+
+		from inter_company_transactions.inter_company_transactions.report.inter_company_transaction_matrix.inter_company_transaction_matrix import (
+			execute,
+		)
+
+		schema_cols = {
+			"Sales Invoice": {"name", "grand_total", "total", "posting_date"},
+			"Purchase Invoice": {"name", "grand_total", "total", "posting_date"},
+			"Stock Entry": {"name", "total_amount", "posting_date"},
+			"Journal Entry": {"name", "total_debit", "total_credit", "posting_date"},
+			"Payment Entry": {"name", "paid_amount", "posting_date"},
+			"Material Request": {"name", "transaction_date"},
+		}
+		docs = {
+			("Sales Invoice", "SINV-1"): {"name": "SINV-1", "grand_total": 1000.0, "posting_date": "2026-11-20"},
+			("Purchase Invoice", "PINV-1"): {"name": "PINV-1", "grand_total": 1000.0, "posting_date": "2026-11-20"},
+			("Stock Entry", "STE-1"): {"name": "STE-1", "total_amount": 500.0, "posting_date": "2026-11-20"},
+			("Stock Entry", "STE-2"): {"name": "STE-2", "total_amount": 500.0, "posting_date": "2026-11-20"},
+			("Journal Entry", "JV-1"): {"name": "JV-1", "total_debit": 250.0, "total_credit": 250.0, "posting_date": "2026-11-20"},
+			("Journal Entry", "JV-2"): {"name": "JV-2", "total_debit": 250.0, "total_credit": 250.0, "posting_date": "2026-11-20"},
+			("Payment Entry", "PE-1"): {"name": "PE-1", "paid_amount": 300.0, "posting_date": "2026-11-20"},
+			("Payment Entry", "PE-2"): {"name": "PE-2", "paid_amount": 300.0, "posting_date": "2026-11-20"},
+			("Material Request", "MR-1"): {"name": "MR-1", "transaction_date": "2026-11-20"},
+		}
+		refs = [
+			frappe._dict({"name": "R1", "source_doctype": "Sales Invoice", "source_name": "SINV-1", "source_company": "A", "target_doctype": "Purchase Invoice", "target_name": "PINV-1", "target_company": "B", "creation": "2026-11-20"}),
+			frappe._dict({"name": "R2", "source_doctype": "Stock Entry", "source_name": "STE-1", "source_name_id": "STE-1", "source_company": "A", "target_doctype": "Stock Entry", "target_name": "STE-2", "target_company": "B", "creation": "2026-11-20"}),
+			frappe._dict({"name": "R3", "source_doctype": "Journal Entry", "source_name": "JV-1", "source_company": "A", "target_doctype": "Journal Entry", "target_name": "JV-2", "target_company": "B", "creation": "2026-11-20"}),
+			frappe._dict({"name": "R4", "source_doctype": "Payment Entry", "source_name": "PE-1", "source_company": "A", "target_doctype": "Payment Entry", "target_name": "PE-2", "target_company": "B", "creation": "2026-11-20"}),
+			frappe._dict({"name": "R5", "source_doctype": "Material Request", "source_name": "MR-1", "source_company": "A", "target_doctype": None, "target_name": None, "target_company": "B", "creation": "2026-11-20"}),
+		]
+
+		def strict_get_value(dt, name, fields, as_dict=False, **kwargs):
+			valid_cols = schema_cols[dt]
+			for f in fields:
+				if f not in valid_cols:
+					raise AssertionError(f"Unknown column '{f}' queried on DocType '{dt}'")
+			return frappe._dict(docs[(dt, name)])
+
+		with patch.object(frappe, "get_all", return_value=refs), patch.object(
+			frappe.db, "exists", side_effect=lambda dt, name=None, **kw: (dt, name) in docs
+		), patch.object(
+			frappe.db, "has_column", side_effect=lambda dt, col: col in schema_cols.get(dt, set())
+		), patch.object(
+			frappe.db, "get_value", side_effect=strict_get_value
+		):
+			_cols, rows, _msg, _chart, summary = execute({"status": "All"})
+			self.assertEqual(len(rows), 5)
+			self.assertEqual([r["source_amount"] for r in rows], [1000.0, 500.0, 250.0, 300.0, 0.0])
+			self.assertEqual(rows[4]["status"], "Pending Mirror")
+			self.assertEqual(summary[0]["value"], 5)
+
+
 
 
