@@ -2944,3 +2944,153 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 
 		self.assertNotIn("Journal Entry Type", queried_exists)
 
+	def test_mirrored_journal_entry_save_tolerates_target_company_clear_and_keeps_ledger_locks(self):
+		"""Verify mirrored JE & PO/PI drafts allow Save/Submit if intercompany_target_company is cleared/drifted while enforcing financial locks"""
+		from unittest.mock import patch
+
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_accounting_builders import (
+			_precalculate_mirrored_doc_totals,
+		)
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_validation import (
+			validate_intercompany_document,
+			validate_locked_mirrored_fields,
+		)
+
+		prev_je = frappe._dict({
+			"doctype": "Journal Entry",
+			"name": "ACC-JV-2026-00001",
+			"company": "Sister Co",
+			"is_intercompany": 1,
+			"intercompany_target_company": "AYP GROUP",
+			"intercompany_linked_doc_doctype": "Journal Entry",
+			"intercompany_linked_doc_name": "ACC-JV-2026-00000",
+			"intercompany_linked_company": "AYP GROUP",
+			"total_debit": 1000.0,
+			"total_credit": 1000.0,
+			"accounts": [
+				frappe._dict({
+					"account": "Debtors - SC",
+					"account_currency": "PKR",
+					"exchange_rate": 1.0,
+					"party_type": "Customer",
+					"party": "AYP GROUP",
+					"debit_in_account_currency": 1000.0,
+					"credit_in_account_currency": 0.0,
+					"debit": 1000.0,
+					"credit": 0.0,
+					"cost_center": "Main - SC",
+				}),
+				frappe._dict({
+					"account": "Intercompany Clearing - SC",
+					"account_currency": "PKR",
+					"exchange_rate": 1.0,
+					"party_type": None,
+					"party": None,
+					"debit_in_account_currency": 0.0,
+					"credit_in_account_currency": 1000.0,
+					"debit": 0.0,
+					"credit": 1000.0,
+					"cost_center": "Main - SC",
+				}),
+			],
+		})
+
+		with patch.object(frappe.db, "exists", return_value=True), patch.object(
+			frappe, "get_doc", return_value=prev_je
+		):
+			# Case 1: intercompany_target_company cleared on client + editable account/cost_center changed -> must pass & restore
+			edited_je = frappe._dict({
+				**prev_je,
+				"intercompany_target_company": "",
+				"flags": frappe._dict(),
+				"accounts": [
+					frappe._dict({**prev_je.accounts[0], "cost_center": "Branch - SC"}),
+					frappe._dict({**prev_je.accounts[1], "account": "Suspense - SC"}),
+				],
+			})
+			validate_intercompany_document(edited_je)
+			self.assertEqual(edited_je.intercompany_target_company, "AYP GROUP")
+
+			# Case 2: Mirrored Purchase Invoice with cleared target company -> must pass & restore
+			prev_pi = frappe._dict({
+				"doctype": "Purchase Invoice",
+				"name": "ACC-PINV-2026-00001",
+				"company": "Sister Co",
+				"currency": "PKR",
+				"conversion_rate": 1.0,
+				"supplier": "AYP GROUP",
+				"is_intercompany": 1,
+				"intercompany_target_company": "AYP GROUP",
+				"intercompany_linked_doc_doctype": "Sales Invoice",
+				"intercompany_linked_doc_name": "ACC-SINV-2026-00001",
+				"intercompany_linked_company": "AYP GROUP",
+				"items": [frappe._dict({"item_code": "ITEM-1", "uom": "Nos", "qty": 1.0, "rate": 500.0, "amount": 500.0})],
+			})
+			edited_pi = frappe._dict({
+				**prev_pi,
+				"intercompany_target_company": None,
+				"flags": frappe._dict(),
+				"items": [frappe._dict(prev_pi["items"][0])],
+			})
+			validate_locked_mirrored_fields(edited_pi, previous=prev_pi)
+			self.assertEqual(edited_pi.intercompany_target_company, "AYP GROUP")
+
+			# Case 3: Tampering with JE debit amount or party must still raise
+			tampered_je = frappe._dict({
+				**prev_je,
+				"flags": frappe._dict(),
+				"accounts": [
+					frappe._dict({**prev_je.accounts[0], "debit_in_account_currency": 999.0, "debit": 999.0}),
+					frappe._dict(prev_je.accounts[1]),
+				],
+			})
+			with self.assertRaises(Exception):
+				validate_locked_mirrored_fields(tampered_je, previous=prev_je)
+
+		# Case 4: _precalculate_mirrored_doc_totals invokes derived JE helpers & sets difference
+		called_helpers = []
+
+		class DerivedHelperJE(frappe._dict):
+			def set_amounts_in_company_currency(self):
+				called_helpers.append("set_amounts_in_company_currency")
+
+			def set_total_debit_credit(self):
+				called_helpers.append("set_total_debit_credit")
+
+			def set_against_account(self):
+				called_helpers.append("set_against_account")
+
+			def set_print_format_fields(self):
+				called_helpers.append("set_print_format_fields")
+
+			def set_title(self):
+				called_helpers.append("set_title")
+
+		helper_je = DerivedHelperJE({
+			"doctype": "Journal Entry",
+			"company": "Sister Co",
+			"total_debit": 0.0,
+			"total_credit": 0.0,
+			"difference": None,
+			"accounts": [
+				frappe._dict({"account": "Debtors - SC", "account_currency": "PKR", "exchange_rate": 1.0, "debit_in_account_currency": 250.0, "credit_in_account_currency": 0.0, "debit": 250.0, "credit": 0.0}),
+				frappe._dict({"account": "Clearing - SC", "account_currency": "PKR", "exchange_rate": 1.0, "debit_in_account_currency": 0.0, "credit_in_account_currency": 250.0, "debit": 0.0, "credit": 250.0}),
+			],
+		})
+		with patch.object(frappe.db, "get_value", return_value="PKR"):
+			_precalculate_mirrored_doc_totals(helper_je)
+		self.assertEqual(
+			called_helpers,
+			[
+				"set_amounts_in_company_currency",
+				"set_total_debit_credit",
+				"set_against_account",
+				"set_print_format_fields",
+				"set_title",
+			],
+		)
+		self.assertEqual(helper_je.total_debit, 250.0)
+		self.assertEqual(helper_je.total_credit, 250.0)
+		self.assertEqual(helper_je.difference, 0.0)
+
+

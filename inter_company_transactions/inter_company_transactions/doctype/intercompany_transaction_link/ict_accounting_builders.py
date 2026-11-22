@@ -591,11 +591,19 @@ def _precalculate_mirrored_doc_totals(doc):
 				doc.set_total_debit_credit()
 		except Exception:
 			pass
+		for fn_name in ("set_against_account", "set_print_format_fields", "set_title"):
+			try:
+				if hasattr(doc, fn_name):
+					getattr(doc, fn_name)()
+			except Exception:
+				pass
 
 		accounts = doc.get("accounts") or []
 		if accounts and abs(flt(doc.get("total_debit"))) <= 0.0001 and abs(flt(doc.get("total_credit"))) <= 0.0001:
 			doc.total_debit = _safe_flt(sum(flt(r.get("debit") or r.get("debit_in_account_currency")) for r in accounts), 2)
 			doc.total_credit = _safe_flt(sum(flt(r.get("credit") or r.get("credit_in_account_currency")) for r in accounts), 2)
+		if _has_row_field(doc, "difference") and doc.get("difference") is None:
+			_set_row_value(doc, "difference", _safe_flt(flt(doc.get("total_debit")) - flt(doc.get("total_credit")), 2))
 		return
 
 	if dt == "Stock Entry":

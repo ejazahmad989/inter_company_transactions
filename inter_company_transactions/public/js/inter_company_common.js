@@ -82,6 +82,9 @@
 				frm.set_df_property(fn, 'read_only', 1);
 			}
 		});
+		if (frm.fields_dict && frm.fields_dict.intercompany_target_company) {
+			frm.set_df_property('intercompany_target_company', 'reqd', 0);
+		}
 
 		// Lock item amounts/quantities while keeping local Warehouse & Cost Center editable
 		if (frm.fields_dict && frm.fields_dict.items && frm.fields_dict.items.grid) {
@@ -105,7 +108,8 @@
 				'debit',
 				'credit',
 				'party_type',
-				'party'
+				'party',
+				'intercompany_target_company'
 			];
 			lockedAccCols.forEach(function(col) {
 				if (typeof accGrid.update_docfield_property === 'function') {

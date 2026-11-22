@@ -258,8 +258,9 @@ def validate_locked_mirrored_fields(doc, previous=None):
 			return
 
 	if previous is None:
-		if hasattr(doc, "get_doc_before_save"):
-			previous = doc.get_doc_before_save()
+		get_before_save = getattr(doc, "get_doc_before_save", None)
+		if callable(get_before_save):
+			previous = get_before_save()
 		if not previous and getattr(doc, "name", None) and hasattr(frappe, "db") and frappe.db and frappe.db.exists(doc.doctype, doc.name):
 			try:
 				previous = frappe.get_doc(doc.doctype, doc.name)
@@ -277,6 +278,10 @@ def validate_locked_mirrored_fields(doc, previous=None):
 	)
 	source_ref = f"{doc.get('intercompany_linked_doc_doctype') or ''} {doc.get('intercompany_linked_doc_name') or ''}".strip()
 
+	expected_target_company = previous.get("intercompany_target_company") or doc.get("intercompany_linked_company")
+	if expected_target_company and doc.get("intercompany_target_company") != expected_target_company:
+		doc.intercompany_target_company = expected_target_company
+
 	def _differs(v_new, v_old, is_num=False):
 		if is_num:
 			return abs(flt(v_new) - flt(v_old)) > 0.0001
@@ -292,7 +297,6 @@ def validate_locked_mirrored_fields(doc, previous=None):
 		("party_type", _("Party Type")),
 		("party", _("Party")),
 		("payment_type", _("Payment Type")),
-		("intercompany_target_company", _("Intercompany Target Company")),
 	]
 	if getattr(doc, "doctype", None) == "Quotation":
 		str_locked.extend([
