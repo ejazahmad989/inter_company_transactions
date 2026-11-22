@@ -649,7 +649,7 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 			self.assertEqual(ict_created[0].parent_account, "Current Assets - MC")
 
 	def test_scan_linked_company_defaults_pair_matching(self):
-		"""Verify scan_linked_company_defaults auto-populates internal parties and TMP-<ABBR> clearing accounts"""
+		"""Verify scan_linked_company_defaults scans clearing accounts/warehouses without auto-filling Customer/Supplier"""
 		from unittest.mock import patch
 
 		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
@@ -659,18 +659,14 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 		def mock_get_value(dt, filters=None, fieldname=None, **kwargs):
 			if dt == "Company" and fieldname == "abbr":
 				return "MAIN" if filters == "Main Corp" else "JC"
+			if dt == "Company" and fieldname == "default_currency":
+				return "USD"
 			return None
 
 		def mock_find_acc(company, sister):
 			return f"TMP-{sister[:2].upper()} - {company[:2].upper()}"
 
-		def mock_sql(query, params=None, as_dict=False, **kwargs):
-			counterparty, party_dt, _owner = params
-			return [frappe._dict({"name": f"{counterparty} ({party_dt})"})]
-
-		with patch.object(frappe.db, "table_exists", return_value=True), patch.object(
-			frappe.db, "sql", side_effect=mock_sql
-		), patch.object(frappe.db, "get_value", side_effect=mock_get_value), patch(
+		with patch.object(frappe.db, "get_value", side_effect=mock_get_value), patch(
 			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.find_existing_clearing_account",
 			side_effect=mock_find_acc,
 		), patch(
@@ -678,10 +674,14 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 			side_effect=lambda c: f"Transit - {c}",
 		):
 			res = scan_linked_company_defaults("Main Corp", "John Co")
-			self.assertEqual(res["main_company_customer"], "John Co (Customer)")
-			self.assertEqual(res["main_company_supplier"], "John Co (Supplier)")
-			self.assertEqual(res["other_company_customer"], "Main Corp (Customer)")
-			self.assertEqual(res["other_company_supplier"], "Main Corp (Supplier)")
+			self.assertIsNone(res["main_company_customer"])
+			self.assertIsNone(res["main_company_supplier"])
+			self.assertIsNone(res["other_company_customer"])
+			self.assertIsNone(res["other_company_supplier"])
+			self.assertEqual(res["main_company_account"], "TMP-JO - MA")
+			self.assertEqual(res["other_company_account"], "TMP-MA - JO")
+			self.assertEqual(res["main_company_warehouse"], "Transit - Main Corp")
+			self.assertEqual(res["other_company_warehouse"], "Transit - John Co")
 			self.assertEqual(res["main_suggested_tmp"], "TMP-JC")
 			self.assertEqual(res["other_suggested_tmp"], "TMP-MAIN")
 
@@ -1926,7 +1926,7 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 				), patch.object(
 					frappe, "get_system_settings", side_effect=lambda k: "Banker's Rounding" if k == "rounding_method" else None
 				), patch.object(
-					frappe.db, "exists", side_effect=lambda dt, name=None, **kw: dt in ("Item", "DocType", "Journal Entry Type")
+					frappe.db, "exists", side_effect=lambda dt, name=None, **kw: dt in ("Item", "DocType")
 				), patch.object(
 					frappe.db, "has_column", return_value=False
 				), patch.object(
@@ -2058,7 +2058,7 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 		), patch.object(
 			frappe, "get_request_header", side_effect=RuntimeError("object is not bound"), create=True
 		), patch.object(
-			frappe.db, "exists", side_effect=lambda dt, name=None, **kw: dt in ("Company", "Item", "Journal Entry Type", "Warehouse") or (dt == "DocType" and name == "Currency Exchange")
+			frappe.db, "exists", side_effect=lambda dt, name=None, **kw: dt in ("Company", "Item", "Warehouse") or (dt == "DocType" and name == "Currency Exchange")
 		), patch.object(
 			frappe.db, "get_value", side_effect=mock_get_value
 		), patch(
@@ -2099,7 +2099,7 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 		), patch.object(
 			frappe, "get_cached_doc", return_value=frappe._dict({"auto_submit_target_doc": 0})
 		), patch.object(
-			frappe.db, "exists", side_effect=lambda dt, name=None, **kw: dt in ("Company", "Item", "Journal Entry Type", "Warehouse") or (dt == "DocType" and name == "Currency Exchange")
+			frappe.db, "exists", side_effect=lambda dt, name=None, **kw: dt in ("Company", "Item", "Warehouse") or (dt == "DocType" and name == "Currency Exchange")
 		), patch.object(
 			frappe.db, "get_value", side_effect=mock_get_value_same_ccy
 		), patch(
@@ -2613,6 +2613,334 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 			self.assertEqual(rows[4]["status"], "Pending Mirror")
 			self.assertEqual(summary[0]["value"], 5)
 
+	def test_quick_setup_no_auto_party_creation(self):
+		"""Verify quick_setup_intercompany_pair never auto-creates Customers/Suppliers or pre-fills party fields"""
+		from unittest.mock import patch
 
+		from inter_company_transactions.inter_company_transactions.doctype.inter_company_settings.inter_company_settings import (
+			quick_setup_intercompany_pair,
+		)
 
+		created_doctypes = []
+		created_links = []
+
+		class FakeLinkDoc:
+			def __init__(self, dt):
+				self.doctype = dt
+				self.name = "Main Co - Sister Co"
+				self.main_company = None
+				self.linked_companies = []
+				self.transaction_types = []
+				self.flags = frappe._dict()
+
+			def append(self, table, row):
+				getattr(self, table).append(frappe._dict(row))
+
+			def insert(self):
+				created_links.append(self)
+				return self
+
+		def mock_new_doc(dt):
+			created_doctypes.append(dt)
+			if dt in ("Customer", "Supplier"):
+				raise AssertionError(f"Unexpected auto-creation of {dt}")
+			return FakeLinkDoc(dt)
+
+		def mock_get_value(dt, filters=None, fieldname=None, **kwargs):
+			if dt == "Company" and fieldname == "default_currency":
+				return "USD"
+			if dt == "Intercompany Transaction Link":
+				return None
+			return None
+
+		with patch.object(frappe, "only_for"), patch.object(
+			frappe, "new_doc", side_effect=mock_new_doc
+		), patch.object(
+			frappe.db, "get_value", side_effect=mock_get_value
+		), patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.get_or_create_intercompany_clearing_account",
+			side_effect=lambda owner, other: f"TMP-{other[:3].upper()} - {owner[:2].upper()}",
+		), patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.get_or_create_intercompany_warehouse",
+			side_effect=lambda c: f"Transit - {c}",
+		):
+			resp = quick_setup_intercompany_pair("Main Co", "Sister Co", preset="trading")
+			self.assertTrue(resp["success"])
+			self.assertNotIn("Customer", created_doctypes)
+			self.assertNotIn("Supplier", created_doctypes)
+			self.assertEqual(len(created_links), 1)
+			row = created_links[0].linked_companies[0]
+			self.assertIsNone(row.get("main_company_customer"))
+			self.assertIsNone(row.get("main_company_supplier"))
+			self.assertIsNone(row.get("other_company_customer"))
+			self.assertIsNone(row.get("other_company_supplier"))
+
+	def test_remote_sync_never_auto_creates_parties(self):
+		"""Verify resolve_counterparty_for_remote_source raises cleanly when missing instead of creating Customer/Supplier"""
+		from unittest.mock import patch
+
+		from inter_company_transactions.sync import resolve_counterparty_for_remote_source
+
+		with patch.object(frappe, "new_doc", side_effect=AssertionError("Must not auto-create party")), patch.object(
+			frappe.db, "exists", return_value=False
+		), patch.object(
+			frappe.db, "get_value", return_value=None
+		), patch.object(
+			frappe.db, "has_column", return_value=True
+		):
+			with self.assertRaises(Exception) as ctx:
+				resolve_counterparty_for_remote_source("Remote Co", "Purchase Invoice", "Local Co")
+			self.assertIn("Supplier", str(ctx.exception))
+
+		# Explicitly configured Intercompany Transaction Link party must resolve directly
+		def mock_get_all(dt, filters=None, fields=None, **kwargs):
+			if dt == "Intercompany Transaction Link":
+				return [frappe._dict({"name": "Local Co - Remote Co", "main_company": "Local Co"})]
+			if dt == "Intercompany Linked Company":
+				return [frappe._dict({"company": "Remote Co", "main_company_supplier": "Manual Remote Supplier"})]
+			return []
+
+		with patch.object(frappe.db, "exists", return_value=True), patch.object(
+			frappe, "get_all", side_effect=mock_get_all
+		):
+			resolved = resolve_counterparty_for_remote_source("Remote Co", "Purchase Invoice", "Local Co")
+			self.assertEqual(resolved, "Manual Remote Supplier")
+
+	def test_journal_entry_never_queries_journal_entry_type_doctype(self):
+		"""Ensure v16 does not trigger 'DocType Journal Entry Type not found' across JE, LCV, Netting, and Remote Sync."""
+		from unittest.mock import patch
+
+		from inter_company_transactions.inter_company_transactions.doctype.inter_company_netting_cycle.inter_company_netting_cycle import (
+			InterCompanyNettingCycle,
+		)
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			create_journal_entry,
+			create_journal_entry_from_lcv,
+			create_linked_documents,
+		)
+		from inter_company_transactions.sync import receive_remote_transaction
+
+		queried_exists = []
+
+		class FakeJEDoc:
+			def __init__(self, dt):
+				self.doctype = dt
+				self.name = "ACC-JV-2026-00001"
+				self.accounts = []
+				self.flags = frappe._dict()
+				self.docstatus = 0
+				self.company = None
+				self.voucher_type = None
+				self.posting_date = None
+
+			def append(self, tbl, row):
+				getattr(self, tbl).append(frappe._dict(row))
+
+			def get(self, key, default=None):
+				return getattr(self, key, default)
+
+			def insert(self, **kwargs):
+				return self
+
+		def strict_exists(dt, name=None, **kw):
+			queried_exists.append(dt)
+			if dt == "Journal Entry Type":
+				raise AssertionError("Must never query non-existent 'Journal Entry Type' DocType")
+			if dt in ("Company", "Account"):
+				return True
+			return False
+
+		def mock_get_value(dt, filters=None, fieldname=None, **kwargs):
+			if dt == "Company":
+				if fieldname == "default_currency":
+					return "PKR"
+				if fieldname == "cost_center":
+					return "Main - CO"
+				if fieldname == "default_payable_account":
+					return "Creditors - CO"
+				if fieldname == "default_receivable_account":
+					return "Debtors - CO"
+				if fieldname == "default_expense_account":
+					return "Expenses - CO"
+				if fieldname == "default_bank_account":
+					return "Bank - CO"
+			if dt == "Account":
+				if fieldname == "account_currency":
+					return "PKR"
+				return "TMP-CO - CO"
+			return None
+
+		mapping = frappe._dict({"main_company": "Main Co"})
+		linked_co = frappe._dict({
+			"company": "Sister Co",
+			"main_company_customer": "Sister Cust",
+			"main_company_supplier": "Sister Supp",
+			"other_company_customer": "Main Cust",
+			"other_company_supplier": "Main Supp",
+			"main_company_account": "TMP-SIS - MC",
+			"other_company_account": "TMP-MAIN - SC",
+		})
+		src_je = frappe._dict({
+			"doctype": "Journal Entry",
+			"name": "ACC-JV-SRC-001",
+			"company": "Main Co",
+			"posting_date": "2026-11-22",
+			"is_intercompany": 1,
+			"intercompany_target_company": "Sister Co",
+			"total_debit": 1500.0,
+			"total_credit": 1500.0,
+			"accounts": [
+				frappe._dict({
+					"party_type": "Supplier",
+					"party": "Sister Supp",
+					"account_currency": "PKR",
+					"exchange_rate": 1.0,
+					"credit_in_account_currency": 1500.0,
+					"credit": 1500.0,
+					"debit_in_account_currency": 0.0,
+					"debit": 0.0,
+				})
+			],
+		})
+		src_lcv = frappe._dict({
+			"doctype": "Landed Cost Voucher",
+			"name": "MAT-LCV-001",
+			"company": "Main Co",
+			"posting_date": "2026-11-22",
+			"total_taxes_and_charges": 500.0,
+			"taxes": [frappe._dict({"description": "Freight", "amount": 500.0, "base_amount": 500.0})],
+		})
+
+		messages = []
+
+		with patch.object(frappe, "new_doc", side_effect=lambda dt: FakeJEDoc(dt)), patch.object(
+			frappe.db, "exists", side_effect=strict_exists
+		), patch.object(
+			frappe.db, "get_value", side_effect=mock_get_value
+		), patch.object(
+			frappe, "has_permission", return_value=True
+		), patch.object(
+			frappe, "get_cached_doc", return_value=frappe._dict({"auto_submit_target_doc": 0})
+		), patch.object(
+			frappe, "msgprint", side_effect=lambda msg, **kw: messages.append(str(msg))
+		), patch.object(
+			frappe, "request", None, create=True
+		):
+			je = create_journal_entry(src_je, mapping, linked_co, "main_to_other")
+			self.assertEqual(je.voucher_type, "Journal Entry")
+
+			lcv_je = create_journal_entry_from_lcv(src_lcv, mapping, linked_co, "main_to_other")
+			self.assertEqual(lcv_je.voucher_type, "Journal Entry")
+
+			rem_resp = receive_remote_transaction({
+				"source_doctype": "Journal Entry",
+				"source_name": "REM-JV-001",
+				"source_company": "Main Co",
+				"target_company": "Sister Co",
+				"posting_date": "2026-11-22",
+				"source_company_currency": "PKR",
+				"currency": "PKR",
+				"accounts": [
+					{
+						"account_currency": "PKR",
+						"exchange_rate": 1.0,
+						"debit_in_account_currency": 1500.0,
+						"credit_in_account_currency": 0.0,
+						"debit": 1500.0,
+						"credit": 0.0,
+					}
+				],
+			})
+			self.assertTrue(rem_resp["success"])
+
+		# Verify Netting Cycle also sets voucher_type='Journal Entry' without querying Journal Entry Type
+		netting = frappe._dict({
+			"name": "NET-2026-001",
+			"settlement_date": "2026-11-22",
+			"participating_companies": [
+				frappe._dict({"company": "Main Co", "gross_receivables": 0.0, "gross_payables": 100.0}),
+				frappe._dict({"company": "Sister Co", "gross_receivables": 100.0, "gross_payables": 0.0}),
+			],
+			"invoices": [],
+			"net_settlements": [],
+			"append": lambda tbl, row: netting[tbl].append(frappe._dict(row)),
+			"db_set": lambda *a, **kw: None,
+		})
+		for s_row_attr in ("total_gross_payables", "total_gross_receivables", "total_net_settled", "status"):
+			netting[s_row_attr] = None
+
+		created_netting_jes = []
+
+		class FakeNettingJE(FakeJEDoc):
+			def db_set(self, *a, **kw):
+				return None
+
+			def insert(self, **kwargs):
+				created_netting_jes.append(self)
+				return self
+
+			def submit(self):
+				self.docstatus = 1
+				return self
+
+		with patch.object(frappe, "new_doc", side_effect=lambda dt: FakeNettingJE(dt)), patch.object(
+			frappe, "get_cached_value", return_value="PKR"
+		), patch.object(
+			frappe.db, "exists", side_effect=strict_exists
+		), patch.object(
+			frappe, "get_value", side_effect=lambda dt, flt_or_name, fieldname=None, **kw: mock_get_value(dt, flt_or_name, fieldname)
+		), patch.object(
+			frappe.db, "get_value", side_effect=mock_get_value
+		), patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.get_or_create_intercompany_clearing_account",
+			return_value="TMP-SIS - MC",
+		), patch.object(
+			frappe, "msgprint", side_effect=lambda msg, **kw: messages.append(str(msg))
+		):
+			# Bind db_set on settlement row after _compute_netting populates it
+			orig_append = netting["append"]
+
+			def append_with_db_set(tbl, row):
+				d = frappe._dict(row)
+				d.db_set = lambda *a, **kw: None
+				netting[tbl].append(d)
+
+			netting["append"] = append_with_db_set
+			InterCompanyNettingCycle.on_submit(netting)
+			self.assertEqual(len(created_netting_jes), 1)
+			self.assertEqual(created_netting_jes[0].voucher_type, "Journal Entry")
+
+		# Verify create_linked_documents produces the exact clean Journal Entry creation msgprint
+		messages.clear()
+		lifecycle_mapping = [{
+			"mapping": frappe._dict({"main_company": "Main Co", "auto_create_draft": 1}),
+			"linked_company": linked_co,
+			"company": "Sister Co",
+			"direction": "main_to_other",
+			"target_doctype": "Journal Entry",
+		}]
+		with patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_lifecycle.find_applicable_mappings",
+			return_value=lifecycle_mapping,
+		), patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_lifecycle.validate_intercompany_cross_currency_rate"
+		), patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_lifecycle.validate_required_parties"
+		), patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_lifecycle.validate_intercompany_items"
+		), patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_lifecycle.create_document_reference"
+		), patch.object(
+			frappe, "new_doc", side_effect=lambda dt: FakeJEDoc(dt)
+		), patch.object(
+			frappe.db, "exists", side_effect=strict_exists
+		), patch.object(
+			frappe.db, "get_value", side_effect=mock_get_value
+		), patch.object(
+			frappe, "msgprint", side_effect=lambda msg, **kw: messages.append(str(msg))
+		):
+			create_linked_documents(src_je)
+			self.assertEqual(messages, ["Created draft Journal Entry ACC-JV-2026-00001 in company Sister Co"])
+
+		self.assertNotIn("Journal Entry Type", queried_exists)
 

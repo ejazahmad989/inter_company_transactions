@@ -247,7 +247,7 @@ class InterCompanyNettingCycle(Document):
 
 			# Create intercompany clearing entry
 			je = frappe.new_doc("Journal Entry")
-			je.voucher_type = "Inter Company Journal Entry" if frappe.db.exists("Journal Entry Type", "Inter Company Journal Entry") else "Journal Entry"
+			je.voucher_type = "Journal Entry"
 			je.company = payer
 			je.posting_date = date
 			je.user_remark = f"Multilateral Netting Settlement for Cycle {self.name}: Paid to {receiver}"

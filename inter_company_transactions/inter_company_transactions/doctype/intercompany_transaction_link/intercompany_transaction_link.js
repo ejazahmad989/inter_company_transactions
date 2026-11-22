@@ -248,11 +248,7 @@ frappe.ui.form.on('Intercompany Linked Company', {
 
 				const is_same_currency = d.same_currency !== false;
 				const auto_fields = [
-					'main_company_customer',
-					'main_company_supplier',
 					'main_company_account',
-					'other_company_customer',
-					'other_company_supplier',
 					'other_company_account'
 				];
 				if (is_same_currency) {
@@ -305,7 +301,7 @@ frappe.ui.form.on('Intercompany Linked Company', {
 					}, 7);
 				} else if (filled > 0) {
 					frappe.show_alert({
-						message: __('Auto-matched {0} existing party/account/warehouse field(s) for {1}.', [
+						message: __('Auto-matched {0} existing clearing account/warehouse field(s) for {1}. Select Customer and Supplier manually.', [
 							filled,
 							frappe.utils.escape_html(row.company)
 						]),

@@ -207,11 +207,7 @@ def create_journal_entry_from_lcv(source_lcv, mapping, linked_company, direction
 		)
 
 	je.posting_date = getattr(source_lcv, "posting_date", None) or nowdate()
-	je.voucher_type = (
-		"Inter Company Journal Entry"
-		if frappe.db.exists("Journal Entry Type", "Inter Company Journal Entry")
-		else "Journal Entry"
-	)
+	je.voucher_type = "Journal Entry"
 
 	tax_descs = []
 	for tax in (source_lcv.get("taxes") or []):
@@ -324,11 +320,7 @@ def create_journal_entry(source_je, mapping, linked_company, direction):
 		tmp_account = clear_fn(je.company, source_je.company)
 
 	je.posting_date = getattr(source_je, "posting_date", None) or nowdate()
-	je.voucher_type = (
-		"Inter Company Journal Entry"
-		if hasattr(frappe, "db") and frappe.db and frappe.db.exists("Journal Entry Type", "Inter Company Journal Entry")
-		else "Journal Entry"
-	)
+	je.voucher_type = "Journal Entry"
 	je.user_remark = f"Auto-generated from {source_je.doctype} {source_je.name} " + (getattr(source_je, "user_remark", None) or "")
 
 	source_company_currency = (

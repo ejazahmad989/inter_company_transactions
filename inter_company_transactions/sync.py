@@ -509,19 +509,33 @@ def receive_remote_transaction(payload: dict | str | bytes | None = None):
 				return flt(1.0 / src_conv, 9)
 		return flt(lookup_intercompany_exchange_rate(from_ccy, to_ccy, tx_date) or 1.0, 9)
 
-	# Resolve Party (Customer or Supplier)
-	party_name = resolve_counterparty_for_remote_source(source_company, target_doctype, target_company)
+	# Resolve Party (Customer or Supplier) only for voucher types that require one
+	party_name = None
 	party_dt = None
 	if target_doctype in ["Purchase Order", "Purchase Invoice", "Purchase Receipt", "Supplier Quotation"]:
+		party_name = resolve_counterparty_for_remote_source(source_company, target_doctype, target_company, party_doctype_override="Supplier")
 		target_doc.supplier = party_name
 		party_dt = "Supplier"
 	elif target_doctype == "Quotation":
+		party_name = resolve_counterparty_for_remote_source(source_company, target_doctype, target_company, party_doctype_override="Customer")
 		target_doc.quotation_to = "Customer"
 		target_doc.party_name = party_name
 		party_dt = "Customer"
 	elif target_doctype in ["Sales Order", "Sales Invoice", "Delivery Note"]:
+		party_name = resolve_counterparty_for_remote_source(source_company, target_doctype, target_company, party_doctype_override="Customer")
 		target_doc.customer = party_name
 		party_dt = "Customer"
+	elif target_doctype == "Payment Entry":
+		pe_inv_type = "Pay" if data.get("payment_type") == "Receive" else "Receive"
+		pe_party_dt = "Supplier" if pe_inv_type == "Pay" else "Customer"
+		party_name = resolve_counterparty_for_remote_source(source_company, target_doctype, target_company, party_doctype_override=pe_party_dt)
+		party_dt = pe_party_dt
+	elif target_doctype == "Journal Entry" and source_doctype == "Landed Cost Voucher":
+		try:
+			party_name = resolve_counterparty_for_remote_source(source_company, target_doctype, target_company, party_doctype_override="Supplier")
+			party_dt = "Supplier"
+		except Exception:
+			party_name = None
 
 	# Resolve currency, conversion_rate, and item rate_factor cleanly for trading vouchers
 	src_voucher_ccy = data.get("currency") or source_company_ccy or target_company_ccy
@@ -595,7 +609,7 @@ def receive_remote_transaction(payload: dict | str | bytes | None = None):
 
 	# Journal Entry specifics (including remote Landed Cost Voucher -> Journal Entry)
 	if target_doctype == "Journal Entry":
-		target_doc.voucher_type = "Inter Company Journal Entry" if frappe.db.exists("Journal Entry Type", "Inter Company Journal Entry") else "Journal Entry"
+		target_doc.voucher_type = "Journal Entry"
 		target_doc.user_remark = data.get("remarks")
 		je_fx = _remote_fx(source_company_ccy, target_company_ccy)
 		if source_company_ccy and target_company_ccy and source_company_ccy != target_company_ccy:
@@ -747,18 +761,54 @@ def receive_remote_transaction(payload: dict | str | bytes | None = None):
 	}
 
 
-def resolve_counterparty_for_remote_source(source_company, target_doctype, target_company):
+def resolve_counterparty_for_remote_source(source_company, target_doctype, target_company, party_doctype_override=None):
 	"""
-	Resolves or auto-provisions internal Customer/Supplier for the remote sister entity
-	using standard ERPNext fields (`is_internal_customer`/`is_internal_supplier`,
-	`represents_company`, and `allowed_to_transact_with`).
-	Compatible with ERPNext v15 and v16.
+	Resolves an existing Customer/Supplier for the remote sister entity without
+	auto-creating parties or falling back to unrelated parties.
+	Checks Intercompany Transaction Link first, then standard ERPNext fields
+	(`is_internal_customer`/`is_internal_supplier`, `represents_company`),
+	then exact company name match. Compatible with ERPNext v15 and v16.
 	"""
-	is_supplier = target_doctype in ["Purchase Order", "Purchase Invoice", "Purchase Receipt", "Supplier Quotation"]
+	is_supplier = (
+		party_doctype_override == "Supplier"
+		if party_doctype_override in ("Customer", "Supplier")
+		else target_doctype in ["Purchase Order", "Purchase Invoice", "Purchase Receipt", "Supplier Quotation"]
+	)
 	party_doctype = "Supplier" if is_supplier else "Customer"
 	internal_flag = "is_internal_supplier" if is_supplier else "is_internal_customer"
 
-	# 1. Search by standard ERPNext represents_company + internal flag
+	# 1. Check explicitly configured Intercompany Transaction Link mapping first
+	try:
+		if frappe.db.exists("DocType", "Intercompany Transaction Link") and target_company:
+			links = frappe.get_all(
+				"Intercompany Transaction Link",
+				filters={"enabled": 1},
+				fields=["name", "main_company"],
+			)
+			for link in (links or []):
+				rows = frappe.get_all(
+					"Intercompany Linked Company",
+					filters={"parent": link.name},
+					fields=[
+						"company",
+						"main_company_customer",
+						"main_company_supplier",
+						"other_company_customer",
+						"other_company_supplier",
+					],
+				)
+				for row in (rows or []):
+					party = None
+					if link.main_company == target_company and row.company == source_company:
+						party = row.main_company_supplier if is_supplier else row.main_company_customer
+					elif link.main_company == source_company and row.company == target_company:
+						party = row.other_company_supplier if is_supplier else row.other_company_customer
+					if party:
+						return party
+	except Exception:
+		pass
+
+	# 2. Search by standard ERPNext represents_company + internal flag
 	try:
 		filters = {"represents_company": source_company}
 		if frappe.db.has_column(party_doctype, internal_flag):
@@ -774,7 +824,7 @@ def resolve_counterparty_for_remote_source(source_company, target_doctype, targe
 	except Exception:
 		pass
 
-	# 2. Check if party with source_company exact name exists
+	# 3. Check if party with exact source_company name exists
 	if frappe.db.exists(party_doctype, source_company):
 		return source_company
 
@@ -782,51 +832,12 @@ def resolve_counterparty_for_remote_source(source_company, target_doctype, targe
 	if frappe.db.exists(party_doctype, internal_named):
 		return internal_named
 
-	# 3. Auto-provision standard ERPNext internal party representing the remote company
-	try:
-		new_party = frappe.new_doc(party_doctype)
-		if is_supplier:
-			new_party.supplier_name = source_company
-			new_party.supplier_type = "Company"
-			new_party.supplier_group = (
-				frappe.db.get_value("Supplier Group", {"is_group": 0}, "name")
-				or "All Supplier Groups"
-			)
-			if frappe.db.has_column("Supplier", "is_internal_supplier"):
-				new_party.is_internal_supplier = 1
-		else:
-			new_party.customer_name = source_company
-			new_party.customer_type = "Company"
-			new_party.customer_group = (
-				frappe.db.get_value("Customer Group", {"is_group": 0}, "name")
-				or "All Customer Groups"
-			)
-			new_party.territory = (
-				frappe.db.get_value("Territory", {"is_group": 0}, "name")
-				or "All Territories"
-			)
-			if frappe.db.has_column("Customer", "is_internal_customer"):
-				new_party.is_internal_customer = 1
-
-		new_party.represents_company = source_company
-
-		# Populate allowed_to_transact_with child table when target_company exists in DB
-		if (
-			target_company
-			and frappe.db.exists("Company", target_company)
-			and hasattr(new_party, "append")
-			and new_party.meta.get_field("allowed_to_transact_with")
-		):
-			new_party.append("allowed_to_transact_with", {"company": target_company})
-
-		new_party.flags.ignore_permissions = True
-		new_party.flags.ignore_mandatory = True
-		new_party.insert(ignore_permissions=True)
-		return new_party.name
-	except Exception:
-		# 4. Safe fallback only if party creation fails
-		first_party = frappe.db.get_value(party_doctype, {}, "name")
-		return first_party or source_company
+	frappe.throw(
+		_(
+			"No existing {0} found for remote company {1} in {2}. "
+			"Please create the {0} manually in ERPNext and select it in Intercompany Transaction Link."
+		).format(party_doctype, source_company, target_company or "")
+	)
 
 
 def resolve_item_code_for_remote(source_item_code, target_company):

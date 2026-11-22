@@ -219,23 +219,6 @@ def get_console_dashboard_data():
 	return data
 
 
-def _ensure_allowed_to_transact_with(party_name, party_doctype, allowed_company):
-	"""Ensure standard ERPNext allowed_to_transact_with child row is populated for v15/v16 compatibility."""
-	if not (party_name and allowed_company and frappe.db.exists(party_doctype, party_name)):
-		return
-	try:
-		party_doc = frappe.get_doc(party_doctype, party_name)
-		if not party_doc.meta.get_field("allowed_to_transact_with"):
-			return
-		existing = [r.company for r in (party_doc.get("allowed_to_transact_with") or [])]
-		if allowed_company not in existing:
-			party_doc.append("allowed_to_transact_with", {"company": allowed_company})
-			party_doc.flags.ignore_permissions = True
-			party_doc.save(ignore_permissions=True)
-	except Exception:
-		pass
-
-
 @frappe.whitelist()
 def quick_setup_intercompany_pair(
 	main_company: str,
@@ -245,9 +228,9 @@ def quick_setup_intercompany_pair(
 ):
 	"""
 	1-Click Setup Wizard:
-	Effortlessly connects two sister companies, configures internal customer/supplier
-	(including ERPNext allowed_to_transact_with), compliant clearing accounts,
-	transit warehouses, and activates selected transaction mirroring rules.
+	Connects two sister companies, configures compliant clearing accounts,
+	transit warehouses (for same-currency pairs), and selected transaction mirroring rules
+	without auto-creating or auto-assigning Customer/Supplier records.
 	"""
 	frappe.only_for(["System Manager", "Accounts Manager"])
 	if not main_company or not counterparty_company:
@@ -261,95 +244,18 @@ def quick_setup_intercompany_pair(
 		get_or_create_intercompany_warehouse,
 	)
 
-	# 1. Find or create internal Customer representing counterparty_company (for Main Company to bill)
-	main_cust = frappe.db.get_value("Customer", {"represents_company": counterparty_company}, "name")
-	if not main_cust:
-		cust_name = f"{counterparty_company} (Internal)"
-		if not frappe.db.exists("Customer", cust_name):
-			cust = frappe.new_doc("Customer")
-			cust.customer_name = cust_name
-			cust.customer_type = "Company"
-			cust.customer_group = frappe.db.get_value("Customer Group", {"is_group": 0}, "name") or "All Customer Groups"
-			cust.territory = frappe.db.get_value("Territory", {"is_group": 0}, "name") or "All Territories"
-			cust.is_internal_customer = 1
-			cust.represents_company = counterparty_company
-			if cust.meta.get_field("allowed_to_transact_with"):
-				cust.append("allowed_to_transact_with", {"company": main_company})
-			cust.flags.ignore_permissions = True
-			cust.insert()
-			main_cust = cust.name
-		else:
-			main_cust = cust_name
-	_ensure_allowed_to_transact_with(main_cust, "Customer", main_company)
-
-	# 2. Find or create internal Supplier representing counterparty_company (for Main Company to purchase from)
-	main_supp = frappe.db.get_value("Supplier", {"represents_company": counterparty_company}, "name")
-	if not main_supp:
-		supp_name = f"{counterparty_company} (Internal)"
-		if not frappe.db.exists("Supplier", supp_name):
-			supp = frappe.new_doc("Supplier")
-			supp.supplier_name = supp_name
-			supp.supplier_type = "Company"
-			supp.supplier_group = frappe.db.get_value("Supplier Group", {"is_group": 0}, "name") or "All Supplier Groups"
-			supp.is_internal_supplier = 1
-			supp.represents_company = counterparty_company
-			if supp.meta.get_field("allowed_to_transact_with"):
-				supp.append("allowed_to_transact_with", {"company": main_company})
-			supp.flags.ignore_permissions = True
-			supp.insert()
-			main_supp = supp.name
-		else:
-			main_supp = supp_name
-	_ensure_allowed_to_transact_with(main_supp, "Supplier", main_company)
-
-	# 3. Find or create internal Customer representing main_company (for Counterparty Company to bill)
-	other_cust = frappe.db.get_value("Customer", {"represents_company": main_company}, "name")
-	if not other_cust:
-		other_cust_name = f"{main_company} (Internal)"
-		if not frappe.db.exists("Customer", other_cust_name):
-			ocust = frappe.new_doc("Customer")
-			ocust.customer_name = other_cust_name
-			ocust.customer_type = "Company"
-			ocust.customer_group = frappe.db.get_value("Customer Group", {"is_group": 0}, "name") or "All Customer Groups"
-			ocust.territory = frappe.db.get_value("Territory", {"is_group": 0}, "name") or "All Territories"
-			ocust.is_internal_customer = 1
-			ocust.represents_company = main_company
-			if ocust.meta.get_field("allowed_to_transact_with"):
-				ocust.append("allowed_to_transact_with", {"company": counterparty_company})
-			ocust.flags.ignore_permissions = True
-			ocust.insert()
-			other_cust = ocust.name
-		else:
-			other_cust = other_cust_name
-	_ensure_allowed_to_transact_with(other_cust, "Customer", counterparty_company)
-
-	# 4. Find or create internal Supplier representing main_company (for Counterparty Company to purchase from)
-	other_supp = frappe.db.get_value("Supplier", {"represents_company": main_company}, "name")
-	if not other_supp:
-		other_supp_name = f"{main_company} (Internal)"
-		if not frappe.db.exists("Supplier", other_supp_name):
-			osupp = frappe.new_doc("Supplier")
-			osupp.supplier_name = other_supp_name
-			osupp.supplier_type = "Company"
-			osupp.supplier_group = frappe.db.get_value("Supplier Group", {"is_group": 0}, "name") or "All Supplier Groups"
-			osupp.is_internal_supplier = 1
-			osupp.represents_company = main_company
-			if osupp.meta.get_field("allowed_to_transact_with"):
-				osupp.append("allowed_to_transact_with", {"company": counterparty_company})
-			osupp.flags.ignore_permissions = True
-			osupp.insert()
-			other_supp = osupp.name
-		else:
-			other_supp = other_supp_name
-	_ensure_allowed_to_transact_with(other_supp, "Supplier", counterparty_company)
-
-	# 5. Provision GAAP/IFRS compliant intercompany clearing accounts & transit warehouses
+	# 1. Provision GAAP/IFRS compliant intercompany clearing accounts & same-currency transit warehouses
 	main_clearing_account = get_or_create_intercompany_clearing_account(main_company, counterparty_company)
 	other_clearing_account = get_or_create_intercompany_clearing_account(counterparty_company, main_company)
-	main_warehouse = get_or_create_intercompany_warehouse(main_company)
-	other_warehouse = get_or_create_intercompany_warehouse(counterparty_company)
 
-	# 6. Determine mapping rules to apply based on preset
+	main_currency = frappe.db.get_value("Company", main_company, "default_currency")
+	other_currency = frappe.db.get_value("Company", counterparty_company, "default_currency")
+	same_currency = not (main_currency and other_currency and main_currency != other_currency)
+
+	main_warehouse = get_or_create_intercompany_warehouse(main_company) if same_currency else None
+	other_warehouse = get_or_create_intercompany_warehouse(counterparty_company) if same_currency else None
+
+	# 2. Determine mapping rules to apply based on preset
 	trading_rules = [
 		("Sales Order", "Purchase Order", "Both"),
 		("Purchase Order", "Sales Order", "Both"),
@@ -381,7 +287,7 @@ def quick_setup_intercompany_pair(
 	else:
 		selected_mappings = trading_rules + financial_rules + stock_rules
 
-	# 7. Check if link already exists for main_company
+	# 3. Check if link already exists for main_company
 	existing_link = frappe.db.get_value("Intercompany Transaction Link", {"main_company": main_company}, "name")
 
 	if existing_link:
@@ -393,21 +299,18 @@ def quick_setup_intercompany_pair(
 					row.main_company_account = main_clearing_account
 				if not row.other_company_account and other_clearing_account:
 					row.other_company_account = other_clearing_account
-				if not getattr(row, "main_company_warehouse", None) and main_warehouse:
-					row.main_company_warehouse = main_warehouse
-				if not getattr(row, "other_company_warehouse", None) and other_warehouse:
-					row.other_company_warehouse = other_warehouse
+				if same_currency:
+					if not getattr(row, "main_company_warehouse", None) and main_warehouse:
+						row.main_company_warehouse = main_warehouse
+					if not getattr(row, "other_company_warehouse", None) and other_warehouse:
+						row.other_company_warehouse = other_warehouse
 				found = True
 				break
 		if not found:
 			link_doc.append("linked_companies", {
 				"company": counterparty_company,
-				"main_company_customer": main_cust,
-				"main_company_supplier": main_supp,
 				"main_company_account": main_clearing_account,
 				"main_company_warehouse": main_warehouse,
-				"other_company_customer": other_cust,
-				"other_company_supplier": other_supp,
 				"other_company_account": other_clearing_account,
 				"other_company_warehouse": other_warehouse,
 			})
@@ -435,12 +338,8 @@ def quick_setup_intercompany_pair(
 		link_doc.auto_cancel_linked_document = 1
 		link_doc.append("linked_companies", {
 			"company": counterparty_company,
-			"main_company_customer": main_cust,
-			"main_company_supplier": main_supp,
 			"main_company_account": main_clearing_account,
 			"main_company_warehouse": main_warehouse,
-			"other_company_customer": other_cust,
-			"other_company_supplier": other_supp,
 			"other_company_account": other_clearing_account,
 			"other_company_warehouse": other_warehouse,
 		})
@@ -459,5 +358,8 @@ def quick_setup_intercompany_pair(
 	return {
 		"success": True,
 		"link_name": link_name,
-		"message": _("Intercompany relationship and transaction rules successfully established between {0} and {1}.").format(main_company, counterparty_company)
+		"message": _(
+			"Intercompany relationship and transaction rules established between {0} and {1}. "
+			"Please select the Customer and Supplier manually in Intercompany Transaction Link."
+		).format(main_company, counterparty_company),
 	}

@@ -104,7 +104,7 @@ function build_console_ui($container, data) {
 						</div>
 						<h4 class="mb-1 font-weight-bold text-white">${__('Inter-Company Orchestration & Automation Hub')}</h4>
 						<p class="mb-0" style="color: #d1d5db; font-size: 13.5px; max-width: 720px;">
-							${__('Seamlessly mirror orders, shipments, and invoices between sister companies with automated party creation, OECD transfer pricing, multilateral netting, and period-end elimination.')}
+							${__('Seamlessly mirror orders, shipments, and invoices between sister companies with OECD transfer pricing, multilateral netting, and period-end elimination.')}
 						</p>
 					</div>
 					<div class="col-lg-4 text-lg-right">
@@ -346,7 +346,7 @@ function open_quick_setup_wizard() {
 					</div>
 					<div class="alert alert-info" style="font-size: 12.5px; margin-bottom: 20px;">
 						<i class="fa fa-info-circle mr-1"></i>
-						${__('The wizard will establish bidirectional trade between two sister companies, automatically generate Internal Customer and Supplier parties in each entity, detect clearing accounts, and configure mirroring rules.')}
+						${__('The wizard will establish bidirectional trade between two sister companies, detect clearing accounts, and configure mirroring rules. Select Customers and Suppliers manually in Intercompany Transaction Link.')}
 					</div>
 				`
 			},

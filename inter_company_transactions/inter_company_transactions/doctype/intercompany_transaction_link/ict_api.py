@@ -42,9 +42,10 @@ _SUPPORTED_INTERCOMPANY_DOCTYPES = {
 
 def scan_linked_company_defaults_impl(main_company, other_company):
 	"""
-	Read-only CoA & Party scanner for Intercompany Linked Company rows.
-	Finds matching internal Customers/Suppliers, existing Bank/Cash TMP-<ABBR> clearing accounts,
-	and transit warehouses (only when both companies share the same base currency).
+	Read-only CoA & warehouse scanner for Intercompany Linked Company rows.
+	Finds existing Bank/Cash TMP-<ABBR> clearing accounts and transit warehouses
+	(only when both companies share the same base currency).
+	Customer and Supplier fields remain unset so users choose them explicitly.
 	"""
 	result = {
 		"main_company_customer": None,
@@ -71,58 +72,8 @@ def scan_linked_company_defaults_impl(main_company, other_company):
 	result["other_currency"] = other_currency
 	result["same_currency"] = bool(same_currency)
 
-	def _find_internal_party(owner_co, counterparty_co, party_dt):
-		if not frappe.db.table_exists(party_dt):
-			return None
-		if party_dt == "Customer":
-			rows = frappe.db.sql(
-				"""
-				SELECT p.name
-				FROM `tabCustomer` p
-				WHERE (p.disabled IS NULL OR p.disabled = 0)
-				  AND p.`is_internal_customer` = 1
-				  AND p.represents_company = %s
-				ORDER BY
-				  EXISTS (
-				    SELECT 1 FROM `tabAllowed To Transact With` att
-				    WHERE att.parent = p.name AND att.parenttype = %s AND att.company = %s
-				  ) DESC,
-				  p.modified DESC
-				LIMIT 1
-				""",
-				(counterparty_co, party_dt, owner_co),
-				as_dict=True,
-			)
-		elif party_dt == "Supplier":
-			rows = frappe.db.sql(
-				"""
-				SELECT p.name
-				FROM `tabSupplier` p
-				WHERE (p.disabled IS NULL OR p.disabled = 0)
-				  AND p.`is_internal_supplier` = 1
-				  AND p.represents_company = %s
-				ORDER BY
-				  EXISTS (
-				    SELECT 1 FROM `tabAllowed To Transact With` att
-				    WHERE att.parent = p.name AND att.parenttype = %s AND att.company = %s
-				  ) DESC,
-				  p.modified DESC
-				LIMIT 1
-				""",
-				(counterparty_co, party_dt, owner_co),
-				as_dict=True,
-			)
-		else:
-			return None
-		return rows[0].name if rows else None
-
 	find_acct_fn = _facade_fn("find_existing_clearing_account", find_existing_clearing_account)
 	get_wh_fn = _facade_fn("get_intercompany_warehouse", get_intercompany_warehouse)
-
-	result["main_company_customer"] = _find_internal_party(main_company, other_company, "Customer")
-	result["main_company_supplier"] = _find_internal_party(main_company, other_company, "Supplier")
-	result["other_company_customer"] = _find_internal_party(other_company, main_company, "Customer")
-	result["other_company_supplier"] = _find_internal_party(other_company, main_company, "Supplier")
 
 	result["main_company_account"] = find_acct_fn(main_company, other_company)
 	result["other_company_account"] = find_acct_fn(other_company, main_company)
