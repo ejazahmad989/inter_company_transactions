@@ -44,5 +44,4 @@ Open **Inter Company Settings** in Desk to choose:
 
 ## Support
 
-- **Publisher:** Ejaz Tech (`ejazahmad989@gmail.com`)
-- **Support:** `rahilali3311@gmail.com`
+- **Publisher:** Ejaz Tech & Rahil Ali

@@ -114,7 +114,7 @@ Automatically creates, submits, or cancels reciprocal mirror documents in real-t
 | ![MAIN Chart of Accounts](../screenshots/main_coa.png) | ![ABC Chart of Accounts](../screenshots/abc_coa.png) | ![John Chart of Accounts](../screenshots/john_coa.png) |
 
 ### 2. Intercompany Transaction Link & Matrix Configuration
-| Transaction Link Master | Main Company & Transit Warehouses | Other Company Settings | Supported Transaction Types (15 Pairs) |
+| Transaction Link Master | Main Company & Transit Warehouses | Other Company Settings | Supported Transaction Types (14 DocTypes) |
 |---|---|---|---|
 | ![Intercompany Transaction Link](../screenshots/transaction_link.png) | ![Main Company Settings](../screenshots/transaction_link_A.png) | ![Other Company Settings](../screenshots/transaction_link_other_company_settings.png) | ![Transaction Types](../screenshots/transaction_link_Transaction_type.png) |
 
@@ -142,7 +142,7 @@ Automatically creates, submits, or cancels reciprocal mirror documents in real-t
 2. Click **Add Intercompany Transaction Link**.
 3. Select your **Main Company**.
 4. In **Linked Companies**, add your sister companies along with internal customer, supplier, transit warehouse, and `TMP-*` clearing accounts.
-5. In **Transaction Types**, define which transactions to mirror (all 15 pairs can be populated in one click).
+5. In **Transaction Types**, define which transactions to mirror (all supported pairs across the 14 DocTypes can be populated in one click).
 6. Click **Save**.
 
 ### 2. Multi-Currency Setup (e.g., PKR ↔ USD)
