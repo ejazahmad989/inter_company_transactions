@@ -151,7 +151,7 @@ def create_sales_invoice(source_doc, mapping, linked_company, direction, setting
 		si.set_missing_values(for_validate=True)
 	except Exception:
 		pass
-	_preserve_intercompany_currency_after_defaults(si, target_currency, conversion_rate, si.posting_date)
+	_preserve_intercompany_currency_after_defaults(si, target_currency, conversion_rate, si.posting_date, source_doc=source_doc)
 
 	si.docstatus = 0
 	return si
@@ -236,7 +236,7 @@ def create_purchase_invoice(source_doc, mapping, linked_company, direction, sett
 		pi.set_missing_values(for_validate=True)
 	except Exception:
 		pass
-	_preserve_intercompany_currency_after_defaults(pi, target_currency, conversion_rate, pi.posting_date)
+	_preserve_intercompany_currency_after_defaults(pi, target_currency, conversion_rate, pi.posting_date, source_doc=source_doc)
 
 	pi.docstatus = 0
 	return pi
@@ -303,7 +303,7 @@ def create_purchase_order(sales_order, mapping, linked_company, direction, setti
 		po.set_missing_values(for_validate=True)
 	except Exception:
 		pass
-	_preserve_intercompany_currency_after_defaults(po, target_currency, conversion_rate, po.transaction_date)
+	_preserve_intercompany_currency_after_defaults(po, target_currency, conversion_rate, po.transaction_date, source_doc=sales_order)
 
 	po.docstatus = 0
 	return po
@@ -370,7 +370,7 @@ def create_sales_order(purchase_order, mapping, linked_company, direction, setti
 		so.set_missing_values(for_validate=True)
 	except Exception:
 		pass
-	_preserve_intercompany_currency_after_defaults(so, target_currency, conversion_rate, so.transaction_date)
+	_preserve_intercompany_currency_after_defaults(so, target_currency, conversion_rate, so.transaction_date, source_doc=purchase_order)
 
 	so.docstatus = 0
 	return so
@@ -443,7 +443,7 @@ def create_delivery_note(purchase_receipt, mapping, linked_company, direction, s
 		dn.set_missing_values(for_validate=True)
 	except Exception:
 		pass
-	_preserve_intercompany_currency_after_defaults(dn, target_currency, conversion_rate, dn.posting_date)
+	_preserve_intercompany_currency_after_defaults(dn, target_currency, conversion_rate, dn.posting_date, source_doc=purchase_receipt)
 
 	dn.docstatus = 0
 	return dn
@@ -516,7 +516,7 @@ def create_purchase_receipt(delivery_note, mapping, linked_company, direction, s
 		pr.set_missing_values(for_validate=True)
 	except Exception:
 		pass
-	_preserve_intercompany_currency_after_defaults(pr, target_currency, conversion_rate, pr.posting_date)
+	_preserve_intercompany_currency_after_defaults(pr, target_currency, conversion_rate, pr.posting_date, source_doc=delivery_note)
 
 	pr.docstatus = 0
 	return pr
@@ -577,7 +577,7 @@ def create_quotation(supplier_quotation, mapping, linked_company, direction, set
 		q.set_missing_values(for_validate=True)
 	except Exception:
 		pass
-	_preserve_intercompany_currency_after_defaults(q, target_currency, conversion_rate, q.transaction_date)
+	_preserve_intercompany_currency_after_defaults(q, target_currency, conversion_rate, q.transaction_date, source_doc=supplier_quotation)
 
 	q.docstatus = 0
 	return q
@@ -637,7 +637,7 @@ def create_supplier_quotation(quotation, mapping, linked_company, direction, set
 		sq.set_missing_values(for_validate=True)
 	except Exception:
 		pass
-	_preserve_intercompany_currency_after_defaults(sq, target_currency, conversion_rate, sq.transaction_date)
+	_preserve_intercompany_currency_after_defaults(sq, target_currency, conversion_rate, sq.transaction_date, source_doc=quotation)
 
 	sq.docstatus = 0
 	return sq

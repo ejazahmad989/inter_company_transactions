@@ -94,8 +94,24 @@ def lookup_intercompany_exchange_rate(from_currency, to_currency, transaction_da
 
 	try:
 		if frappe.db.exists("DocType", "Currency Exchange Settings"):
-			use_http = frappe.db.get_single_value("Currency Exchange Settings", "use_httpclient")
-			if cint(use_http):
+			meta = frappe.get_meta("Currency Exchange Settings") if hasattr(frappe, "get_meta") else None
+			should_query_ext = False
+			if meta and hasattr(meta, "has_field") and meta.has_field("use_httpclient"):
+				should_query_ext = bool(cint(frappe.db.get_single_value("Currency Exchange Settings", "use_httpclient")))
+			elif meta and hasattr(meta, "has_field"):
+				is_disabled = (
+					bool(cint(frappe.db.get_single_value("Currency Exchange Settings", "disabled")))
+					if meta.has_field("disabled")
+					else False
+				)
+				has_provider = (
+					bool(frappe.db.get_single_value("Currency Exchange Settings", "service_provider"))
+					if meta.has_field("service_provider")
+					else False
+				)
+				should_query_ext = (not is_disabled) and has_provider
+
+			if should_query_ext:
 				from erpnext.setup.utils import get_exchange_rate
 
 				prev_mute = getattr(frappe.flags, "mute_messages", False)
@@ -223,6 +239,13 @@ def check_intercompany_exchange_rate_impl(
 	else:
 		rate = lookup_fn(src_ccy, tgt_ccy, tx_date)
 
+	doc_currency_rate = None
+	if doc_currency and doc_currency != src_ccy:
+		if flt(conversion_rate) > 0:
+			doc_currency_rate = _safe_flt(conversion_rate, 9)
+		else:
+			doc_currency_rate = lookup_fn(doc_currency, src_ccy, tx_date)
+
 	return {
 		"required": True,
 		"has_rate": bool(rate and flt(rate) > 0),
@@ -230,6 +253,8 @@ def check_intercompany_exchange_rate_impl(
 		"to_currency": tgt_ccy,
 		"exchange_rate": _safe_flt(rate, 9) if rate else None,
 		"inverse_rate": _safe_flt(1.0 / flt(rate), 9) if rate else None,
+		"doc_currency": doc_currency,
+		"doc_currency_rate": _safe_flt(doc_currency_rate, 9) if doc_currency_rate else None,
 		"transaction_date": tx_date,
 	}
 
@@ -375,7 +400,17 @@ def resolve_intercompany_currency_and_rate(source_doc, target_company, party_typ
 	if party_type and party_name and frappe.db.exists(party_type, party_name):
 		party_currency = frappe.db.get_value(party_type, party_name, "default_currency")
 
-	target_currency = party_currency or source_currency or target_company_currency
+	if party_currency:
+		target_currency = party_currency
+	elif (
+		source_company_currency
+		and target_company_currency
+		and source_company_currency != target_company_currency
+		and source_currency == target_company_currency
+	):
+		target_currency = source_company_currency
+	else:
+		target_currency = source_currency or target_company_currency
 
 	if target_currency == target_company_currency:
 		conversion_rate = 1.0
@@ -400,7 +435,7 @@ def resolve_intercompany_currency_and_rate(source_doc, target_company, party_typ
 	return target_currency, (_safe_flt(conversion_rate, 9) or 1.0), (_safe_flt(rate_factor, 9) or 1.0)
 
 
-def _preserve_intercompany_currency_after_defaults(target_doc, target_currency, conversion_rate, date=None):
+def _preserve_intercompany_currency_after_defaults(target_doc, target_currency, conversion_rate, date=None, source_doc=None):
 	"""Re-apply exact intercompany currency and conversion_rate after ERPNext set_missing_values."""
 	if not target_doc:
 		return
@@ -417,6 +452,9 @@ def _preserve_intercompany_currency_after_defaults(target_doc, target_currency, 
 			target_doc.plc_conversion_rate = conversion_rate
 		elif tgt_comp_ccy and plc != tgt_comp_ccy:
 			if abs(flt(getattr(target_doc, "plc_conversion_rate", 0))) <= 0:
-				target_doc.plc_conversion_rate = get_intercompany_exchange_rate(plc, tgt_comp_ccy, date)
+				target_doc.plc_conversion_rate = (
+					extract_document_exchange_rate(source_doc, plc, tgt_comp_ccy)
+					or get_intercompany_exchange_rate(plc, tgt_comp_ccy, date)
+				)
 		else:
 			target_doc.plc_conversion_rate = 1.0

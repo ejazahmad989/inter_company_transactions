@@ -3245,5 +3245,189 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 					previous=prev_pe,
 				)
 
+	def test_lookup_exchange_rate_v16_no_use_httpclient_field(self):
+		"""Verify v16 Currency Exchange Settings without use_httpclient never throws/msgprints missing-field error and returns doc_currency_rate"""
+		from unittest.mock import patch
+
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			check_intercompany_exchange_rate,
+			lookup_intercompany_exchange_rate,
+		)
+
+		v16_meta = frappe._dict({
+			"has_field": lambda fn: fn in ("disabled", "service_provider"),
+		})
+
+		def strict_get_single_value(dt, fieldname):
+			if fieldname == "use_httpclient":
+				raise AssertionError("Must not query use_httpclient when field does not exist in v16")
+			if dt == "Currency Exchange Settings" and fieldname == "disabled":
+				return 1
+			return None
+
+		def mock_get_all(doctype, filters=None, **kwargs):
+			if doctype == "Currency Exchange" and filters == {"from_currency": "PKR", "to_currency": "USD", "date": ["<=", "2026-11-22"]}:
+				return [frappe._dict({"exchange_rate": 0.003636364})]
+			if doctype == "Currency Exchange" and filters == {"from_currency": "PKR", "to_currency": "USD"}:
+				return [frappe._dict({"exchange_rate": 0.003636364})]
+			return []
+
+		def mock_get_value(dt, name, fieldname=None, **kwargs):
+			if dt == "Company" and fieldname == "default_currency":
+				return "PKR" if name == "Main PKR Co" else "USD"
+			return None
+
+		with patch.object(
+			frappe.db, "exists", side_effect=lambda dt, name=None, **kw: dt == "DocType" and name in ("Currency Exchange", "Currency Exchange Settings")
+		), patch.object(
+			frappe, "get_meta", return_value=v16_meta
+		), patch.object(
+			frappe.db, "get_single_value", side_effect=strict_get_single_value
+		), patch.object(
+			frappe, "get_all", return_value=[]
+		):
+			self.assertIsNone(lookup_intercompany_exchange_rate("USD", "PKR", "2026-11-22"))
+
+		with patch.object(
+			frappe.db, "exists", side_effect=lambda dt, name=None, **kw: dt == "DocType" and name in ("Currency Exchange", "Currency Exchange Settings")
+		), patch.object(
+			frappe, "get_meta", return_value=v16_meta
+		), patch.object(
+			frappe.db, "get_single_value", side_effect=strict_get_single_value
+		), patch.object(
+			frappe.db, "get_value", side_effect=mock_get_value
+		), patch.object(
+			frappe, "get_all", side_effect=mock_get_all
+		):
+			info = check_intercompany_exchange_rate("Main PKR Co", "Sister USD Co", "2026-11-22", doc_currency="USD")
+			self.assertTrue(info["has_rate"])
+			self.assertAlmostEqual(info["doc_currency_rate"], 1.0 / 0.003636364, places=3)
+
+	def test_sales_order_foreign_currency_creates_po_with_inverse_exchange_rate(self):
+		"""Verify Sales Order in USD @ 275 (PKR Main Co) mirrors Purchase Order in PKR @ 0.003636364 (USD Sister Co)"""
+		from unittest.mock import patch
+
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			create_corresponding_document,
+		)
+		from inter_company_transactions.sync import receive_remote_transaction
+
+		class FakeTradingDoc:
+			def __init__(self, dt):
+				self.doctype = dt
+				self.items = []
+				self.flags = frappe._dict()
+				self.company = None
+				self.currency = None
+				self.conversion_rate = None
+				self.buying_price_list = "Standard Buying"
+				self.price_list_currency = "USD"
+				self.plc_conversion_rate = 1.0
+
+			def append(self, table, row):
+				getattr(self, table).append(frappe._dict(row))
+
+			def set_missing_values(self, for_validate=False):
+				pass
+
+			def get(self, key, default=None):
+				return getattr(self, key, default)
+
+			def insert(self, **kwargs):
+				self.name = "PUR-ORD-2026-00001"
+				return self
+
+		src_so = FakeTradingDoc("Sales Order")
+		src_so.name = "SAL-ORD-2026-00001"
+		src_so.company = "PKR Main Co"
+		src_so.transaction_date = "2026-11-22"
+		src_so.delivery_date = "2026-11-25"
+		src_so.currency = "USD"
+		src_so.conversion_rate = 275.0
+		src_so.append("items", {
+			"item_code": "DAIRY-01",
+			"item_name": "dairy america",
+			"description": "dairy america",
+			"qty": 2.0,
+			"uom": "Nos",
+			"rate": 10.0,
+		})
+
+		mapping = frappe._dict({"main_company": "PKR Main Co"})
+		linked_co = frappe._dict({
+			"company": "USD Sister Co",
+			"main_company_customer": "Sister USD Cust",
+			"other_company_customer": "Main PKR Cust",
+			"main_company_supplier": "Sister USD Supp",
+			"other_company_supplier": "Main PKR Supp",
+		})
+		mapping_info = {"mapping": mapping, "linked_company": linked_co, "target_doctype": "Purchase Order"}
+
+		def mock_get_value(dt, name=None, fieldname=None, **kwargs):
+			if dt == "Company" and fieldname == "default_currency":
+				return "PKR" if name == "PKR Main Co" else "USD"
+			if dt == "Supplier" and fieldname == "default_currency":
+				return None
+			if dt == "Item":
+				return frappe._dict({"item_name": "dairy america", "stock_uom": "Nos", "description": "dairy america"})
+			if dt == "Warehouse":
+				return "Stores - USD"
+			return None
+
+		with patch.object(frappe, "new_doc", side_effect=lambda dt: FakeTradingDoc(dt)), patch.object(
+			frappe, "get_all", return_value=[]
+		), patch.object(
+			frappe.db, "exists", side_effect=lambda dt, name=None, **kw: dt in ("Item", "Supplier")
+		), patch.object(
+			frappe.db, "get_value", side_effect=mock_get_value
+		):
+			po = create_corresponding_document(src_so, mapping_info, "main_to_other")
+			self.assertEqual(po.currency, "PKR")
+			self.assertAlmostEqual(po.conversion_rate, 1.0 / 275.0, places=6)
+			self.assertAlmostEqual(po.items[0].rate, 2750.0, places=2)
+			self.assertAlmostEqual(po.items[0].rate * po.conversion_rate, 10.0, places=2)
+
+		remote_payload = {
+			"source_doctype": "Sales Order",
+			"source_name": "SAL-ORD-2026-00001",
+			"source_company": "PKR Main Co",
+			"target_company": "USD Sister Co",
+			"source_company_currency": "PKR",
+			"transaction_date": "2026-11-22",
+			"schedule_date": "2026-11-25",
+			"currency": "USD",
+			"conversion_rate": 275.0,
+			"items": [
+				{"item_code": "DAIRY-01", "item_name": "dairy america", "qty": 2.0, "uom": "Nos", "rate": 10.0}
+			],
+		}
+		created_docs = []
+
+		def make_remote(dt):
+			d = FakeTradingDoc(dt)
+			created_docs.append(d)
+			return d
+
+		with patch.object(frappe, "new_doc", side_effect=make_remote), patch.object(
+			frappe, "get_all", return_value=[]
+		), patch(
+			"inter_company_transactions.sync.resolve_counterparty_for_remote_source", return_value="Main PKR Supp"
+		), patch(
+			"inter_company_transactions.sync.resolve_item_code_for_remote", return_value="DAIRY-01"
+		), patch.object(
+			frappe.db, "exists", side_effect=lambda dt, name=None, **kw: dt in ("Item", "Supplier", "Company", "DocType")
+		), patch.object(
+			frappe.db, "has_column", return_value=False
+		), patch.object(
+			frappe.db, "get_value", side_effect=mock_get_value
+		):
+			res = receive_remote_transaction(remote_payload)
+			self.assertTrue(res["success"])
+			rem_po = created_docs[0]
+			self.assertEqual(rem_po.currency, "PKR")
+			self.assertAlmostEqual(rem_po.conversion_rate, 1.0 / 275.0, places=6)
+			self.assertAlmostEqual(rem_po.items[0].rate, 2750.0, places=2)
+
+
 
 

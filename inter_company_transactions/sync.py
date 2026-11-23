@@ -542,7 +542,17 @@ def receive_remote_transaction(payload: dict | str | bytes | None = None):
 	party_ccy = None
 	if party_dt and party_name and frappe.db.exists(party_dt, party_name):
 		party_ccy = frappe.db.get_value(party_dt, party_name, "default_currency")
-	target_currency = party_ccy or src_voucher_ccy or target_company_ccy
+	if party_ccy:
+		target_currency = party_ccy
+	elif (
+		source_company_ccy
+		and target_company_ccy
+		and source_company_ccy != target_company_ccy
+		and src_voucher_ccy == target_company_ccy
+	):
+		target_currency = source_company_ccy
+	else:
+		target_currency = src_voucher_ccy or target_company_ccy
 	target_conv_rate = 1.0 if (not target_currency or not target_company_ccy or target_currency == target_company_ccy) else _remote_fx(target_currency, target_company_ccy)
 	item_rate_factor = 1.0 if (not src_voucher_ccy or not target_currency or src_voucher_ccy == target_currency) else _remote_fx(src_voucher_ccy, target_currency)
 

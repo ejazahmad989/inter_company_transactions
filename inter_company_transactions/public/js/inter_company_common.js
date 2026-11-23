@@ -607,6 +607,139 @@
 		});
 	}
 
+	function apply_saved_fx_to_form(frm, saved, base_ccy) {
+		if (!frm || !frm.doc || !saved) return Promise.resolve();
+		const docCcy = frm.doc.currency;
+		if (!docCcy || !base_ccy || docCcy === base_ccy) return Promise.resolve();
+
+		let conv = null;
+		const r = flt(saved.exchange_rate);
+		if (r > 0) {
+			if (saved.from_currency === docCcy && saved.to_currency === base_ccy) {
+				conv = r;
+			} else if (saved.to_currency === docCcy && saved.from_currency === base_ccy) {
+				conv = flt(1.0 / r, 9);
+			}
+		}
+		if (conv && conv > 0) {
+			return frm.set_value('conversion_rate', conv);
+		}
+		return Promise.resolve();
+	}
+
+	function heal_missing_item_row_details(frm, target_cdt, target_cdn) {
+		if (!frm || !frm.doc || !Array.isArray(frm.doc.items) || frm.doc.docstatus !== 0 || is_mirrored_counterpart(frm)) {
+			return;
+		}
+		const rows = frm.doc.items.filter(function(r) {
+			if (!r || !r.item_code) return false;
+			if (target_cdt && target_cdn && (r.doctype !== target_cdt || r.name !== target_cdn)) return false;
+			return (!r.item_name || !r.uom);
+		});
+		if (!rows.length) return;
+
+		rows.forEach(function(row) {
+			if (row._ict_healing_item) return;
+			row._ict_healing_item = true;
+			frappe.db.get_value('Item', row.item_code, ['item_name', 'stock_uom', 'description']).then(function(res) {
+				const d = res && res.message;
+				if (d) {
+					if (!row.item_name && d.item_name) {
+						frappe.model.set_value(row.doctype, row.name, 'item_name', d.item_name);
+					}
+					if (!row.uom && d.stock_uom) {
+						frappe.model.set_value(row.doctype, row.name, 'uom', d.stock_uom);
+					}
+					if (!row.stock_uom && d.stock_uom) {
+						frappe.model.set_value(row.doctype, row.name, 'stock_uom', d.stock_uom);
+					}
+					if (!row.conversion_factor) {
+						frappe.model.set_value(row.doctype, row.name, 'conversion_factor', 1);
+					}
+					if (!row.description && (d.description || d.item_name)) {
+						frappe.model.set_value(row.doctype, row.name, 'description', d.description || d.item_name);
+					}
+				}
+				const attempts = row._ict_heal_attempts || 0;
+				if (flt(frm.doc.conversion_rate) > 0 && attempts < 1 && !flt(row.rate)) {
+					row._ict_heal_attempts = attempts + 1;
+					if (frm.script_manager && typeof frm.script_manager.trigger === 'function') {
+						frm.script_manager.trigger('item_code', row.doctype, row.name);
+					}
+				}
+			}).finally(function() {
+				row._ict_healing_item = false;
+			});
+		});
+	}
+
+	function ensure_doc_currency_exchange_rate(frm, prompt_if_missing, on_ready) {
+		if (!frm || !frm.doc || frm.doc.docstatus !== 0 || is_mirrored_counterpart(frm)) {
+			if (typeof on_ready === 'function') on_ready();
+			return;
+		}
+		if (!cint(frm.doc.is_intercompany) || !frm.doc.company || !frm.doc.intercompany_target_company) {
+			if (typeof on_ready === 'function') on_ready();
+			return;
+		}
+		if (frm.doc.company === frm.doc.intercompany_target_company) {
+			if (typeof on_ready === 'function') on_ready();
+			return;
+		}
+
+		frappe.call({
+			method: 'inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.check_intercompany_exchange_rate',
+			args: {
+				source_company: frm.doc.company,
+				target_company: frm.doc.intercompany_target_company,
+				transaction_date: get_voucher_tx_date(frm),
+				doc_currency: frm.doc.currency || null,
+				conversion_rate: frm.doc.conversion_rate || null
+			},
+			callback: function(r) {
+				const info = r && r.message;
+				if (!info) {
+					if (typeof on_ready === 'function') on_ready();
+					return;
+				}
+				frm._ict_fx_info = info;
+				const baseCcy = info.from_currency;
+				const docCcy = frm.doc.currency;
+				const needsDocRate = !!(docCcy && baseCcy && docCcy !== baseCcy && flt(frm.doc.conversion_rate) <= 0);
+
+				if (needsDocRate && flt(info.doc_currency_rate) > 0) {
+					frm.set_value('conversion_rate', info.doc_currency_rate).then(function() {
+						if (typeof on_ready === 'function') on_ready();
+					});
+					return;
+				}
+
+				if (needsDocRate && prompt_if_missing && !frm._ict_fx_prompt_open) {
+					frm._ict_fx_prompt_open = true;
+					prompt_exchange_rate_dialog(
+						frm,
+						info,
+						function(saved) {
+							frm._ict_fx_prompt_open = false;
+							apply_saved_fx_to_form(frm, saved, baseCcy).then(function() {
+								if (typeof on_ready === 'function') on_ready();
+							});
+						},
+						function() {
+							frm._ict_fx_prompt_open = false;
+							if (typeof on_ready === 'function') on_ready();
+						}
+					);
+					return;
+				}
+				if (typeof on_ready === 'function') on_ready();
+			},
+			error: function() {
+				if (typeof on_ready === 'function') on_ready();
+			}
+		});
+	}
+
 	function check_and_update_exchange_rate_ui(frm) {
 		if (!frm || !frm.doc || frm.doc.docstatus !== 0 || is_mirrored_counterpart(frm)) return;
 		if (frm.doc.doctype === 'Stock Entry') {
@@ -632,8 +765,22 @@
 				frm._ict_fx_info = info;
 				if (!info.required) return;
 
+				if (
+					frm.doc.currency &&
+					info.from_currency &&
+					frm.doc.currency !== info.from_currency &&
+					flt(frm.doc.conversion_rate) <= 0 &&
+					flt(info.doc_currency_rate) > 0
+				) {
+					frm.set_value('conversion_rate', info.doc_currency_rate).then(function() {
+						heal_missing_item_row_details(frm);
+					});
+					return;
+				}
+
 				const has_inline = doc_has_inline_cross_currency_rate(frm, info);
 				if (!info.has_rate && !has_inline) {
+					frm._ict_fx_alert_shown = true;
 					if (frm.dashboard && frm.dashboard.set_headline_alert) {
 						frm.dashboard.set_headline_alert(
 							__('Cross-Currency Exchange Rate Required: <b>{0}</b> ({1}) ↔ <b>{2}</b> ({3}) on <b>{4}</b>. Click <b>Inter Company → Set Exchange Rate</b> before submitting.', [
@@ -649,18 +796,28 @@
 					frm.add_custom_button(
 						__('Set Exchange Rate ({0} ↔ {1})', [info.from_currency, info.to_currency]),
 						function() {
-							prompt_exchange_rate_dialog(frm, info, function() {
-								frm.refresh();
+							prompt_exchange_rate_dialog(frm, info, function(saved) {
+								apply_saved_fx_to_form(frm, saved, info.from_currency).then(function() {
+									heal_missing_item_row_details(frm);
+									frm.refresh();
+								});
 							});
 						},
 						__('Inter Company')
 					);
 				} else {
+					if (frm._ict_fx_alert_shown && frm.dashboard && frm.dashboard.clear_headline) {
+						frm.dashboard.clear_headline();
+						frm._ict_fx_alert_shown = false;
+					}
 					frm.add_custom_button(
 						__('Update Exchange Rate ({0} ↔ {1})', [info.from_currency, info.to_currency]),
 						function() {
-							prompt_exchange_rate_dialog(frm, info, function() {
-								frm.refresh();
+							prompt_exchange_rate_dialog(frm, info, function(saved) {
+								apply_saved_fx_to_form(frm, saved, info.from_currency).then(function() {
+									heal_missing_item_row_details(frm);
+									frm.refresh();
+								});
 							});
 						},
 						__('Inter Company')
@@ -839,6 +996,19 @@
 			},
 			transaction_date: function(frm) {
 				check_and_update_exchange_rate_ui(frm);
+			},
+			currency: function(frm) {
+				if (is_mirrored_counterpart(frm) || frm.doc.docstatus !== 0) return;
+				setTimeout(function() {
+					check_and_update_exchange_rate_ui(frm);
+				}, 200);
+			},
+			conversion_rate: function(frm) {
+				if (is_mirrored_counterpart(frm) || frm.doc.docstatus !== 0) return;
+				check_and_update_exchange_rate_ui(frm);
+				if (flt(frm.doc.conversion_rate) > 0) {
+					heal_missing_item_row_details(frm);
+				}
 			},
 			company: function(frm) {
 				if (is_mirrored_counterpart(frm)) return;
@@ -1205,6 +1375,44 @@
 		frappe.ui.form.on(dt, {
 			supplier: function(frm) {
 				handle_party_selection(frm, 'supplier', frm.doc.supplier);
+			}
+		});
+	});
+
+	// Guard child item rows against blank item_name / uom when ERPNext v16 process_item_selection aborts on missing FX rate
+	[
+		'Sales Order Item',
+		'Purchase Order Item',
+		'Sales Invoice Item',
+		'Purchase Invoice Item',
+		'Delivery Note Item',
+		'Purchase Receipt Item',
+		'Quotation Item',
+		'Supplier Quotation Item'
+	].forEach(function(childDt) {
+		frappe.ui.form.on(childDt, {
+			item_code: function(frm, cdt, cdn) {
+				if (!frm || !frm.doc || frm.doc.docstatus !== 0 || is_mirrored_counterpart(frm)) return;
+				const afterFetch = function() {
+					const row = locals[cdt] && locals[cdt][cdn];
+					if (!row || !row.item_code) return;
+					if (row.item_name && row.uom) return;
+
+					if (cint(frm.doc.is_intercompany) && flt(frm.doc.conversion_rate) <= 0) {
+						ensure_doc_currency_exchange_rate(frm, true, function() {
+							heal_missing_item_row_details(frm, cdt, cdn);
+						});
+					} else {
+						heal_missing_item_row_details(frm, cdt, cdn);
+					}
+				};
+				if (typeof frappe.after_ajax === 'function') {
+					frappe.after_ajax(function() {
+						setTimeout(afterFetch, 150);
+					});
+				} else {
+					setTimeout(afterFetch, 300);
+				}
 			}
 		});
 	});
