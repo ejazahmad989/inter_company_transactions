@@ -190,9 +190,30 @@ frappe.ui.form.on('Intercompany Transaction Link', {
 				validate_transaction_link_setup(frm);
 			});
 		} else {
-			// For new documents, offer a 1-click button to preload all transaction types
+			// For new documents, offer 1-click helpers to preload transaction types & provision TMP accounts before save
 			frm.add_custom_button(__('Preload Transaction Types'), function() {
 				preload_standard_transaction_types(frm);
+			});
+			frm.add_custom_button(__('Auto-Setup TMP Bank Accounts'), function() {
+				if (!frm.doc.main_company || !(frm.doc.linked_companies || []).some(r => r.company)) {
+					frappe.msgprint(__('Please select Main Company and at least one Linked Company first.'));
+					return;
+				}
+				frappe.call({
+					doc: frm.doc,
+					method: 'auto_create_intercompany_accounts',
+					freeze: true,
+					freeze_message: __('Scanning Chart of Accounts & configuring Bank TMP-<ABBR> Clearing Accounts...'),
+					callback: function(r) {
+						if (!r.exc && r.message) {
+							frm.refresh_field('linked_companies');
+							frappe.show_alert({
+								message: r.message.message || __('Intercompany Bank TMP Clearing Accounts verified and linked.'),
+								indicator: 'green'
+							});
+						}
+					}
+				});
 			});
 		}
 
@@ -293,8 +314,7 @@ frappe.ui.form.on('Intercompany Linked Company', {
 
 				if (missing_tmp.length > 0) {
 					frappe.show_alert({
-						message: __('Chart of Accounts scan complete ({0} auto-filled). Click Save then Actions -> Auto-Setup TMP Bank Accounts to create: {1}', [
-							filled,
+						message: __('Both TMP Accounts are required before saving. Select them or click Auto-Setup TMP Bank Accounts to create: {0}', [
 							frappe.utils.escape_html(missing_tmp.join(', '))
 						]),
 						indicator: 'blue'
@@ -594,8 +614,20 @@ function validate_transaction_link_setup(frm) {
 		if (row.company === frm.doc.main_company) {
 			issues.push(__('Row #{0}: Linked company cannot be the same as Main Company ({1})', [idx + 1, frm.doc.main_company]));
 		}
-		if (!row.other_company_customer && !row.other_company_supplier) {
-			issues.push(__('Row #{0}: Both Customer and Supplier are blank for {1}', [idx + 1, row.company]));
+		if (!row.main_company_account || !row.other_company_account) {
+			issues.push(__('Row #{0}: Both Main Company Account and Other Company Account (TMP clearing accounts) are required for {1}', [idx + 1, row.company || '']));
+		}
+		if (row.main_company_customer && !row.other_company_customer) {
+			issues.push(__('Row #{0}: Other Company Customer is required when Main Company Customer is set for {1}', [idx + 1, row.company || '']));
+		}
+		if (row.other_company_customer && !row.main_company_customer) {
+			issues.push(__('Row #{0}: Main Company Customer is required when Other Company Customer is set for {1}', [idx + 1, row.company || '']));
+		}
+		if (row.main_company_supplier && !row.other_company_supplier) {
+			issues.push(__('Row #{0}: Other Company Supplier is required when Main Company Supplier is set for {1}', [idx + 1, row.company || '']));
+		}
+		if (row.other_company_supplier && !row.main_company_supplier) {
+			issues.push(__('Row #{0}: Main Company Supplier is required when Other Company Supplier is set for {1}', [idx + 1, row.company || '']));
 		}
 	});
 

@@ -247,6 +247,12 @@ def quick_setup_intercompany_pair(
 	# 1. Provision GAAP/IFRS compliant intercompany clearing accounts & same-currency transit warehouses
 	main_clearing_account = get_or_create_intercompany_clearing_account(main_company, counterparty_company)
 	other_clearing_account = get_or_create_intercompany_clearing_account(counterparty_company, main_company)
+	if not main_clearing_account or not other_clearing_account:
+		frappe.throw(
+			_("Could not configure both TMP clearing accounts for {0} and {1}. Both TMP accounts are required.").format(
+				main_company, counterparty_company
+			)
+		)
 
 	main_currency = frappe.db.get_value("Company", main_company, "default_currency")
 	other_currency = frappe.db.get_value("Company", counterparty_company, "default_currency")

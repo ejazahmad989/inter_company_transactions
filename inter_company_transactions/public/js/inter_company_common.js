@@ -65,8 +65,6 @@
 			'received_amount',
 			'source_exchange_rate',
 			'target_exchange_rate',
-			'paid_from',
-			'paid_to',
 			'customer',
 			'supplier',
 			'party_type',
@@ -84,6 +82,34 @@
 		});
 		if (frm.fields_dict && frm.fields_dict.intercompany_target_company) {
 			frm.set_df_property('intercompany_target_company', 'reqd', 0);
+		}
+
+		// On mirrored Payment Entry drafts, allow switching the Bank/Cash side account (e.g. TMP -> Cash/Bank)
+		// while keeping party control account, currency, amounts, and exchange rates strictly locked.
+		if (frm.doc.doctype === 'Payment Entry') {
+			if (!frm.is_dirty() || !frm._ict_pe_snapshot) {
+				frm._ict_pe_snapshot = {
+					paid_amount: frm.doc.paid_amount,
+					received_amount: frm.doc.received_amount,
+					source_exchange_rate: frm.doc.source_exchange_rate,
+					target_exchange_rate: frm.doc.target_exchange_rate,
+					paid_from_account_currency: frm.doc.paid_from_account_currency,
+					paid_to_account_currency: frm.doc.paid_to_account_currency
+				};
+			}
+			const peType = frm.doc.payment_type;
+			const isDraft = cint(frm.doc.docstatus) === 0;
+			if (frm.fields_dict && frm.fields_dict.paid_from) {
+				frm.set_df_property('paid_from', 'read_only', (isDraft && peType !== 'Receive') ? 0 : 1);
+			}
+			if (frm.fields_dict && frm.fields_dict.paid_to) {
+				frm.set_df_property('paid_to', 'read_only', (isDraft && peType !== 'Pay') ? 0 : 1);
+			}
+			['paid_from_account_currency', 'paid_to_account_currency'].forEach(function(fn) {
+				if (frm.fields_dict && frm.fields_dict[fn]) {
+					frm.set_df_property(fn, 'read_only', 1);
+				}
+			});
 		}
 
 		// Lock item amounts/quantities while keeping local Warehouse & Cost Center editable
@@ -1183,6 +1209,35 @@
 		});
 	});
 
+	function preserve_mirrored_pe_locked_values(frm, account_fieldname) {
+		if (!is_mirrored_counterpart(frm) || cint(frm.doc.docstatus) !== 0 || !frm._ict_pe_snapshot) return;
+		const snap = frm._ict_pe_snapshot;
+		const restore = function() {
+			if (!frm || !frm.doc) return;
+			const ccyField = account_fieldname === 'paid_from' ? 'paid_from_account_currency' : 'paid_to_account_currency';
+			const expectedCcy = snap[ccyField];
+			if (expectedCcy && frm.doc[ccyField] && frm.doc[ccyField] !== expectedCcy) {
+				frappe.msgprint({
+					title: __('Account Currency Locked'),
+					indicator: 'orange',
+					message: __('On mirrored Payment Entries, please select a Bank or Cash account in currency {0}.', [expectedCcy])
+				});
+			}
+			['source_exchange_rate', 'target_exchange_rate', 'paid_amount', 'received_amount'].forEach(function(fn) {
+				if (snap[fn] !== undefined && snap[fn] !== null && Math.abs(flt(frm.doc[fn]) - flt(snap[fn])) > 0.0001) {
+					frm.set_value(fn, snap[fn]);
+				}
+			});
+		};
+		if (typeof frappe.after_ajax === 'function') {
+			frappe.after_ajax(function() {
+				setTimeout(restore, 50);
+			});
+		} else {
+			setTimeout(restore, 250);
+		}
+	}
+
 	// Attach Payment Entry triggers
 	frappe.ui.form.on('Payment Entry', {
 		party: function(frm) {
@@ -1192,6 +1247,12 @@
 			if (frm.doc.party) {
 				handle_party_selection(frm, (frm.doc.party_type || '').toLowerCase(), frm.doc.party);
 			}
+		},
+		paid_from: function(frm) {
+			preserve_mirrored_pe_locked_values(frm, 'paid_from');
+		},
+		paid_to: function(frm) {
+			preserve_mirrored_pe_locked_values(frm, 'paid_to');
 		}
 	});
 

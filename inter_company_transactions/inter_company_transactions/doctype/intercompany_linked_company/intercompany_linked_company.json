@@ -47,6 +47,7 @@
       "fieldtype": "Link",
       "label": "Main Company Account",
       "options": "Account",
+      "reqd": 1,
       "description": "Account in main company for transactions with this company"
     },
     {
@@ -71,6 +72,7 @@
       "fieldtype": "Link",
       "label": "Other Company Account",
       "options": "Account",
+      "reqd": 1,
       "description": "Account in this company for transactions with main company"
     },
     {

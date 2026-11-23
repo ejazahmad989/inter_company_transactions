@@ -500,13 +500,13 @@ function show_tutorial_dialog() {
 								<div class="ict-flow-step">
 									<div class="ict-flow-num">1</div>
 									<div>
-										<strong>Create Sales Order in Entity A:</strong> Go to <span class="ict-code-pill">Sales Order &gt; New</span>. Set Customer to <span class="ict-code-pill">Acme Distribution (Internal)</span>, Item to "Industrial Widget", Qty: 100, Rate: $50.
+										<strong>Create Sales Order in Entity A:</strong> Go to <span class="ict-code-pill">Sales Order &gt; New</span>. Set your mapped Customer (e.g., <span class="ict-code-pill">Acme Distribution</span>), Item to "Industrial Widget", Qty: 100, Rate: $50.
 									</div>
 								</div>
 								<div class="ict-flow-step">
 									<div class="ict-flow-num">2</div>
 									<div>
-										<strong>Submit Document:</strong> Upon submission, the engine checks company links and automatically creates a linked <span class="ict-code-pill">Purchase Order</span> in Entity B with Supplier <span class="ict-code-pill">Acme Manufacturing (Internal)</span>.
+										<strong>Submit Document:</strong> Upon submission, the engine checks company links and automatically creates a linked <span class="ict-code-pill">Purchase Order</span> in Entity B with your mapped Supplier (e.g., <span class="ict-code-pill">Acme Manufacturing</span>).
 									</div>
 								</div>
 								<div class="ict-flow-step">
@@ -685,7 +685,7 @@ function show_tutorial_dialog() {
 								<div class="ict-flow-step">
 									<div class="ict-flow-num">2</div>
 									<div>
-										<strong>Assign to Internal Customer:</strong> Open the internal customer (e.g., <em>Distribution LLC (Internal)</em>). Set <strong>Customer Group</strong> (or <strong>Inter Company Customer Group</strong>) to <em>Inter Company Group</em>. Check <em>Is Internal Customer</em> and set <em>Represents Company</em>.
+										<strong>Assign to Your Inter-Company Customer:</strong> Open your manually created sister-entity customer (e.g., <em>Distribution LLC</em>). Set <strong>Customer Group</strong> (or <strong>Inter Company Customer Group</strong>) to <em>Inter Company Group</em>. Check <em>Is Internal Customer</em> and set <em>Represents Company</em>.
 									</div>
 								</div>
 								<div class="ict-flow-step">

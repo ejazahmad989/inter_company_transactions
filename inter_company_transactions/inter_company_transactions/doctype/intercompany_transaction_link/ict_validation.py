@@ -297,6 +297,8 @@ def validate_locked_mirrored_fields(doc, previous=None):
 		("party_type", _("Party Type")),
 		("party", _("Party")),
 		("payment_type", _("Payment Type")),
+		("paid_from_account_currency", _("Paid From Account Currency")),
+		("paid_to_account_currency", _("Paid To Account Currency")),
 	]
 	if getattr(doc, "doctype", None) == "Quotation":
 		str_locked.extend([
@@ -321,7 +323,7 @@ def validate_locked_mirrored_fields(doc, previous=None):
 
 	for fname, label in str_locked:
 		if _has_field(previous, fname):
-			if fname == "currency" and not previous.get(fname):
+			if fname in ("currency", "paid_from_account_currency", "paid_to_account_currency") and not previous.get(fname):
 				continue
 			if _differs(doc.get(fname), previous.get(fname), is_num=False):
 				changed_fields.append(label)

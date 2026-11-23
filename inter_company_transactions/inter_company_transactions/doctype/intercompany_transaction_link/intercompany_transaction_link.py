@@ -235,19 +235,42 @@ class IntercompanyTransactionLink(Document):
 					linked_company.other_company_warehouse = None
 
 	def validate_parties(self):
-		"""Validate that customers and suppliers are properly mapped between companies."""
-		for linked_company in self.linked_companies:
-			if linked_company.main_company_customer and not linked_company.other_company_supplier:
+		"""Validate that both TMP accounts are present and customers/suppliers are symmetrically paired."""
+		for linked_company in (self.get("linked_companies") or []):
+			comp_label = linked_company.company or _("Linked Company")
+
+			if not getattr(linked_company, "main_company_account", None) or not getattr(linked_company, "other_company_account", None):
 				frappe.throw(
-					_("Other Company Supplier is required when Main Company Customer is set for {0}").format(
-						linked_company.company
+					_("Both Main Company Account and Other Company Account (TMP clearing accounts) are required for {0}.").format(
+						comp_label
 					)
 				)
 
-			if linked_company.main_company_supplier and not linked_company.other_company_customer:
+			if getattr(linked_company, "main_company_customer", None) and not getattr(linked_company, "other_company_customer", None):
 				frappe.throw(
-					_("Other Company Customer is required when Main Company Supplier is set for {0}").format(
-						linked_company.company
+					_("Other Company Customer is required when Main Company Customer is set for {0}.").format(
+						comp_label
+					)
+				)
+
+			if getattr(linked_company, "other_company_customer", None) and not getattr(linked_company, "main_company_customer", None):
+				frappe.throw(
+					_("Main Company Customer is required when Other Company Customer is set for {0}.").format(
+						comp_label
+					)
+				)
+
+			if getattr(linked_company, "main_company_supplier", None) and not getattr(linked_company, "other_company_supplier", None):
+				frappe.throw(
+					_("Other Company Supplier is required when Main Company Supplier is set for {0}.").format(
+						comp_label
+					)
+				)
+
+			if getattr(linked_company, "other_company_supplier", None) and not getattr(linked_company, "main_company_supplier", None):
+				frappe.throw(
+					_("Main Company Supplier is required when Other Company Supplier is set for {0}.").format(
+						comp_label
 					)
 				)
 

@@ -33,20 +33,19 @@ class IntercompanyLinkedCompany(Document):
         """Validate accounts"""
         parent = frappe.get_doc("Intercompany Transaction Link", self.parent)
 
-        # Validate main company account
-        if self.main_company_account:
-            account = frappe.get_doc("Account", self.main_company_account)
-            if account.company != parent.main_company:
-                frappe.throw(f"Account {self.main_company_account} does not belong to main company {parent.main_company}")
+        if not self.main_company_account or not self.other_company_account:
+            frappe.throw(f"Both Main Company Account and Other Company Account are required for {self.company}")
 
-            if account.account_type != "Bank":
-                frappe.throw(f"Account {self.main_company_account} must be of type 'Bank'")
+        # Validate main company account
+        account = frappe.get_doc("Account", self.main_company_account)
+        if account.company != parent.main_company:
+            frappe.throw(f"Account {self.main_company_account} does not belong to main company {parent.main_company}")
+        if getattr(account, "is_group", 0):
+            frappe.throw(f"Account {self.main_company_account} cannot be a group account")
 
         # Validate other company account
-        if self.other_company_account:
-            account = frappe.get_doc("Account", self.other_company_account)
-            if account.company != self.company:
-                frappe.throw(f"Account {self.other_company_account} does not belong to company {self.company}")
-
-            if account.account_type != "Bank":
-                frappe.throw(f"Account {self.other_company_account} must be of type 'Bank'")
+        account = frappe.get_doc("Account", self.other_company_account)
+        if account.company != self.company:
+            frappe.throw(f"Account {self.other_company_account} does not belong to company {self.company}")
+        if getattr(account, "is_group", 0):
+            frappe.throw(f"Account {self.other_company_account} cannot be a group account")

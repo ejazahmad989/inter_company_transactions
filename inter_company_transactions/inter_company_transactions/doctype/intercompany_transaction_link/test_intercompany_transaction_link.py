@@ -15,7 +15,9 @@ from inter_company_transactions.inter_company_transactions.doctype.intercompany_
 IGNORE_TEST_RECORD_DEPENDENCIES = [
 	"Company",
 	"Customer",
+	"Customer Group",
 	"Supplier",
+	"Supplier Group",
 	"Account",
 	"Warehouse",
 	"Item",
@@ -2497,18 +2499,22 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 			frappe._dict({
 				"company": "Sister PKR Co",
 				"main_company_customer": "Sister PKR (C)",
+				"other_company_customer": "Main PKR (C)",
+				"main_company_supplier": "Sister PKR (S)",
 				"other_company_supplier": "Main PKR (S)",
-				"main_company_supplier": None,
-				"other_company_customer": None,
+				"main_company_account": "TMP-SPK - MPK",
+				"other_company_account": "TMP-MPK - SPK",
 				"main_company_warehouse": "Transit - Main PKR",
 				"other_company_warehouse": "Transit - Sister PKR",
 			}),
 			frappe._dict({
 				"company": "Sister USD Co",
 				"main_company_customer": "Sister USD (C)",
+				"other_company_customer": "Main PKR (C)",
+				"main_company_supplier": "Sister USD (S)",
 				"other_company_supplier": "Main PKR (S)",
-				"main_company_supplier": None,
-				"other_company_customer": None,
+				"main_company_account": "TMP-SUS - MPK",
+				"other_company_account": "TMP-MPK - SUS",
 				"main_company_warehouse": "Transit - Main PKR",
 				"other_company_warehouse": "Transit - Sister USD",
 			}),
@@ -3092,5 +3098,152 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 		self.assertEqual(helper_je.total_debit, 250.0)
 		self.assertEqual(helper_je.total_credit, 250.0)
 		self.assertEqual(helper_je.difference, 0.0)
+
+	def test_link_symmetric_party_and_both_tmp_accounts_validation(self):
+		"""Verify Link requires both TMP accounts and symmetric Customer/Supplier pairing without auto-creating parties"""
+		from unittest.mock import patch
+
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			IntercompanyTransactionLink,
+		)
+
+		def make_link(row_data):
+			doc = IntercompanyTransactionLink.__new__(IntercompanyTransactionLink)
+			doc.main_company = "Main Co"
+			doc.sister_company = "ABC Co"
+			doc.linked_companies = [frappe._dict({"company": "ABC Co", **row_data})]
+			doc.transaction_types = []
+			return doc
+
+		# 1. Missing either TMP clearing account -> must throw
+		for bad_accounts in (
+			{"main_company_account": "", "other_company_account": "TMP-MA - ABC"},
+			{"main_company_account": "TMP-AB - MC", "other_company_account": ""},
+			{"main_company_account": None, "other_company_account": None},
+		):
+			with self.assertRaises(Exception) as ctx:
+				make_link(bad_accounts).validate_parties()
+			self.assertIn("TMP", str(ctx.exception))
+
+		# 2. One-sided Customer without counterpart Customer -> must throw
+		with self.assertRaises(Exception) as ctx:
+			make_link({
+				"main_company_account": "TMP-AB - MC",
+				"other_company_account": "TMP-MC - AB",
+				"main_company_customer": "ABC Customer",
+				"other_company_customer": None,
+			}).validate_parties()
+		self.assertIn("Other Company Customer", str(ctx.exception))
+
+		with self.assertRaises(Exception) as ctx:
+			make_link({
+				"main_company_account": "TMP-AB - MC",
+				"other_company_account": "TMP-MC - AB",
+				"main_company_customer": None,
+				"other_company_customer": "Main Customer",
+			}).validate_parties()
+		self.assertIn("Main Company Customer", str(ctx.exception))
+
+		# 3. One-sided Supplier without counterpart Supplier -> must throw
+		with self.assertRaises(Exception) as ctx:
+			make_link({
+				"main_company_account": "TMP-AB - MC",
+				"other_company_account": "TMP-MC - AB",
+				"main_company_supplier": "ABC Supplier",
+				"other_company_supplier": None,
+			}).validate_parties()
+		self.assertIn("Other Company Supplier", str(ctx.exception))
+
+		with self.assertRaises(Exception) as ctx:
+			make_link({
+				"main_company_account": "TMP-AB - MC",
+				"other_company_account": "TMP-MC - AB",
+				"main_company_supplier": None,
+				"other_company_supplier": "Main Supplier",
+			}).validate_parties()
+		self.assertIn("Main Company Supplier", str(ctx.exception))
+
+		# 4. Valid states: both TMP accounts with no parties (post-wizard), paired Customers, or all 4 parties
+		make_link({"main_company_account": "TMP-AB - MC", "other_company_account": "TMP-MC - AB"}).validate_parties()
+		make_link({
+			"main_company_account": "TMP-AB - MC",
+			"other_company_account": "TMP-MC - AB",
+			"main_company_customer": "ABC Customer",
+			"other_company_customer": "Main Customer",
+		}).validate_parties()
+		with patch.object(frappe.db, "get_value", return_value="PKR"):
+			doc_full = make_link({
+				"main_company_account": "TMP-AB - MC",
+				"other_company_account": "TMP-MC - AB",
+				"main_company_customer": "ABC Customer",
+				"other_company_customer": "Main Customer",
+				"main_company_supplier": "ABC Supplier",
+				"other_company_supplier": "Main Supplier",
+			})
+			doc_full.validate()
+
+	def test_mirrored_payment_entry_allows_bank_cash_account_change_locks_amount_fx(self):
+		"""Verify mirrored Payment Entry allows changing paid_from/paid_to (TMP -> Cash/Bank) while locking amount, currency, party, and FX"""
+		from unittest.mock import patch
+
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_validation import (
+			validate_intercompany_document,
+			validate_locked_mirrored_fields,
+		)
+
+		prev_pe = frappe._dict({
+			"doctype": "Payment Entry",
+			"name": "ACC-PAY-2026-00010",
+			"company": "ABC Company",
+			"payment_type": "Receive",
+			"party_type": "Customer",
+			"party": "Main Customer",
+			"paid_from": "Debtors - ABC",
+			"paid_to": "TMP-MAIN - ABC",
+			"paid_from_account_currency": "PKR",
+			"paid_to_account_currency": "PKR",
+			"paid_amount": 1000.0,
+			"received_amount": 1000.0,
+			"source_exchange_rate": 1.0,
+			"target_exchange_rate": 1.0,
+			"is_intercompany": 1,
+			"intercompany_target_company": "Main Co",
+			"intercompany_linked_doc_doctype": "Payment Entry",
+			"intercompany_linked_doc_name": "ACC-PAY-2026-00009",
+			"intercompany_linked_company": "Main Co",
+		})
+
+		with patch.object(frappe.db, "exists", return_value=True), patch.object(
+			frappe, "get_doc", return_value=prev_pe
+		):
+			# Switching TMP clearing account -> local Cash/Bank account in same currency must pass cleanly
+			edited_account_pe = frappe._dict({
+				**prev_pe,
+				"paid_to": "Cash - ABC",
+				"flags": frappe._dict(),
+			})
+			validate_intercompany_document(edited_account_pe)
+
+			# Changing paid_amount must throw
+			with self.assertRaises(Exception):
+				validate_locked_mirrored_fields(
+					frappe._dict({**prev_pe, "paid_to": "Cash - ABC", "paid_amount": 1200.0, "flags": frappe._dict()}),
+					previous=prev_pe,
+				)
+
+			# Changing target_exchange_rate must throw
+			with self.assertRaises(Exception):
+				validate_locked_mirrored_fields(
+					frappe._dict({**prev_pe, "paid_to": "Cash - ABC", "target_exchange_rate": 2.5, "flags": frappe._dict()}),
+					previous=prev_pe,
+				)
+
+			# Changing paid_to_account_currency (e.g. picking USD bank for PKR payment) must throw
+			with self.assertRaises(Exception):
+				validate_locked_mirrored_fields(
+					frappe._dict({**prev_pe, "paid_to": "USD Bank - ABC", "paid_to_account_currency": "USD", "flags": frappe._dict()}),
+					previous=prev_pe,
+				)
+
 
 

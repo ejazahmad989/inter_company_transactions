@@ -869,13 +869,33 @@ def validate_required_parties(doc, mapping):
 			if not linked_company.other_company_customer:
 				frappe.throw(_("Other Company Customer is required for linked company {0}").format(linked_company.company))
 
-	elif target_doctype in ["Journal Entry", "Payment Entry"]:
-		if doc.doctype == "Landed Cost Voucher" and target_doctype == "Journal Entry":
+	elif target_doctype == "Payment Entry":
+		src_pt = getattr(doc, "payment_type", None)
+		needs_customer = src_pt == "Pay"
+		if needs_customer:
+			req_party = linked_company.main_company_customer if direction == "other_to_main" else linked_company.other_company_customer
+			label = _("Main Company Customer") if direction == "other_to_main" else _("Other Company Customer")
+		else:
+			req_party = linked_company.main_company_supplier if direction == "other_to_main" else linked_company.other_company_supplier
+			label = _("Main Company Supplier") if direction == "other_to_main" else _("Other Company Supplier")
+		if not req_party:
+			frappe.throw(_("{0} is required for linked company {1}").format(label, linked_company.company))
+
+	elif target_doctype == "Journal Entry":
+		if doc.doctype == "Landed Cost Voucher":
 			return
-		if not linked_company.main_company_customer:
-			frappe.throw(_("Main Company Customer is required for {0}").format(linked_company.company))
-		if not linked_company.other_company_supplier:
-			frappe.throw(_("Other Company Supplier is required for {0}").format(linked_company.company))
+		src_has_supplier = any(
+			getattr(acc, "party_type", None) == "Supplier" and getattr(acc, "party", None)
+			for acc in (getattr(doc, "accounts", None) or [])
+		)
+		if src_has_supplier:
+			req_party = linked_company.main_company_customer if direction == "other_to_main" else linked_company.other_company_customer
+			label = _("Main Company Customer") if direction == "other_to_main" else _("Other Company Customer")
+		else:
+			req_party = linked_company.main_company_supplier if direction == "other_to_main" else linked_company.other_company_supplier
+			label = _("Main Company Supplier") if direction == "other_to_main" else _("Other Company Supplier")
+		if not req_party:
+			frappe.throw(_("{0} is required for linked company {1}").format(label, linked_company.company))
 
 
 def validate_intercompany_items(doc, mapping):
