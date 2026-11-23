@@ -1,18 +1,17 @@
 <p align="center">
-  <img src="inter_company_transactions/public/images/inter_company_logo.svg" alt="Inter-Company Transactions for ERPNext Logo" width="600" />
+  <img src="public/images/inter_company_logo.svg" alt="Inter-Company Transactions for ERPNext Logo" width="600" />
 </p>
 
 <p align="center">
-  <a href="https://frappeframework.com/"><img src="https://img.shields.io/badge/Frappe-v15%20%7C%20v16-blue.svg" alt="Frappe v15 | v16" /></a>
-  <a href="https://erpnext.com/"><img src="https://img.shields.io/badge/ERPNext-v15%20%7C%20v16-blue.svg" alt="ERPNext v15 | v16" /></a>
-  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.11%20%7C%203.14-blue.svg" alt="Python 3.11 | 3.14" /></a>
-  <a href="license.txt"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT" /></a>
-  <img src="https://img.shields.io/badge/Build-Passing-brightgreen.svg" alt="Build Status" />
-  <a href="MARKETPLACE.md"><img src="https://img.shields.io/badge/Frappe%20Marketplace-Verified-orange.svg" alt="Frappe Marketplace" /></a>
+  <strong>Frappe:</strong> v15 | v16 &nbsp;|&nbsp;
+  <strong>ERPNext:</strong> v15 | v16 &nbsp;|&nbsp;
+  <strong>Python:</strong> 3.10 | 3.11 | 3.12 &nbsp;|&nbsp;
+  <strong>License:</strong> MIT &nbsp;|&nbsp;
+  <strong>Status:</strong> Marketplace Ready
 </p>
 
 <p align="center">
-  <img src="inter_company_transactions/public/images/marketplace_banner.png" alt="Inter-Company Transactions Hero Banner" width="100%" />
+  <img src="public/images/marketplace_banner.png" alt="Inter-Company Transactions Hero Banner" width="100%" />
 </p>
 
 # Inter-Company Transactions for ERPNext (v15 & v16 Ready)
@@ -21,19 +20,19 @@ An enterprise-grade, comprehensive Frappe / ERPNext application engineered for c
 
 ---
 
-## 🚀 Multi-Version Compatibility: ERPNext v15 & v16
+## Multi-Version Compatibility: ERPNext v15 & v16
 
 ### **Does it work on ERPNext 16 too?**
 **Yes! The application is verified by automated CI across both ERPNext v15 and ERPNext v16.**
 
 | Component | ERPNext v15 (Stable) | ERPNext v16 (Latest) | Notes |
 |---|:---:|:---:|---|
-| **Python Runtime (CI Tested)** | 3.11 | 3.14 | Standard Python type hinting & clean imports |
+| **Python Runtime** | 3.10 / 3.11 | 3.12 | Standard Python type hinting & clean imports |
 | **DocType Schemas** | Compatible | Compatible | Standard Frappe JSON schema |
 | **Document Hooks (`doc_events`)** | Supported | Supported | `validate`, `on_submit`, `before_cancel`, `on_cancel`, `on_trash` |
 | **Frappe ORM & Database** | Supported | Supported | Standard `frappe.get_doc`, `frappe.db`, and safe parameterized queries |
 | **Client Script Hooks** | Supported | Supported | Standard `frappe.ui.form.on` and Desk Page API (zero prototype overrides) |
-| **REST API & Multi-Site Sync** | Supported | Supported | Standard Token Auth (`Authorization: token key:secret`) + HMAC-SHA256 |
+| **REST API & Multi-Site Sync** | Supported | Supported | Standard Token Auth + HMAC-SHA256 |
 | **Database Migrations** | Zero Conflict | Zero Conflict | Idempotent `after_migrate` checks field existence dynamically |
 
 ### Why It Runs Flawlessly Across Both v15 and v16:
@@ -44,9 +43,9 @@ An enterprise-grade, comprehensive Frappe / ERPNext application engineered for c
 
 ---
 
-## 🌟 Key Capabilities
+## Key Capabilities
 
-### 1. Zero-Touch Document Mirroring (15 Transaction Types)
+### 1. Zero-Touch Document Mirroring (14 Supported DocTypes)
 Automatically creates, submits, or cancels reciprocal mirror documents in real-time across sister companies:
 - **Sales Order ↔ Purchase Order**
 - **Sales Invoice ↔ Purchase Invoice** (with full Credit Note & Debit Note return synchronization)
@@ -55,9 +54,8 @@ Automatically creates, submits, or cancels reciprocal mirror documents in real-t
 - **Journal Entry ↔ Journal Entry** (Inverted Debit/Credit intercompany clearing)
 - **Payment Entry ↔ Payment Entry** (Bi-directional intercompany settlement matching)
 - **Quotation ↔ Supplier Quotation**
-- **Material Request → Purchase Order**
+- **Material Request → Purchase Order / Sales Order**
 - **Request for Quotation → Supplier Quotation**
-- **Subcontracting Order → Purchase Order**
 - **Landed Cost Voucher → Journal Entry**
 
 ### 2. Dynamic Party & Company Auto-Detection
@@ -108,7 +106,7 @@ Automatically creates, submits, or cancels reciprocal mirror documents in real-t
 
 ---
 
-## 📸 Application Screenshots
+## Application Screenshots
 
 ### 1. Chart of Accounts & Intercompany Clearing Setup
 | MAIN Company COA | ABC Company COA | John Company COA |
@@ -116,7 +114,7 @@ Automatically creates, submits, or cancels reciprocal mirror documents in real-t
 | ![MAIN Chart of Accounts](../screenshots/main_coa.png) | ![ABC Chart of Accounts](../screenshots/abc_coa.png) | ![John Chart of Accounts](../screenshots/john_coa.png) |
 
 ### 2. Intercompany Transaction Link & Matrix Configuration
-| Transaction Link Master | Main Company & Transit Warehouses | Other Company Settings | Supported Transaction Types (16 Pairs) |
+| Transaction Link Master | Main Company & Transit Warehouses | Other Company Settings | Supported Transaction Types (15 Pairs) |
 |---|---|---|---|
 | ![Intercompany Transaction Link](../screenshots/transaction_link.png) | ![Main Company Settings](../screenshots/transaction_link_A.png) | ![Other Company Settings](../screenshots/transaction_link_other_company_settings.png) | ![Transaction Types](../screenshots/transaction_link_Transaction_type.png) |
 
@@ -137,14 +135,14 @@ Automatically creates, submits, or cancels reciprocal mirror documents in real-t
 
 ---
 
-## 🚀 Quickstart & Desk Configuration
+## Quickstart & Desk Configuration
 
 ### 1. Configure Linked Companies (Single-Bench)
 1. In Frappe Desk, search for **Intercompany Transaction Link**.
 2. Click **Add Intercompany Transaction Link**.
 3. Select your **Main Company**.
 4. In **Linked Companies**, add your sister companies along with internal customer, supplier, transit warehouse, and `TMP-*` clearing accounts.
-5. In **Transaction Types**, define which transactions to mirror (all 16 pairs can be populated in one click).
+5. In **Transaction Types**, define which transactions to mirror (all 15 pairs can be populated in one click).
 6. Click **Save**.
 
 ### 2. Multi-Currency Setup (e.g., PKR ↔ USD)
@@ -158,7 +156,7 @@ The package includes a full automated test suite across ERPNext v15 and v16 and 
 
 ---
 
-## 🌐 Multi-Language Support
+## Multi-Language Support
 Out-of-the-box translation support included for:
 - English (`en`)
 - Spanish (`es`)
@@ -167,7 +165,7 @@ Out-of-the-box translation support included for:
 
 ---
 
-## 📄 License & Publisher
-- **Publisher:** Ejaz Tech (`ejazahmad989@gmail.com`) & Rahil Ali (`rahilali3311@gmail.com`)
+## License & Publisher
+- **Publisher:** Ejaz Tech & Rahil Ali
 - **License:** MIT License (Commercial & Marketplace Ready)
-- **Documentation:** Complete setup and operations guide available in [`USER_GUIDE.md`](../USER_GUIDE.md) and inside ERPNext Desk via the User Guide PDF download.
+- **Documentation:** Complete setup and operations guide is bundled inside ERPNext Desk and in the repository documentation files.

@@ -318,7 +318,6 @@ class IntercompanyTransactionLink(Document):
 			("Journal Entry", "Journal Entry", "Both"),
 			("Payment Entry", "Payment Entry", "Both"),
 			("Request for Quotation", "Supplier Quotation", "Both"),
-			("Subcontracting Order", "Purchase Order", "Both"),
 			("Landed Cost Voucher", "Journal Entry", "Both"),
 		]
 

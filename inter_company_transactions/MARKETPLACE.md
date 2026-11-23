@@ -34,14 +34,14 @@
 ## 2. Version Support: ERPNext 15 & ERPNext 16 Compatibility
 
 ### **Is this app only for ERPNext 15, or will it work on ERPNext 16 too?**
-**It works on BOTH ERPNext 15 AND ERPNext 16!** Automated CI tests fresh install, unit tests, uninstallation, and reinstall across both `version-15` (Python 3.11) and `version-16` (Python 3.14).
+**It works on BOTH ERPNext 15 AND ERPNext 16!** Automated CI tests fresh install, unit tests, uninstallation, and reinstall across both `version-15` and `version-16`.
 
 ### Architecture Highlights for v15 & v16 Compatibility:
 - **Zero Core Tampering or Monkey-Patching:** The app uses standard, public Frappe extension hooks (`doc_events`, `scheduler_events`, `on_session_creation`) with zero overrides of core Python functions or JS prototypes.
-- **Python Runtime:** Tested in CI on Python 3.11 (`version-15`) and Python 3.14 (`version-16`) with standard library dependencies only.
+- **Python Runtime:** Packaged for Python 3.10, 3.11, and 3.12 with standard library dependencies only.
 - **Unified DocType Schema:** DocType definitions use standard Frappe JSON specifications supported uniformly across Frappe 15 and 16.
 - **Idempotent Bench Migrations:** `after_migrate` checks schema state before creating custom fields, eliminating fixture conflicts during upgrades.
-- **REST Multi-Site Federation:** Token-based authentication (`Authorization: token api_key:api_secret`) and HMAC-SHA256 verification operate identically across Frappe 15 and 16.
+- **REST Multi-Site Federation:** Standard Token Auth and HMAC-SHA256 verification operate identically across Frappe 15 and 16.
 
 ---
 
@@ -58,7 +58,7 @@ Managing multi-company enterprises in vanilla ERPNext requires manual re-entry o
 
 ## 4. Key Feature Matrix (Marketplace Highlights)
 
-### 4.1. Zero-Touch Document Mirroring (15 Transaction Types)
+### 4.1. Zero-Touch Document Mirroring (14 Supported DocTypes)
 Seamless bidirectional mirroring for every operational document:
 1. **Sales Order ↔ Purchase Order**
 2. **Sales Invoice ↔ Purchase Invoice** (with full Credit/Debit Note return sync)
@@ -67,10 +67,9 @@ Seamless bidirectional mirroring for every operational document:
 5. **Stock Entry ↔ Stock Entry (Same-Currency Transit Warehouses)**
 6. **Journal Entry ↔ Journal Entry (Debit/Credit Inversion)**
 7. **Payment Entry ↔ Payment Entry (Payment to Receipt Matching)**
-8. **Material Request → Purchase Order**
+8. **Material Request → Purchase Order / Sales Order**
 9. **Request for Quotation → Supplier Quotation**
-10. **Subcontracting Order → Purchase Order**
-11. **Landed Cost Voucher → Journal Entry**
+10. **Landed Cost Voucher → Journal Entry**
 
 ### 4.2. Dynamic Party & Company Auto-Detection
 - **Dynamic Routing:** No hardcoding required. The system links internal customers/suppliers configured in *Intercompany Transaction Link*.
@@ -112,7 +111,7 @@ Seamless bidirectional mirroring for every operational document:
 
 | Plan | Price Model | Target Audience | What's Included |
 |---|---|---|---|
-| **Monthly Subscription** | **$49 / month / site** | Multi-company groups, holding entities | Complete intercompany engine, all 15 doctypes, 2-way bilateral trading, automated `TMP-<ABBR>` Bank accounts |
+| **Monthly Subscription** | **$49 / month / site** | Multi-company groups, holding entities | Complete intercompany engine, all 14 supported doctypes, 2-way bilateral trading, automated `TMP-<ABBR>` Bank accounts |
 | **Annual Subscription** | **$490 / year / site** (2 Months Free) | Annual subscribers saving $98/year | All features, continuous updates for ERPNext v15 & v16, email support |
 | **Enterprise Support Retainer** | **$299 / month** | Large conglomerates & holding groups | Federated Multi-Site Sync, custom ERP integrations, priority engineering SLA |
 
@@ -127,10 +126,10 @@ Seamless bidirectional mirroring for every operational document:
 
 ### Pre-Submission Checklist:
 
-- [x] **App Packaging (`pyproject.toml` / Flit):** Modern PEP 621 `pyproject.toml` (`flit_core`) with Python 3.11 & 3.14 classifiers and zero conflicting `setup.py` or pip requirements.
+- [x] **App Packaging (`pyproject.toml` / Flit):** Modern PEP 621 `pyproject.toml` (`flit_core`) with Python 3.10, 3.11 & 3.12 classifiers and zero conflicting `setup.py` or pip requirements.
 - [x] **CI-Tested for ERPNext v15 & v16:** GitHub Actions runs install, `verify_marketplace_readiness`, unit tests, uninstall, and reinstall on both `version-15` and `version-16`.
 - [x] **High-Resolution Branding Assets:** 512x512 app icon (SVG & PNG), horizontal logo, and 1280x640 showcase banner.
-- [x] **Hooks Configuration:** Metadata (`app_name`, `app_publisher`, `app_logo_url`, `app_icon`, `app_version = "1.0.0"`, `required_apps = ["erpnext"]`), `on_session_creation`, `notification_config`, and `scheduler_events` declared (`before_request` removed).
+- [x] **Hooks Configuration:** Metadata (`app_name`, `app_publisher`, `app_logo_url`, `app_icon`, `required_apps = ["erpnext"]`), `on_session_creation`, `notification_config`, and `scheduler_events` declared (`before_request` removed; version sourced from `__version__`).
 - [x] **Federated Remote Multi-Site Sync:** Robust cross-instance push/cancel REST API engine with permission verification, idempotency, and hourly offline auto-retry.
 - [x] **In-GUI Network & Firewall Diagnostic Tool:** Automated port and socket diagnostics with copy-pasteable firewall commands.
 - [x] **Migration Idempotency:** `after_install`, single-file patches, and `after_migrate` safely check existence and sanitize metadata expressions in MariaDB without modifying core runtime classes.
