@@ -4386,3 +4386,250 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 			_c2, feb_rows, _m2, _ch2, _s2 = matrix_execute({"from_date": "2026-02-01", "to_date": "2026-02-28"})
 			self.assertEqual(len(jan_rows), 1)
 			self.assertEqual(len(feb_rows), 0)
+
+	def test_netting_two_sided_settlement_with_invoice_references_and_dual_cancel(self):
+		"""Verify netting posts both payer AP and receiver AR Journal Entries with invoice references and cancels both"""
+		from unittest.mock import patch
+
+		from inter_company_transactions.inter_company_transactions.doctype.inter_company_netting_cycle.inter_company_netting_cycle import (
+			InterCompanyNettingCycle,
+		)
+
+		class FakeSettlementRow(frappe._dict):
+			def insert(self, ignore_permissions=False):
+				self.name = f"NET-SUM-{self.get('idx', 1)}"
+				return self
+
+			def db_set(self, vals, update_modified=False):
+				if isinstance(vals, dict):
+					self.update(vals)
+
+		class FakeTwoSidedDoc:
+			def __init__(self):
+				self.doctype = "Inter Company Netting Cycle"
+				self.name = "NET-CYCLE-2SIDE-1"
+				self.docstatus = 1
+				self.settlement_date = "2026-11-24"
+				self.participating_companies = [
+					frappe._dict({"company": "Main Co"}),
+					frappe._dict({"company": "Sub Co"}),
+				]
+				self.invoices = [
+					frappe._dict({
+						"company": "Main Co",
+						"partner_company": "Sub Co",
+						"invoice_type": "Sales Invoice",
+						"invoice_name": "SINV-MAIN-99",
+						"outstanding_amount": 500.0,
+						"settled_amount": 500.0,
+						"currency": "PKR",
+					})
+				]
+				self.net_settlements = []
+				self.status = "Draft"
+
+			def append(self, tbl, row):
+				obj = FakeSettlementRow(row) if tbl == "net_settlements" else frappe._dict(row)
+				getattr(self, tbl).append(obj)
+				return obj
+
+			def db_set(self, field, val=None, update_modified=False):
+				if isinstance(field, dict):
+					for k, v in field.items():
+						setattr(self, k, v)
+				else:
+					setattr(self, field, val)
+
+		created_jes = []
+
+		class FakeJE:
+			def __init__(self):
+				self.doctype = "Journal Entry"
+				self.name = f"ACC-JV-2SIDE-{len(created_jes) + 1}"
+				self.accounts = []
+				self.flags = frappe._dict()
+				self.docstatus = 0
+
+			def append(self, tbl, row):
+				self.accounts.append(frappe._dict(row))
+
+			def insert(self, **kw):
+				created_jes.append(self)
+				return self
+
+			def submit(self):
+				self.docstatus = 1
+
+			def cancel(self):
+				self.docstatus = 2
+
+		doc = FakeTwoSidedDoc()
+
+		def mock_get_val(dt, flt_or_name, fieldname=None, as_dict=False):
+			if dt == "Intercompany Transaction Link":
+				if isinstance(flt_or_name, dict) and flt_or_name.get("main_company") == "Main Co":
+					return "IC-LINK-2S"
+				return None
+			if dt == "Intercompany Linked Company":
+				return frappe._dict({
+					"main_company_account": "TMP-SUB - MAIN",
+					"main_company_customer": "Cust Sub",
+					"other_company_account": "TMP-MAIN - SUB",
+					"other_company_supplier": "Supp Main",
+				})
+			if dt == "Company":
+				if fieldname == "default_payable_account":
+					return "Creditors - SUB"
+				if fieldname == "default_receivable_account":
+					return "Debtors - MAIN"
+			return None
+
+		def mock_db_get_val(dt, flt_or_name, fieldname=None, as_dict=False):
+			if dt == "Inter Company Document Reference":
+				if isinstance(flt_or_name, dict) and flt_or_name.get("source_name") == "SINV-MAIN-99":
+					return "PINV-SUB-99"
+				return None
+			if dt == "Purchase Invoice" and flt_or_name == "PINV-SUB-99":
+				return frappe._dict({"docstatus": 1, "outstanding_amount": 500.0, "currency": "PKR"})
+			if dt == "Company":
+				return "PKR"
+			return None
+
+		with patch.object(frappe.db, "table_exists", return_value=True), patch.object(
+			frappe.db, "delete"
+		), patch.object(
+			frappe.db, "exists", return_value=False
+		), patch.object(
+			frappe.db, "has_column", return_value=False
+		), patch.object(
+			frappe, "get_value", side_effect=mock_get_val
+		), patch.object(
+			frappe, "get_cached_value", return_value="PKR"
+		), patch.object(
+			frappe.db, "get_value", side_effect=mock_db_get_val
+		), patch.object(
+			frappe, "new_doc", side_effect=lambda dt: FakeJE()
+		), patch.object(
+			frappe, "msgprint"
+		):
+			InterCompanyNettingCycle.on_submit(doc)
+
+		self.assertEqual(len(created_jes), 2)
+		payer_je, recv_je = created_jes[0], created_jes[1]
+		self.assertEqual(payer_je.company, "Sub Co")
+		self.assertEqual(payer_je.accounts[0].party, "Supp Main")
+		self.assertEqual(payer_je.accounts[0].reference_type, "Purchase Invoice")
+		self.assertEqual(payer_je.accounts[0].reference_name, "PINV-SUB-99")
+		self.assertEqual(payer_je.accounts[1].account, "TMP-MAIN - SUB")
+
+		self.assertEqual(recv_je.company, "Main Co")
+		self.assertEqual(recv_je.accounts[0].account, "TMP-SUB - MAIN")
+		self.assertEqual(recv_je.accounts[1].party, "Cust Sub")
+		self.assertEqual(recv_je.accounts[1].reference_type, "Sales Invoice")
+		self.assertEqual(recv_je.accounts[1].reference_name, "SINV-MAIN-99")
+
+		self.assertEqual(doc.net_settlements[0].settlement_entry, payer_je.name)
+		self.assertEqual(doc.net_settlements[0].receiver_settlement_entry, recv_je.name)
+		self.assertEqual(doc.net_settlements[0].status, "Settled")
+
+		je_map = {payer_je.name: payer_je, recv_je.name: recv_je}
+		with patch.object(frappe.db, "exists", side_effect=lambda dt, n: n in je_map), patch.object(
+			frappe, "get_doc", side_effect=lambda dt, n: je_map[n]
+		):
+			InterCompanyNettingCycle.on_cancel(doc)
+		self.assertEqual(payer_je.docstatus, 2)
+		self.assertEqual(recv_je.docstatus, 2)
+
+	def test_v15_patch_and_uninstall_no_global_healing_boot_cached_and_rfq_fallback_rate(self):
+		"""Verify v1_5 patch skips run_full_healing, uninstall drops dead helper, boot caches Desk only, and RFQ gets fallback rate"""
+		from unittest.mock import MagicMock, patch
+
+		from inter_company_transactions import boot, uninstall
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_builders import (
+			create_supplier_quotation,
+		)
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_utils import (
+			fix_legacy_custom_fields,
+		)
+		from inter_company_transactions.patches import v1_5_repair_item_depends_on_and_clean_trees as v15_patch
+
+		# 1. Dead repair helper removed from uninstall.py
+		self.assertFalse(hasattr(uninstall, "repair_all_depends_on_expressions"))
+
+		# 2. v1_5 patch and fix_legacy_custom_fields stay ICT-scoped and never invoke run_full_healing / repair_database_text
+		with patch("inter_company_transactions.diagnose_and_heal.run_full_healing") as mock_heal, patch(
+			"inter_company_transactions.diagnose_and_heal.repair_database_text"
+		) as mock_repair, patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_utils._sanitize_intercompany_stock_entry_custom_fields"
+		) as mock_sanitize, patch.object(frappe.db, "table_exists", return_value=False):
+			v15_patch.execute()
+			fix_legacy_custom_fields()
+			mock_heal.assert_not_called()
+			mock_repair.assert_not_called()
+			self.assertGreaterEqual(mock_sanitize.call_count, 2)
+
+		# 3. boot_session skips Guest / Website User and uses cache for Desk users
+		bootinfo = frappe._dict()
+		with patch.object(frappe, "session", frappe._dict({"user": "Guest"})), patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.get_intercompany_party_map"
+		) as mock_pm:
+			boot.boot_session(bootinfo)
+			mock_pm.assert_not_called()
+
+		fake_cache = MagicMock()
+		fake_cache.get_value.return_value = None
+		with patch.object(frappe, "session", frappe._dict({"user": "accountant@example.com"})), patch.object(
+			frappe.db, "get_value", return_value="System User"
+		), patch.object(frappe, "cache", return_value=fake_cache, create=True), patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.get_intercompany_party_map",
+			return_value={"party_to_company": {"Cust B": "Co B"}},
+		) as mock_pm:
+			boot.boot_session(bootinfo)
+			mock_pm.assert_called_once()
+			fake_cache.set_value.assert_called_once()
+			self.assertEqual(bootinfo.intercompany_party_map, {"party_to_company": {"Cust B": "Co B"}})
+
+		# 4. RFQ -> Supplier Quotation resolves Item Price fallback rate instead of 0 under Source Document Rate
+		class FakeSQ:
+			def __init__(self):
+				self.doctype = "Supplier Quotation"
+				self.items = []
+				self.flags = frappe._dict()
+
+			def append(self, tbl, row):
+				getattr(self, tbl).append(frappe._dict(row))
+
+			def set_missing_values(self, for_validate=True):
+				pass
+
+		class FakeRFQ:
+			doctype = "Request for Quotation"
+			name = "PUR-RFQ-2026-00001"
+			company = "Co A"
+			transaction_date = "2026-11-24"
+			items = [frappe._dict({"item_code": "ITEM-RFQ-1", "item_name": "Widget", "qty": 2.0, "uom": "Nos"})]
+
+		rfq = FakeRFQ()
+		mapping = frappe._dict({"main_company": "Co A"})
+		linked_co = frappe._dict({"company": "Co B", "other_company_supplier": "Supp Co A"})
+		settings = {"default_transfer_pricing_rule": "Source Document Rate"}
+
+		def rfq_get_val(dt, filters, fieldname=None, as_dict=False):
+			if dt == "Company":
+				return "PKR"
+			if dt == "Item Price":
+				return frappe._dict({"price_list_rate": 450.0, "currency": "PKR"})
+			if dt == "Item":
+				return frappe._dict({"item_name": "Widget", "stock_uom": "Nos", "description": "Widget"})
+			return None
+
+		with patch.object(frappe, "new_doc", return_value=FakeSQ()), patch.object(
+			frappe.db, "exists", return_value=True
+		), patch.object(
+			frappe.db, "has_column", return_value=False
+		), patch.object(
+			frappe.db, "get_value", side_effect=rfq_get_val
+		):
+			sq = create_supplier_quotation(rfq, mapping, linked_co, "main_to_other", settings=settings)
+			self.assertEqual(sq.items[0].rate, 450.0)
+

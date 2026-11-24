@@ -1,6 +1,11 @@
 # Copyright (c) 2026, Inter Company Transactions and contributors
 # For license information, please see license.txt
 
+"""
+Manual administrator / developer troubleshooting utility for Inter Company Transactions.
+Never invoked automatically during app install, migrate, patch, or uninstall hooks.
+"""
+
 import ast
 import re
 import frappe
@@ -8,7 +13,8 @@ import frappe
 
 def run_full_healing(verbose=True):
 	"""
-	Complete self-healing and restoration utility for ERPNext site:
+	Manual administrator CLI diagnostic & repair utility (dev/support use only;
+	never invoked automatically during install, migrate, patch, or uninstall hooks).
 	1. Repairs corrupted 'depends_on' expressions in MariaDB tables
 	   (tabDocField, tabCustom Field, tabProperty Setter, tabClient Script, tabCustom Script, etc.)
 	2. Preserves external bench app directories without modifying disk JSON files.

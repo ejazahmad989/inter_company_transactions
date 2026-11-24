@@ -135,11 +135,3 @@ def cleanup_v16_navigation():
                 frappe.db.delete("Workspace Sidebar", {"name": "Inter Company"})
     except Exception as e:
         print(f"Notice during v16 navigation cleanup: {e}")
-
-
-def repair_all_depends_on_expressions():
-    """
-    Scans and permanently repairs any damaged depends_on expressions in MariaDB.
-    """
-    from inter_company_transactions.diagnose_and_heal import repair_database_text
-    repair_database_text(lambda *args, **kwargs: None)

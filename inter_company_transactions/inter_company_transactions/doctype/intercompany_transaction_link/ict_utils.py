@@ -596,9 +596,6 @@ def fix_legacy_custom_fields(force=False):
 		return
 
 	try:
-		from inter_company_transactions.diagnose_and_heal import repair_database_text
-
-		repair_database_text(lambda *args, **kwargs: None)
 		_sanitize_intercompany_stock_entry_custom_fields(force=True)
 
 		if frappe.db.table_exists("Custom Field"):

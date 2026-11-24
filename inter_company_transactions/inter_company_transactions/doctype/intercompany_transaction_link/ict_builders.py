@@ -3,7 +3,7 @@
 
 import frappe
 from frappe import _
-from frappe.utils import nowdate
+from frappe.utils import flt, nowdate
 
 from .ict_accounting_builders import (
 	create_journal_entry,
@@ -611,13 +611,42 @@ def create_supplier_quotation(quotation, mapping, linked_company, direction, set
 			source_company=quotation.company,
 			transaction_date=sq.transaction_date,
 		)
+		item_rate = flt(target_item["rate"])
+		if quotation.doctype == "Request for Quotation" and item_rate <= 0 and hasattr(frappe, "db") and frappe.db:
+			from .ict_currency import get_intercompany_exchange_rate
+			from .ict_pricing import _get_item_valuation_rate
+
+			t_code = target_item["item_code"]
+			if t_code and frappe.db.exists("DocType", "Item Price"):
+				ip_row = frappe.db.get_value(
+					"Item Price",
+					{"item_code": t_code, "buying": 1},
+					["price_list_rate", "currency"],
+					as_dict=True,
+				)
+				if ip_row and flt(ip_row.get("price_list_rate")) > 0:
+					ip_fx = (
+						get_intercompany_exchange_rate(ip_row.get("currency"), target_currency, sq.transaction_date)
+						if ip_row.get("currency") and target_currency and ip_row.get("currency") != target_currency
+						else 1.0
+					)
+					item_rate = flt(ip_row.get("price_list_rate")) * flt(ip_fx or 1.0)
+			if item_rate <= 0 and t_code:
+				std_rate = flt(frappe.db.get_value("Item", t_code, "standard_rate"))
+				if std_rate > 0:
+					item_rate = std_rate * flt(rate_factor or 1.0)
+				else:
+					val_rate = _get_item_valuation_rate(getattr(item, "item_code", None) or t_code, quotation.company)
+					if val_rate > 0:
+						item_rate = flt(val_rate) * flt(rate_factor or 1.0)
+
 		sq.append("items", {
 			"item_code": target_item["item_code"],
 			"item_name": target_item["item_name"],
 			"description": target_item["description"],
 			"qty": target_item["qty"],
 			"uom": target_item["uom"],
-			"rate": target_item["rate"],
+			"rate": item_rate,
 		})
 
 	sq.intercompany_linked_doc_doctype = quotation.doctype

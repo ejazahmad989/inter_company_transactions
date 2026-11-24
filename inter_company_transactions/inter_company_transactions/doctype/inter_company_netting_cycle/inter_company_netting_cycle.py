@@ -271,6 +271,147 @@ def _resolve_netting_clearing_and_supplier(doc, payer, receiver):
 	return clearing_account_payer, receiver_supplier
 
 
+def _resolve_netting_clearing_and_customer(doc, receiver, payer):
+	"""Symmetrically resolve receiver's clearing account and customer representing payer."""
+	clearing_account_receiver = None
+	payer_customer = None
+
+	for row in (getattr(doc, "participating_companies", None) or []):
+		if getattr(row, "company", None) == receiver and getattr(row, "clearing_account", None):
+			clearing_account_receiver = row.clearing_account
+			break
+
+	if hasattr(frappe, "db") and frappe.db:
+		parent_link = frappe.get_value("Intercompany Transaction Link", {"main_company": receiver}, "name")
+		if parent_link:
+			row_data = frappe.get_value(
+				"Intercompany Linked Company",
+				{"parent": parent_link, "company": payer},
+				["main_company_account", "main_company_customer"],
+				as_dict=True,
+			)
+			if row_data:
+				clearing_account_receiver = clearing_account_receiver or row_data.get("main_company_account")
+				payer_customer = row_data.get("main_company_customer")
+
+		if not payer_customer or not clearing_account_receiver:
+			rev_parent = frappe.get_value("Intercompany Transaction Link", {"main_company": payer}, "name")
+			if rev_parent:
+				rev_row = frappe.get_value(
+					"Intercompany Linked Company",
+					{"parent": rev_parent, "company": receiver},
+					["other_company_account", "other_company_customer"],
+					as_dict=True,
+				)
+				if rev_row:
+					clearing_account_receiver = clearing_account_receiver or rev_row.get("other_company_account")
+					payer_customer = payer_customer or rev_row.get("other_company_customer")
+
+	return clearing_account_receiver, payer_customer
+
+
+def _collect_pair_open_invoices_for_settlement(doc, company, partner_company, invoice_type, target_currency, tx_date):
+	"""Collect open invoices for a (company, partner_company) side to reference on the netting Journal Entry."""
+	refs = []
+	seen = set()
+	for inv in (getattr(doc, "invoices", None) or []):
+		inv_dt = getattr(inv, "invoice_type", None) or (inv.get("invoice_type") if isinstance(inv, dict) else None)
+		inv_name = getattr(inv, "invoice_name", None) or (inv.get("invoice_name") if isinstance(inv, dict) else None)
+		inv_co = getattr(inv, "company", None) or (inv.get("company") if isinstance(inv, dict) else None)
+		inv_partner = getattr(inv, "partner_company", None) or (inv.get("partner_company") if isinstance(inv, dict) else None)
+		if not inv_name:
+			continue
+
+		matched_name = None
+		matched_ccy = getattr(inv, "currency", None) or (inv.get("currency") if isinstance(inv, dict) else None)
+		raw_amt = flt(
+			getattr(inv, "settled_amount", None)
+			or getattr(inv, "outstanding_amount", None)
+			or (inv.get("settled_amount") if isinstance(inv, dict) else 0)
+			or (inv.get("outstanding_amount") if isinstance(inv, dict) else 0)
+		)
+
+		if inv_dt == invoice_type and inv_co == company and inv_partner == partner_company:
+			matched_name = inv_name
+		elif (
+			inv_co == partner_company
+			and inv_partner == company
+			and inv_dt in ("Sales Invoice", "Purchase Invoice")
+			and inv_dt != invoice_type
+			and hasattr(frappe, "db")
+			and frappe.db
+			and frappe.db.table_exists("Inter Company Document Reference")
+		):
+			cp_name = (
+				frappe.db.get_value(
+					"Inter Company Document Reference",
+					{"source_doctype": inv_dt, "source_name": inv_name, "target_doctype": invoice_type, "target_company": company},
+					"target_name",
+				)
+				or frappe.db.get_value(
+					"Inter Company Document Reference",
+					{"target_doctype": inv_dt, "target_name": inv_name, "source_doctype": invoice_type, "source_company": company},
+					"source_name",
+				)
+			)
+			if cp_name:
+				cp_info = frappe.db.get_value(invoice_type, cp_name, ["docstatus", "outstanding_amount", "currency"], as_dict=True)
+				if isinstance(cp_info, dict) and cp_info.get("docstatus") == 1 and flt(cp_info.get("outstanding_amount")) > 0:
+					matched_name = cp_name
+					raw_amt = flt(cp_info.get("outstanding_amount"))
+					matched_ccy = cp_info.get("currency") or matched_ccy
+
+		if matched_name and matched_name not in seen and raw_amt > 0.01:
+			seen.add(matched_name)
+			amt = _convert_cycle_amount(raw_amt, matched_ccy, target_currency, tx_date)
+			if amt > 0.01:
+				refs.append({"doctype": invoice_type, "name": matched_name, "amount": amt})
+
+	return refs
+
+
+def _append_allocated_party_rows(je, account, side, total_amount, company_currency, tx_date, party_type, party, invoice_refs):
+	"""Append party JE rows linked against open invoices up to total_amount, with remainder unallocated."""
+	from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_accounting_builders import (
+		_build_je_row,
+	)
+
+	remaining = flt(total_amount, 2)
+	for ref in (invoice_refs or []):
+		if remaining <= 0.01:
+			break
+		alloc = min(remaining, flt(ref["amount"], 2))
+		if alloc <= 0.01:
+			continue
+		row = _build_je_row(
+			account,
+			side,
+			alloc,
+			company_currency,
+			tx_date=tx_date,
+			party_type=party_type,
+			party=party,
+		)
+		row["reference_type"] = ref["doctype"]
+		row["reference_name"] = ref["name"]
+		je.append("accounts", row)
+		remaining = flt(remaining - alloc, 2)
+
+	if remaining > 0.01:
+		je.append(
+			"accounts",
+			_build_je_row(
+				account,
+				side,
+				remaining,
+				company_currency,
+				tx_date=tx_date,
+				party_type=party_type,
+				party=party,
+			),
+		)
+
+
 class InterCompanyNettingCycle(Document):
 	def validate(self):
 		if not self.participating_companies:
@@ -519,35 +660,35 @@ class InterCompanyNettingCycle(Document):
 			)
 
 			if payable_acct and receiver_supplier:
-				debit_row = _build_je_row(
+				pi_refs = _collect_pair_open_invoices_for_settlement(self, payer, receiver, "Purchase Invoice", payer_currency, date)
+				_append_allocated_party_rows(
+					je,
 					payable_acct,
 					"debit",
 					base_amt,
 					payer_currency,
-					tx_date=date,
-					party_type="Supplier",
-					party=receiver_supplier,
+					date,
+					"Supplier",
+					receiver_supplier,
+					pi_refs,
 				)
 			elif bank_or_cash_acct:
-				debit_row = _build_je_row(bank_or_cash_acct, "debit", base_amt, payer_currency, tx_date=date)
+				je.append("accounts", _build_je_row(bank_or_cash_acct, "debit", base_amt, payer_currency, tx_date=date))
 			else:
-				debit_row = _build_je_row(payable_acct or clearing_account_payer, "debit", base_amt, payer_currency, tx_date=date)
+				je.append("accounts", _build_je_row(payable_acct or clearing_account_payer, "debit", base_amt, payer_currency, tx_date=date))
 
-			if clearing_account_payer and debit_row.get("account"):
+			if clearing_account_payer and je.accounts:
 				credit_row = _build_je_row(clearing_account_payer, "credit", base_amt, payer_currency, tx_date=date)
 				if (
 					payer_currency
-					and (
-						debit_row.get("account_currency") != payer_currency
-						or credit_row.get("account_currency") != payer_currency
-					)
-				):
+					and any(r.get("account_currency") != payer_currency for r in je.accounts)
+				) or (payer_currency and credit_row.get("account_currency") != payer_currency):
 					je.multi_currency = 1
 
-				je.append("accounts", debit_row)
 				je.append("accounts", credit_row)
 				je.flags.ignore_permissions = True
 				je.flags.ignore_mandatory = True
+				je.flags.ict_system_sync = True
 				je.insert(ignore_permissions=True)
 				try:
 					if hasattr(frappe.db, "savepoint"):
@@ -563,25 +704,116 @@ class InterCompanyNettingCycle(Document):
 					frappe.log_error(f"Netting settlement JE {je.name} kept as draft: {e!s}", "Inter Company Netting")
 					settlement.status = "Pending"
 				settlement.settlement_entry = je.name
+
+				# Create mirrored receiver-side AR settlement JE so both ledgers tally
+				clearing_account_receiver, payer_customer = _resolve_netting_clearing_and_customer(self, receiver, payer)
+				receivable_acct = (
+					frappe.get_value("Company", receiver, "default_receivable_account")
+					if hasattr(frappe, "db") and frappe.db
+					else None
+				)
+				if not clearing_account_receiver and receivable_acct and payer_customer:
+					clearing_account_receiver = get_or_create_intercompany_clearing_account(receiver, payer)
+
+				if clearing_account_receiver and receivable_acct and payer_customer:
+					receiver_currency = (
+						frappe.get_cached_value("Company", receiver, "default_currency")
+						if hasattr(frappe, "db") and frappe.db
+						else payer_currency
+					)
+					recv_base_amt = _convert_cycle_amount(raw_amt, settlement_ccy, receiver_currency, date)
+					si_refs = _collect_pair_open_invoices_for_settlement(self, receiver, payer, "Sales Invoice", receiver_currency, date)
+
+					recv_je = frappe.new_doc("Journal Entry")
+					recv_je.voucher_type = "Journal Entry"
+					recv_je.company = receiver
+					recv_je.posting_date = date
+					recv_je.user_remark = f"Mirrored Netting Settlement for Cycle {self.name}: Received from {payer}"
+					recv_je.is_intercompany = 1
+					recv_je.intercompany_linked_doc_doctype = "Journal Entry"
+					recv_je.intercompany_linked_doc_name = je.name
+					recv_je.intercompany_linked_company = payer
+
+					recv_debit_row = _build_je_row(clearing_account_receiver, "debit", recv_base_amt, receiver_currency, tx_date=date)
+					recv_je.append("accounts", recv_debit_row)
+					_append_allocated_party_rows(
+						recv_je,
+						receivable_acct,
+						"credit",
+						recv_base_amt,
+						receiver_currency,
+						date,
+						"Customer",
+						payer_customer,
+						si_refs,
+					)
+					if receiver_currency and any(r.get("account_currency") != receiver_currency for r in recv_je.accounts):
+						recv_je.multi_currency = 1
+					recv_je.flags.ignore_permissions = True
+					recv_je.flags.ignore_mandatory = True
+					recv_je.flags.ict_system_sync = True
+					recv_je.insert(ignore_permissions=True)
+					try:
+						if hasattr(frappe.db, "savepoint"):
+							frappe.db.savepoint("ict_netting_recv_submit")
+						recv_je.submit()
+					except Exception as e:
+						if hasattr(frappe.db, "rollback"):
+							try:
+								frappe.db.rollback(save_point="ict_netting_recv_submit")
+							except Exception:
+								pass
+						frappe.log_error(f"Receiver netting JE {recv_je.name} kept as draft: {e!s}", "Inter Company Netting")
+						settlement.status = "Pending"
+					settlement.receiver_settlement_entry = recv_je.name
+					if frappe.db.table_exists("Inter Company Document Reference"):
+						try:
+							ref_doc = frappe.get_doc({
+								"doctype": "Inter Company Document Reference",
+								"source_doctype": "Journal Entry",
+								"source_name": je.name,
+								"source_company": payer,
+								"target_doctype": "Journal Entry",
+								"target_name": recv_je.name,
+								"target_company": receiver,
+							})
+							ref_doc.flags.ignore_permissions = True
+							ref_doc.flags.ignore_links = True
+							ref_doc.flags.ignore_mandatory = True
+							ref_doc.insert(ignore_permissions=True)
+						except Exception:
+							pass
+
 				if hasattr(settlement, "db_set"):
-					settlement.db_set({
+					update_vals = {
 						"status": settlement.status,
 						"settlement_entry": je.name,
-					}, update_modified=False)
+					}
+					if getattr(settlement, "receiver_settlement_entry", None):
+						update_vals["receiver_settlement_entry"] = settlement.receiver_settlement_entry
+					settlement.db_set(update_vals, update_modified=False)
 
 		self.status = "Settled"
 		self.db_set("status", "Settled", update_modified=False)
-		frappe.msgprint(_("Multilateral Netting Cycle {0} submitted. Settlement entries generated.").format(self.name), indicator="green")
+		frappe.msgprint(_("Multilateral Netting Cycle {0} submitted. Two-sided settlement entries generated.").format(self.name), indicator="green")
 
 	def on_cancel(self):
-		"""Cancel associated settlement vouchers"""
-		for settlement in self.net_settlements:
-			if settlement.settlement_entry and frappe.db.exists("Journal Entry", settlement.settlement_entry):
-				try:
-					doc = frappe.get_doc("Journal Entry", settlement.settlement_entry)
-					if doc.docstatus == 1:
-						doc.cancel()
-				except Exception as e:
-					frappe.log_error(f"Error cancelling netting settlement entry {settlement.settlement_entry}: {e}")
+		"""Cancel associated payer and receiver settlement Journal Entries."""
+		for settlement in (self.net_settlements or []):
+			je_names = []
+			if getattr(settlement, "settlement_entry", None):
+				je_names.append(settlement.settlement_entry)
+			if getattr(settlement, "receiver_settlement_entry", None):
+				je_names.append(settlement.receiver_settlement_entry)
+			for je_name in je_names:
+				if frappe.db.exists("Journal Entry", je_name):
+					try:
+						doc = frappe.get_doc("Journal Entry", je_name)
+						if doc.docstatus == 1:
+							doc.flags.ignore_permissions = True
+							doc.flags.ict_system_sync = True
+							doc.cancel()
+					except Exception as e:
+						frappe.log_error(f"Error cancelling netting settlement entry {je_name}: {e}")
 		self.status = "Cancelled"
 		self.db_set("status", "Cancelled", update_modified=False)

@@ -182,6 +182,18 @@ class IntercompanyTransactionLink(Document):
 		sister = self.get_sister_company_name()
 		if sister and getattr(self, "sister_company", None) != sister:
 			self.db_set("sister_company", sister, update_modified=False)
+		if callable(getattr(frappe, "cache", None)):
+			try:
+				frappe.cache().delete_value("ict_intercompany_party_map")
+			except Exception:
+				pass
+
+	def on_trash(self):
+		if callable(getattr(frappe, "cache", None)):
+			try:
+				frappe.cache().delete_value("ict_intercompany_party_map")
+			except Exception:
+				pass
 
 	def get_sister_company_name(self):
 		"""Extract sister company name(s) from linked_companies child table."""

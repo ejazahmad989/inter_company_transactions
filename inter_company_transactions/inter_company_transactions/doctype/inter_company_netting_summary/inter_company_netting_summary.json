@@ -9,6 +9,7 @@
     "amount",
     "currency",
     "settlement_entry",
+    "receiver_settlement_entry",
     "status"
   ],
   "fields": [
@@ -47,7 +48,14 @@
       "fieldname": "settlement_entry",
       "fieldtype": "Data",
       "in_list_view": 1,
-      "label": "Settlement Reference",
+      "label": "Payer Settlement Entry",
+      "read_only": 1
+    },
+    {
+      "fieldname": "receiver_settlement_entry",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Receiver Settlement Entry",
       "read_only": 1
     },
     {
