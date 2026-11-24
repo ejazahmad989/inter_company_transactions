@@ -3,6 +3,7 @@
 
 import hashlib
 import hmac
+import ipaddress
 import json
 import socket
 import ssl
@@ -47,6 +48,42 @@ def get_app_version_and_capabilities():
 	}
 
 
+def _get_decrypted_secret(row, fieldname):
+	"""Safely retrieve decrypted Password field from an Inter Company Remote Site row."""
+	if not row:
+		return ""
+	get_pw = getattr(row, "get_password", None)
+	if callable(get_pw):
+		try:
+			pw = get_pw(fieldname, raise_exception=False)
+			if pw is not None:
+				return str(pw).strip()
+		except Exception:
+			pass
+	row_name = row.get("name") if hasattr(row, "get") else getattr(row, "name", None)
+	if row_name and hasattr(frappe, "db") and frappe.db:
+		try:
+			from frappe.utils.password import get_decrypted_password
+
+			pw = get_decrypted_password(
+				"Inter Company Remote Site",
+				row_name,
+				fieldname,
+				raise_exception=False,
+			)
+			if pw is not None:
+				return str(pw).strip()
+		except Exception:
+			pass
+	raw_val = row.get(fieldname) if hasattr(row, "get") else getattr(row, fieldname, None)
+	if not raw_val:
+		return ""
+	raw_str = str(raw_val).strip()
+	if raw_str and set(raw_str) == {"*"}:
+		return ""
+	return raw_str
+
+
 def get_remote_site_for_company(company_name):
 	"""
 	Finds configured remote ERPNext site for the specified company.
@@ -61,15 +98,21 @@ def get_remote_site_for_company(company_name):
 			return None
 
 		for site in settings.remote_sites:
-			if (site.company_name or "").strip() == company_name.strip() and cint(site.is_active):
+			site_co = (site.get("company_name") if hasattr(site, "get") else getattr(site, "company_name", None) or "").strip()
+			site_active = site.get("is_active") if hasattr(site, "get") else getattr(site, "is_active", 0)
+			if site_co == company_name.strip() and cint(site_active):
+				site_url = (site.get("site_url") if hasattr(site, "get") else getattr(site, "site_url", "") or "").strip().rstrip('/')
+				api_key = (site.get("api_key") if hasattr(site, "get") else getattr(site, "api_key", "") or "").strip()
+				timeout_val = site.get("timeout_seconds") if hasattr(site, "get") else getattr(site, "timeout_seconds", 0)
+				verify_val = site.get("verify_ssl") if hasattr(site, "get") else getattr(site, "verify_ssl", None)
 				return {
-					"site_url": (site.site_url or "").strip().rstrip('/'),
-					"company_name": site.company_name.strip(),
-					"api_key": (site.api_key or "").strip(),
-					"api_secret": (site.api_secret or "").strip(),
-					"hmac_secret": (site.hmac_secret or "").strip(),
-					"timeout_seconds": cint(site.timeout_seconds) or 15,
-					"verify_ssl": cint(site.verify_ssl) if site.get("verify_ssl") is not None else 1
+					"site_url": site_url,
+					"company_name": site_co,
+					"api_key": api_key,
+					"api_secret": _get_decrypted_secret(site, "api_secret"),
+					"hmac_secret": _get_decrypted_secret(site, "hmac_secret"),
+					"timeout_seconds": cint(timeout_val) or 15,
+					"verify_ssl": cint(verify_val) if verify_val is not None else 1
 				}
 	except Exception as e:
 		frappe.logger().error(f"Error fetching remote site for company {company_name}: {e!s}")
@@ -267,6 +310,43 @@ def push_document_to_remote_site(doc, target_company, remote_site):
 		}
 
 
+def push_cancellation_to_remote_site(doc, remote_site):
+	"""Send signed cancellation notification to a configured remote federated ERPNext site."""
+	if not remote_site or not doc:
+		return False
+	site_url = remote_site["site_url"]
+	endpoint = f"{site_url}/api/method/inter_company_transactions.sync.cancel_remote_transaction"
+	payload_bytes = json.dumps(
+		{
+			"source_doctype": doc.doctype,
+			"source_name": doc.name,
+			"source_company": doc.get("company"),
+		},
+		default=str,
+	).encode("utf-8")
+	headers = {
+		"Content-Type": "application/json",
+		"Accept": "application/json",
+		"Authorization": f"token {remote_site['api_key']}:{remote_site['api_secret']}",
+	}
+	if remote_site.get("hmac_secret"):
+		headers["X-Intercompany-Signature"] = hmac.new(
+			remote_site["hmac_secret"].encode("utf-8"),
+			payload_bytes,
+			hashlib.sha256,
+		).hexdigest()
+
+	ssl_context = ssl.create_default_context()
+	if not cint(remote_site.get("verify_ssl", 1)):
+		ssl_context.check_hostname = False
+		ssl_context.verify_mode = ssl.CERT_NONE
+
+	timeout = cint(remote_site.get("timeout_seconds")) or 10
+	req = urllib.request.Request(endpoint, data=payload_bytes, headers=headers, method="POST")
+	with urllib.request.urlopen(req, timeout=timeout, context=ssl_context):
+		return True
+
+
 def create_remote_document_reference(source_doc, target_doctype, target_name, target_company, remote_site_url, idempotency_key):
 	"""Records cross-site reference linking source document to remote target document."""
 	if not frappe.db.exists("DocType", "Inter Company Document Reference"):
@@ -368,6 +448,57 @@ def _get_request_header_safe(header_name):
 	return None
 
 
+def _verify_remote_hmac_signature(data, raw_text_for_hmac):
+	"""Strictly verify X-Intercompany-Signature when any active remote site defines an HMAC secret."""
+	settings = frappe.get_cached_doc("Inter Company Settings")
+	remote_sites = (settings.get("remote_sites") or []) if settings else []
+	active_sites = [
+		s for s in remote_sites
+		if cint(s.get("is_active") if (isinstance(s, dict) and "is_active" in s) or hasattr(s, "is_active") else 1) != 0
+	]
+	if not active_sites:
+		return
+
+	source_company = ((data or {}).get("source_company") or "").strip()
+	source_site_url = ((data or {}).get("source_site_url") or "").strip().rstrip("/")
+
+	matched_secrets = []
+	all_secrets = []
+	for site in active_sites:
+		secret = _get_decrypted_secret(site, "hmac_secret")
+		if not secret:
+			continue
+		all_secrets.append(secret)
+		site_co = (site.get("company_name") if hasattr(site, "get") else getattr(site, "company_name", "") or "").strip()
+		site_url = (site.get("site_url") if hasattr(site, "get") else getattr(site, "site_url", "") or "").strip().rstrip("/")
+		if (source_company and site_co == source_company) or (source_site_url and site_url == source_site_url):
+			matched_secrets.append(secret)
+
+	secrets_to_check = matched_secrets or all_secrets
+	if not secrets_to_check:
+		return
+
+	incoming_sig = (_get_request_header_safe("X-Intercompany-Signature") or "").strip()
+	auth_exc = getattr(frappe, "AuthenticationError", getattr(frappe, "PermissionError", Exception))
+	if not incoming_sig:
+		frappe.throw(_("Missing X-Intercompany-Signature HMAC header."), exc=auth_exc)
+
+	raw_bytes = (
+		raw_text_for_hmac.encode("utf-8")
+		if raw_text_for_hmac is not None
+		else json.dumps(data, default=str).encode("utf-8")
+	)
+	verified = any(
+		hmac.compare_digest(
+			incoming_sig,
+			hmac.new(secret.encode("utf-8"), raw_bytes, hashlib.sha256).hexdigest(),
+		)
+		for secret in secrets_to_check
+	)
+	if not verified:
+		frappe.throw(_("Invalid HMAC signature on remote inter-company request."), exc=auth_exc)
+
+
 @frappe.whitelist(allow_guest=False)
 def receive_remote_transaction(payload: dict | str | bytes | None = None):
 	"""
@@ -393,24 +524,8 @@ def receive_remote_transaction(payload: dict | str | bytes | None = None):
 	else:
 		frappe.throw(_("No payload provided."))
 
-	# Optional HMAC signature verification on raw HTTP payload bytes first
-	incoming_sig = _get_request_header_safe("X-Intercompany-Signature")
-	settings = frappe.get_cached_doc("Inter Company Settings")
-	if incoming_sig and settings.get("remote_sites"):
-		verified = False
-		raw_bytes = (
-			raw_text_for_hmac.encode("utf-8")
-			if raw_text_for_hmac is not None
-			else json.dumps(data, default=str).encode("utf-8")
-		)
-		for site in settings.remote_sites:
-			if site.hmac_secret:
-				expected = hmac.new(site.hmac_secret.encode("utf-8"), raw_bytes, hashlib.sha256).hexdigest()
-				if hmac.compare_digest(incoming_sig, expected):
-					verified = True
-					break
-		if not verified:
-			frappe.logger().warning("HMAC signature mismatch on receive_remote_transaction")
+	# Strict HMAC signature verification whenever remote sites configure an HMAC secret
+	_verify_remote_hmac_signature(data, raw_text_for_hmac)
 
 	# Idempotency Check
 	idempotency_key = data.get("idempotency_key")
@@ -431,15 +546,12 @@ def receive_remote_transaction(payload: dict | str | bytes | None = None):
 				"message": _("Transaction already processed (Idempotent)")
 			}
 
-	# Identify Target Company
-	target_company = data.get("target_company")
+	# Identify Target Company strictly — never fall back to an arbitrary database Company
+	target_company = (data.get("target_company") or "").strip()
 	if not target_company or not frappe.db.exists("Company", target_company):
-		# Fall back to single company default or throw
-		companies = frappe.get_all("Company", limit=1)
-		if companies:
-			target_company = companies[0].name
-		else:
-			frappe.throw(_("Target company {0} does not exist on this ERPNext instance.").format(target_company))
+		frappe.throw(
+			_("Target company {0} does not exist on this ERPNext instance.").format(target_company or _("(missing)"))
+		)
 
 	source_doctype = data.get("source_doctype")
 	source_name = data.get("source_name")
@@ -748,6 +860,11 @@ def receive_remote_transaction(payload: dict | str | bytes | None = None):
 		idempotency_key=idempotency_key
 	)
 
+	try:
+		settings = frappe.get_cached_doc("Inter Company Settings") or frappe._dict()
+	except Exception:
+		settings = frappe._dict()
+
 	if cint(settings.get("auto_submit_target_doc")) and hasattr(target_doc, "submit") and target_doc.docstatus == 0:
 		try:
 			if hasattr(frappe.db, "savepoint"):
@@ -911,24 +1028,7 @@ def cancel_remote_transaction(payload: dict | str | bytes | None = None):
 	else:
 		data = raw_data or {}
 
-	incoming_sig = _get_request_header_safe("X-Intercompany-Signature")
-	settings = frappe.get_cached_doc("Inter Company Settings")
-	if incoming_sig and settings.get("remote_sites"):
-		raw_bytes = (
-			raw_text_for_hmac.encode("utf-8")
-			if raw_text_for_hmac is not None
-			else json.dumps(data, default=str).encode("utf-8")
-		)
-		verified = any(
-			hmac.compare_digest(
-				incoming_sig,
-				hmac.new(site.hmac_secret.encode("utf-8"), raw_bytes, hashlib.sha256).hexdigest(),
-			)
-			for site in settings.remote_sites
-			if site.hmac_secret
-		)
-		if not verified:
-			frappe.logger().warning("HMAC signature mismatch on cancel_remote_transaction")
+	_verify_remote_hmac_signature(data, raw_text_for_hmac)
 
 	source_doctype = data.get("source_doctype")
 	source_name = data.get("source_name")
@@ -961,32 +1061,50 @@ def cancel_remote_transaction(payload: dict | str | bytes | None = None):
 	return {"success": True, "message": "Already cancelled"}
 
 
+def _is_blocked_ssrf_ip(ip_str):
+	"""Return (blocked: bool, normalized_ip: str) blocking loopback, private, link-local, metadata & reserved ranges."""
+	raw_ip = (ip_str or "").split("%", 1)[0].strip()
+	ip_obj = ipaddress.ip_address(raw_ip)
+	if isinstance(ip_obj, ipaddress.IPv6Address) and ip_obj.ipv4_mapped:
+		ip_obj = ip_obj.ipv4_mapped
+	blocked = (
+		ip_obj.is_private
+		or ip_obj.is_loopback
+		or ip_obj.is_link_local
+		or ip_obj.is_multicast
+		or ip_obj.is_reserved
+		or ip_obj.is_unspecified
+		or not ip_obj.is_global
+	)
+	return blocked, str(ip_obj)
+
+
 @frappe.whitelist()
 def diagnose_remote_site_connectivity(
 	site_url: str,
 	api_key: str | None = None,
 	api_secret: str | None = None,
 	timeout: int | float = 5,
+	verify_ssl: int | bool = 1,
 ):
 	"""
 	Comprehensive Multi-Layer Network, Port & Firewall Diagnostic Engine.
-	Executes 6 verification layers:
-	  1. URL format & scheme validation
-	  2. DNS hostname resolution
+	Executes 6 verification layers with SSRF & IPv6 safety checks:
+	  1. URL format & http/https scheme validation
+	  2. DNS hostname resolution (IPv4 & IPv6) & private/metadata IP blocking
 	  3. TCP socket / port reachability
 	  4. SSL/TLS Handshake
 	  5. Frappe API Token Authentication
 	  6. Intercompany Transactions App Handshake
 	Returns actionable Linux firewall commands (UFW, Firewalld, iptables, AWS SG).
 	"""
-	if getattr(frappe, "request", None):
-		frappe.only_for(["System Manager", "Accounts Manager"])
+	frappe.only_for("System Manager")
 
 	if not site_url:
 		frappe.throw(_("Please provide a Site URL to diagnose."))
 
 	site_url = site_url.strip().rstrip('/')
-	timeout = cint(timeout) or 5
+	timeout = max(1, min(cint(timeout) or 5, 30))
 
 	diag = {
 		"site_url": site_url,
@@ -997,20 +1115,20 @@ def diagnose_remote_site_connectivity(
 		"error": None
 	}
 
-	# Step 1: URL Parsing
+	# Step 1: URL Parsing & Strict HTTP/HTTPS Scheme Validation
 	parsed = urllib.parse.urlparse(site_url)
-	if not parsed.scheme or not parsed.netloc:
+	scheme = (parsed.scheme or "").lower()
+	hostname = parsed.hostname
+	if not scheme or not parsed.netloc or not hostname or scheme not in ("http", "https"):
 		diag["overall_status"] = "Failed"
-		diag["error"] = _("Invalid URL format. Please include protocol, e.g. https://erp.yourdomain.com:443")
+		diag["error"] = _("Invalid URL format. Please include an http:// or https:// URL, e.g. https://erp.yourdomain.com:443")
 		diag["steps"].append({
 			"step": "URL Format",
 			"status": "Failed",
-			"details": _("Missing scheme (http/https) or host domain.")
+			"details": _("Missing or unsupported URL scheme (only http/https supported) or missing host domain.")
 		})
 		return diag
 
-	scheme = parsed.scheme.lower()
-	hostname = parsed.hostname
 	port = parsed.port or (443 if scheme == "https" else 80)
 
 	diag["steps"].append({
@@ -1019,38 +1137,64 @@ def diagnose_remote_site_connectivity(
 		"details": f"Scheme: {scheme.upper()}, Host: {hostname}, Port: {port}" + (" (Plain HTTP is unencrypted; HTTPS recommended)" if scheme == "http" else "")
 	})
 
-	# Step 2: DNS Resolution
-	ip_address = None
+	# Step 2: DNS Resolution (IPv4 + IPv6) & SSRF Validation
+	addr_infos = []
+	resolved_ips = []
 	try:
-		ip_address = socket.gethostbyname(hostname)
+		addr_infos = socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
+		if not addr_infos:
+			raise socket.gaierror(f"No address records returned for {hostname}")
+
+		blocked_ips = []
+		for _fam, _stype, _proto, _canon, sockaddr in addr_infos:
+			ip_candidate = sockaddr[0]
+			is_blocked, norm_ip = _is_blocked_ssrf_ip(ip_candidate)
+			if norm_ip not in resolved_ips:
+				resolved_ips.append(norm_ip)
+			if is_blocked and norm_ip not in blocked_ips:
+				blocked_ips.append(norm_ip)
+
+		if blocked_ips:
+			diag["overall_status"] = "Failed"
+			diag["error"] = _("Blocked connection to non-public or internal IP address(es): {0}").format(", ".join(blocked_ips))
+			diag["steps"].append({
+				"step": "DNS Resolution & SSRF Safety",
+				"status": "Failed",
+				"details": diag["error"],
+			})
+			return diag
+
+		ip_display = ", ".join(resolved_ips)
 		diag["steps"].append({
 			"step": "DNS Resolution",
 			"status": "Passed",
-			"details": f"Hostname '{hostname}' successfully resolved to IP: {ip_address}"
+			"details": f"Hostname '{hostname}' resolved to public IP(s): {ip_display}"
 		})
-	except socket.gaierror as e:
+	except (socket.gaierror, ValueError) as e:
 		diag["overall_status"] = "Failed"
+		diag["error"] = f"DNS Lookup failed for host '{hostname}': {e!s}"
 		diag["steps"].append({
 			"step": "DNS Resolution",
 			"status": "Failed",
-			"details": f"DNS Lookup failed for host '{hostname}': {e!s}. Ensure domain is configured in DNS or /etc/hosts."
+			"details": f"DNS Lookup failed for host '{hostname}': {e!s}. Ensure domain is configured in DNS."
 		})
 		_generate_firewall_remedy(diag, hostname, port)
 		return diag
 
-	# Step 3: TCP Port & Socket Reachability
+	# Step 3: TCP Port & Socket Reachability (supports both IPv4 and IPv6)
 	t_start = time.time()
-	sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-	sock.settimeout(timeout)
+	primary_family, primary_socktype, primary_proto, _canon, primary_sockaddr = addr_infos[0]
+	primary_ip = resolved_ips[0] if resolved_ips else hostname
 	try:
-		sock.connect((hostname, port))
-		sock.close()
+		with socket.socket(primary_family, primary_socktype, primary_proto) as sock:
+			sock.settimeout(timeout)
+			sock.connect(primary_sockaddr)
 		sock_latency = round((time.time() - t_start) * 1000, 2)
 		diag["latency_ms"] = sock_latency
 		diag["steps"].append({
 			"step": "TCP Port & Firewall Reachability",
 			"status": "Passed",
-			"details": f"Port {port} on {ip_address} is OPEN and reachable. (TCP handshake: {sock_latency} ms)"
+			"details": f"Port {port} on {primary_ip} is OPEN and reachable. (TCP handshake: {sock_latency} ms)"
 		})
 	except TimeoutError:
 		diag["overall_status"] = "Failed"
@@ -1080,12 +1224,20 @@ def diagnose_remote_site_connectivity(
 		_generate_firewall_remedy(diag, hostname, port)
 		return diag
 
+	# Build TLS context respecting verify_ssl
+	ssl_ctx = ssl.create_default_context()
+	if not cint(verify_ssl):
+		ssl_ctx.check_hostname = False
+		ssl_ctx.verify_mode = ssl.CERT_NONE
+
 	# Step 4: SSL/TLS Handshake (if HTTPS)
 	if scheme == "https":
 		try:
-			context = ssl.create_default_context()
-			with socket.create_connection((hostname, port), timeout=timeout) as s:
-				with context.wrap_socket(s, server_hostname=hostname) as ssock:
+			verify_context = ssl.create_default_context()
+			with socket.socket(primary_family, primary_socktype, primary_proto) as s:
+				s.settimeout(timeout)
+				s.connect(primary_sockaddr)
+				with verify_context.wrap_socket(s, server_hostname=hostname) as ssock:
 					cert = ssock.getpeercert()
 					diag["steps"].append({
 						"step": "SSL / TLS Handshake",
@@ -1093,6 +1245,8 @@ def diagnose_remote_site_connectivity(
 						"details": f"TLS verification valid. Certificate Subject: {dict(x[0] for x in cert.get('subject', []))}"
 					})
 		except ssl.SSLError as e:
+			if cint(verify_ssl):
+				diag["overall_status"] = "Warning"
 			diag["steps"].append({
 				"step": "SSL / TLS Handshake",
 				"status": "Warning",
@@ -1116,9 +1270,6 @@ def diagnose_remote_site_connectivity(
 					"Accept": "application/json"
 				}
 			)
-			ssl_ctx = ssl.create_default_context()
-			ssl_ctx.check_hostname = False
-			ssl_ctx.verify_mode = ssl.CERT_NONE
 
 			t_auth_start = time.time()
 			with urllib.request.urlopen(req, timeout=timeout, context=ssl_ctx) as resp:
@@ -1155,9 +1306,6 @@ def diagnose_remote_site_connectivity(
 	try:
 		handshake_url = f"{site_url}/api/method/inter_company_transactions.sync.get_app_version_and_capabilities"
 		req = urllib.request.Request(handshake_url, headers={"Accept": "application/json"})
-		ssl_ctx = ssl.create_default_context()
-		ssl_ctx.check_hostname = False
-		ssl_ctx.verify_mode = ssl.CERT_NONE
 
 		with urllib.request.urlopen(req, timeout=timeout, context=ssl_ctx) as resp:
 			h_data = json.loads(resp.read().decode('utf-8'))

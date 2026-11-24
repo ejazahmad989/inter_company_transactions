@@ -247,6 +247,17 @@
 			);
 		}
 
+		const deskPrefix = (function() {
+			try {
+				const p = (typeof window !== 'undefined' && window.location && window.location.pathname) || '';
+				if (p.startsWith('/desk')) return '/desk';
+				const v = (frappe && frappe.boot && frappe.boot.versions && frappe.boot.versions.frappe) || '';
+				if (parseInt(String(v).split('.')[0], 10) >= 16) return '/desk';
+			} catch (e) {}
+			return '/app';
+		})();
+		const targetHref = `${deskPrefix}/${encodeURIComponent(frappe.router.slug(targetDocType))}/${encodeURIComponent(targetDocName)}`;
+
 		if (frm.dashboard && frm.dashboard.set_headline_alert) {
 			if (isCounterpart && isOrphan) {
 				frm.dashboard.set_headline_alert(
@@ -260,9 +271,8 @@
 			} else if (isCounterpart) {
 				const docStateLabel = frm.doc.docstatus === 0 ? __('Draft') : (frm.doc.docstatus === 1 ? __('Document') : __('Cancelled Document'));
 				frm.dashboard.set_headline_alert(
-					__('Mirrored Inter-Company {5} from <a href="/app/{0}/{1}"><b>{2} {3}</b></a> ({4}). Currency, exchange rates, parties & amounts are strictly locked \u2014 contact <b>{4}</b> to cancel or amend. Warehouse / Cost Center / Account remain editable.', [
-						encodeURIComponent(frappe.router.slug(targetDocType)),
-						encodeURIComponent(targetDocName),
+					__('Mirrored Inter-Company {4} from <a href="{0}"><b>{1} {2}</b></a> ({3}). Currency, exchange rates, parties & amounts are strictly locked \u2014 contact <b>{3}</b> to cancel or amend. Warehouse / Cost Center / Account remain editable.', [
+						targetHref,
 						esc(__(targetDocType)),
 						esc(targetDocName),
 						esc(targetCompany),
@@ -272,9 +282,8 @@
 				);
 			} else {
 				frm.dashboard.set_headline_alert(
-					__('Linked Inter-Company Document: <a href="/app/{0}/{1}"><b>{2} {3}</b></a> ({4})', [
-						encodeURIComponent(frappe.router.slug(targetDocType)),
-						encodeURIComponent(targetDocName),
+					__('Linked Inter-Company Document: <a href="{0}"><b>{1} {2}</b></a> ({3})', [
+						targetHref,
 						esc(__(targetDocType)),
 						esc(targetDocName),
 						esc(targetCompany)

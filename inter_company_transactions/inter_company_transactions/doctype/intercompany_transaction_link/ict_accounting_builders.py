@@ -427,6 +427,135 @@ def create_journal_entry(source_je, mapping, linked_company, direction):
 	return je
 
 
+def _find_counterpart_payment_ref(ref_doctype, ref_name, target_company):
+	"""Find submitted counterpart Sales/Purchase Invoice or Journal Entry in target_company for a Payment Entry reference."""
+	if not ref_doctype or not ref_name or not target_company or not (hasattr(frappe, "db") and frappe.db):
+		return None, None
+
+	if frappe.db.exists("DocType", "Inter Company Document Reference") and frappe.db.table_exists("Inter Company Document Reference"):
+		ref = frappe.db.get_value(
+			"Inter Company Document Reference",
+			{
+				"source_doctype": ref_doctype,
+				"source_name": ref_name,
+				"target_company": target_company,
+			},
+			["target_doctype", "target_name"],
+			as_dict=True,
+		)
+		if ref and ref.get("target_doctype") and ref.get("target_name"):
+			return ref.get("target_doctype"), ref.get("target_name")
+
+		rev = frappe.db.get_value(
+			"Inter Company Document Reference",
+			{
+				"target_doctype": ref_doctype,
+				"target_name": ref_name,
+				"source_company": target_company,
+			},
+			["source_doctype", "source_name"],
+			as_dict=True,
+		)
+		if rev and rev.get("source_doctype") and rev.get("source_name"):
+			return rev.get("source_doctype"), rev.get("source_name")
+
+	candidate_doctypes = {
+		"Sales Invoice": ("Purchase Invoice", "Journal Entry"),
+		"Purchase Invoice": ("Sales Invoice", "Journal Entry"),
+		"Sales Order": ("Purchase Order",),
+		"Purchase Order": ("Sales Order",),
+		"Journal Entry": ("Journal Entry",),
+	}.get(ref_doctype, ())
+
+	for tgt_dt in candidate_doctypes:
+		if frappe.db.exists("DocType", tgt_dt) and frappe.db.has_column(tgt_dt, "intercompany_linked_doc_name"):
+			tgt_name = frappe.db.get_value(
+				tgt_dt,
+				{
+					"company": target_company,
+					"intercompany_linked_doc_doctype": ref_doctype,
+					"intercompany_linked_doc_name": ref_name,
+					"docstatus": 1,
+				},
+				"name",
+			)
+			if tgt_name:
+				return tgt_dt, tgt_name
+
+	return None, None
+
+
+def _populate_mirrored_payment_references(pe, source_pe, target_company_currency):
+	"""Map source_pe.references to matching submitted invoices/vouchers in pe.company so bills get allocated."""
+	source_refs = getattr(source_pe, "references", None) or (source_pe.get("references") if isinstance(source_pe, dict) else None) or []
+	if not source_refs or not (hasattr(frappe, "db") and frappe.db):
+		return
+
+	allowed_by_party_type = {
+		"Supplier": {"Purchase Invoice", "Journal Entry", "Purchase Order", "Employee Advance"},
+		"Customer": {"Sales Invoice", "Journal Entry", "Sales Order"},
+	}.get(pe.party_type, set())
+
+	pe_party_ccy = pe.paid_to_account_currency if pe.payment_type == "Pay" else pe.paid_from_account_currency
+	remaining_budget = flt(pe.received_amount if pe.payment_type == "Pay" else pe.paid_amount)
+
+	for src_ref in source_refs:
+		src_dt = src_ref.get("reference_doctype") if isinstance(src_ref, dict) else getattr(src_ref, "reference_doctype", None)
+		src_name = src_ref.get("reference_name") if isinstance(src_ref, dict) else getattr(src_ref, "reference_name", None)
+		src_alloc = flt(src_ref.get("allocated_amount") if isinstance(src_ref, dict) else getattr(src_ref, "allocated_amount", 0))
+		if not src_dt or not src_name or src_alloc <= 0:
+			continue
+
+		tgt_dt, tgt_name = _find_counterpart_payment_ref(src_dt, src_name, pe.company)
+		if not tgt_dt or not tgt_name or (allowed_by_party_type and tgt_dt not in allowed_by_party_type):
+			continue
+		if not frappe.db.exists(tgt_dt, tgt_name):
+			continue
+
+		info = frappe.db.get_value(tgt_dt, tgt_name, ["docstatus", "outstanding_amount", "grand_total", "currency"], as_dict=True) if tgt_dt in ("Sales Invoice", "Purchase Invoice") else frappe.db.get_value(tgt_dt, tgt_name, ["docstatus"], as_dict=True)
+		if not info or info.get("docstatus") != 1:
+			continue
+
+		src_ref_ccy = None
+		if src_dt in ("Sales Invoice", "Purchase Invoice"):
+			src_ref_ccy = frappe.db.get_value(src_dt, src_name, "currency")
+		src_ref_ccy = src_ref_ccy or getattr(source_pe, "paid_to_account_currency", None) or getattr(source_pe, "paid_from_account_currency", None)
+		tgt_ref_ccy = info.get("currency") or pe_party_ccy or target_company_currency
+
+		if src_ref_ccy and tgt_ref_ccy and src_ref_ccy != tgt_ref_ccy:
+			fx = (
+				extract_document_exchange_rate(source_pe, src_ref_ccy, tgt_ref_ccy)
+				or get_intercompany_exchange_rate(src_ref_ccy, tgt_ref_ccy, pe.posting_date)
+			)
+			alloc = _safe_flt(src_alloc * flt(fx), 2)
+		else:
+			alloc = _safe_flt(src_alloc, 2)
+
+		outstanding = flt(info.get("outstanding_amount")) if info.get("outstanding_amount") is not None else alloc
+		if tgt_dt in ("Sales Invoice", "Purchase Invoice"):
+			if outstanding <= 0:
+				continue
+			alloc = min(alloc, outstanding)
+
+		if remaining_budget > 0:
+			alloc = min(alloc, remaining_budget)
+			remaining_budget = _safe_flt(remaining_budget - alloc, 2)
+
+		if alloc <= 0:
+			continue
+
+		ref_row = {
+			"reference_doctype": tgt_dt,
+			"reference_name": tgt_name,
+			"allocated_amount": alloc,
+		}
+		if info.get("grand_total") is not None:
+			ref_row["total_amount"] = flt(info.get("grand_total"))
+		if info.get("outstanding_amount") is not None:
+			ref_row["outstanding_amount"] = outstanding
+		pe.append("references", ref_row)
+
+
 def create_payment_entry(source_pe, mapping, linked_company, direction):
 	"""Create corresponding Payment Entry using Bank/Cash TMP clearing accounts and exact FX rates."""
 	pe = frappe.new_doc("Payment Entry")
@@ -523,6 +652,8 @@ def create_payment_entry(source_pe, mapping, linked_company, direction):
 	pe.intercompany_linked_doc_name = source_pe.name
 	pe.intercompany_linked_company = source_pe.company
 	pe.intercompany_target_company = source_pe.company
+
+	_populate_mirrored_payment_references(pe, source_pe, target_company_currency)
 
 	pe.flags.ignore_permissions = True
 	pe.flags.ignore_mandatory = True

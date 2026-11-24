@@ -88,6 +88,7 @@ function build_console_ui($container, data) {
 	let isHealthy = data.health_status === 'Healthy';
 
 	const esc = frappe.utils.escape_html;
+	const deskPrefix = ict_desk_prefix();
 	let html = `
 		<div class="ict-console-body" style="padding: 10px 0;">
 			<!-- Welcome / Quick Action Banner -->
@@ -134,7 +135,7 @@ function build_console_ui($container, data) {
 						<div class="text-muted text-uppercase font-weight-bold" style="font-size: 11px; letter-spacing: 0.5px;">${__('Mirrored Documents')}</div>
 						<div class="d-flex align-items-center justify-content-between mt-2">
 							<h2 class="mb-0 font-weight-bold" style="color: #16a34a;">${m.synced_docs_count}</h2>
-							<a href="/app/inter-company-document-reference" class="btn btn-xs btn-default">${__('View All')}</a>
+							<a href="${deskPrefix}/inter-company-document-reference" class="btn btn-xs btn-default">${__('View All')}</a>
 						</div>
 					</div>
 				</div>
@@ -152,7 +153,7 @@ function build_console_ui($container, data) {
 						<div class="text-muted text-uppercase font-weight-bold" style="font-size: 11px; letter-spacing: 0.5px;">${__('Open Disputes')}</div>
 						<div class="d-flex align-items-center justify-content-between mt-2">
 							<h2 class="mb-0 font-weight-bold" style="color: ${m.open_disputes > 0 ? '#dc2626' : '#6b7280'};">${m.open_disputes}</h2>
-							<a href="/app/inter-company-dispute" class="btn btn-xs btn-default">${__('Disputes')}</a>
+							<a href="${deskPrefix}/inter-company-dispute" class="btn btn-xs btn-default">${__('Disputes')}</a>
 						</div>
 					</div>
 				</div>
@@ -161,28 +162,28 @@ function build_console_ui($container, data) {
 			<!-- Quick Function Hub / Navigation Tiles -->
 			<div class="row mb-4">
 				<div class="col-6 col-md-3 mb-3">
-					<a href="/app/intercompany-transaction-link" class="ict-action-tile">
+					<a href="${deskPrefix}/intercompany-transaction-link" class="ict-action-tile">
 						<div class="tile-icon text-primary"><i class="fa fa-sitemap"></i></div>
 						<div class="font-weight-bold">${__('Company Links')}</div>
 						<small class="text-muted d-block mt-1">${__('Entity topology & transaction routes')}</small>
 					</a>
 				</div>
 				<div class="col-6 col-md-3 mb-3">
-					<a href="/app/transfer-pricing-policy" class="ict-action-tile">
+					<a href="${deskPrefix}/transfer-pricing-policy" class="ict-action-tile">
 						<div class="tile-icon text-success"><i class="fa fa-tags"></i></div>
 						<div class="font-weight-bold">${__('Transfer Pricing')}</div>
 						<small class="text-muted d-block mt-1">${__('OECD Cost-plus & resale margins')}</small>
 					</a>
 				</div>
 				<div class="col-6 col-md-3 mb-3">
-					<a href="/app/inter-company-netting-cycle" class="ict-action-tile">
+					<a href="${deskPrefix}/inter-company-netting-cycle" class="ict-action-tile">
 						<div class="tile-icon text-info"><i class="fa fa-balance-scale"></i></div>
 						<div class="font-weight-bold">${__('Netting Cycles')}</div>
 						<small class="text-muted d-block mt-1">${__('Multilateral cross-debt settlement')}</small>
 					</a>
 				</div>
 				<div class="col-6 col-md-3 mb-3">
-					<a href="/app/inter-company-elimination-run" class="ict-action-tile">
+					<a href="${deskPrefix}/inter-company-elimination-run" class="ict-action-tile">
 						<div class="tile-icon text-warning"><i class="fa fa-compress"></i></div>
 						<div class="font-weight-bold">${__('Elimination Runs')}</div>
 						<small class="text-muted d-block mt-1">${__('Group holding consolidation & GL reversals')}</small>
@@ -211,7 +212,7 @@ function build_console_ui($container, data) {
 						<h5 class="mb-1 font-weight-bold"><i class="fa fa-exchange mr-2 text-success"></i>${__('Live Mirroring Stream')}</h5>
 						<p class="text-muted mb-0" style="font-size: 13px;">${__('Real-time audit trail of mirrored transactions across sister companies')}</p>
 					</div>
-					<a href="/app/query-report/Inter Company Transaction Matrix" class="btn btn-sm btn-default"><i class="fa fa-table mr-1"></i>${__('Full Audit Matrix')}</a>
+					<a href="${deskPrefix}/query-report/Inter Company Transaction Matrix" class="btn btn-sm btn-default"><i class="fa fa-table mr-1"></i>${__('Full Audit Matrix')}</a>
 				</div>
 				<div class="table-responsive">
 					<table class="table table-hover table-striped mb-0" style="font-size: 13px;">
@@ -262,6 +263,16 @@ function build_console_ui($container, data) {
 	});
 }
 
+function ict_desk_prefix() {
+	try {
+		const path = (typeof window !== 'undefined' && window.location && window.location.pathname) || '';
+		if (path.startsWith('/desk')) return '/desk';
+		const ver = (frappe && frappe.boot && frappe.boot.versions && frappe.boot.versions.frappe) || '';
+		if (parseInt(String(ver).split('.')[0], 10) >= 16) return '/desk';
+	} catch (e) {}
+	return '/app';
+}
+
 function render_links_cards(links) {
 	if (!links || links.length === 0) {
 		return `
@@ -274,6 +285,7 @@ function render_links_cards(links) {
 	}
 
 	const esc = frappe.utils.escape_html;
+	const deskPrefix = ict_desk_prefix();
 	return links.map(l => {
 		let counterpartiesHtml = (l.counterparties || []).map(cp => `<span class="badge badge-light border mr-1 mb-1 p-1">${esc(cp)}</span>`).join('');
 		return `
@@ -281,7 +293,7 @@ function render_links_cards(links) {
 				<div class="card h-100 p-3 border" style="border-radius: 8px; border-color: var(--border-color, #e2e8f0) !important;">
 					<div class="d-flex justify-content-between align-items-center mb-2">
 						<span class="badge ${l.enabled ? 'badge-success' : 'badge-secondary'}">${l.enabled ? __('Active') : __('Disabled')}</span>
-						<a href="/app/intercompany-transaction-link/${encodeURIComponent(l.name)}" class="btn btn-xs btn-default">${__('Edit')}</a>
+						<a href="${deskPrefix}/intercompany-transaction-link/${encodeURIComponent(l.name)}" class="btn btn-xs btn-default">${__('Edit')}</a>
 					</div>
 					<h6 class="font-weight-bold mb-1"><i class="fa fa-building-o mr-1 text-muted"></i>${esc(l.main_company)}</h6>
 					<div class="my-2">
@@ -290,7 +302,7 @@ function render_links_cards(links) {
 					</div>
 					<div class="mt-auto pt-2 border-top d-flex justify-content-between align-items-center" style="font-size: 12px;">
 						<span class="text-muted">${cint(l.active_types_count)} ${__('Transaction Rules')}</span>
-						<a href="/app/inter-company-document-reference?source_company=${encodeURIComponent(l.main_company || '')}" class="text-primary">${__('Audit Logs')} &rarr;</a>
+						<a href="${deskPrefix}/inter-company-document-reference?source_company=${encodeURIComponent(l.main_company || '')}" class="text-primary">${__('Audit Logs')} &rarr;</a>
 					</div>
 				</div>
 			</div>
@@ -304,6 +316,7 @@ function render_recent_tx(txList) {
 	}
 
 	const esc = frappe.utils.escape_html;
+	const deskPrefix = ict_desk_prefix();
 	return txList.map(tx => {
 		let isMirrored = !!tx.target_name;
 		let badgeClass = isMirrored ? 'indicator-pill green' : 'indicator-pill orange';
@@ -312,12 +325,12 @@ function render_recent_tx(txList) {
 		return `
 			<tr>
 				<td><b>${esc(tx.source_company)}</b></td>
-				<td><a href="/app/${encodeURIComponent(frappe.router.slug(tx.source_doctype))}/${encodeURIComponent(tx.source_name)}">${esc(tx.source_doctype)}: ${esc(tx.source_name)}</a></td>
+				<td><a href="${deskPrefix}/${encodeURIComponent(frappe.router.slug(tx.source_doctype))}/${encodeURIComponent(tx.source_name)}">${esc(tx.source_doctype)}: ${esc(tx.source_name)}</a></td>
 				<td class="text-center text-muted">&rarr;</td>
 				<td><b>${esc(tx.target_company)}</b></td>
 				<td>
 					${isMirrored 
-						? `<a href="/app/${encodeURIComponent(frappe.router.slug(tx.target_doctype))}/${encodeURIComponent(tx.target_name)}">${esc(tx.target_doctype)}: ${esc(tx.target_name)}</a>`
+						? `<a href="${deskPrefix}/${encodeURIComponent(frappe.router.slug(tx.target_doctype))}/${encodeURIComponent(tx.target_name)}">${esc(tx.target_doctype)}: ${esc(tx.target_name)}</a>`
 						: `<span class="text-muted font-italic">${__('Pending creation')}</span>`
 					}
 				</td>

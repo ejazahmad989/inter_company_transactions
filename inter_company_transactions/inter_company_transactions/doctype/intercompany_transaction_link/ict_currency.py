@@ -10,6 +10,15 @@ from frappe.utils import cint, flt, getdate, nowdate
 from .ict_utils import _facade_fn, _safe_flt
 
 
+def _get_desk_base_path():
+	"""Return '/desk' on Frappe v16+ and '/app' on Frappe v15."""
+	try:
+		major = int(str(getattr(frappe, "__version__", "15") or "15").split(".")[0])
+	except Exception:
+		major = 15
+	return "/desk" if major >= 16 else "/app"
+
+
 def _normalize_tx_date(transaction_date=None):
 	"""Safely convert date/datetime/ISO/DD-MM-YYYY strings to YYYY-MM-DD."""
 	if not transaction_date:
@@ -374,14 +383,15 @@ def validate_intercompany_cross_currency_rate(doc):
 	if db_rate and flt(db_rate) > 0:
 		return
 
+	ce_route = f"{_get_desk_base_path()}/currency-exchange/new"
 	frappe.throw(
 		_(
 			"Multi-Currency Exchange Rate Required: <b>{0}</b> ({1}) and <b>{2}</b> ({3}) use different currencies.<br><br>"
 			"No exchange rate was found between <b>{1}</b> and <b>{3}</b> for <b>{4}</b>. "
 			"Please enter the exchange rate on this voucher or "
-			"<a href='/app/currency-exchange/new'><b>create a Currency Exchange record</b></a> "
+			"<a href='{5}'><b>create a Currency Exchange record</b></a> "
 			"so both company ledgers stay 100% tallied."
-		).format(source_company, src_ccy, target_company, tgt_ccy, tx_date),
+		).format(source_company, src_ccy, target_company, tgt_ccy, tx_date, ce_route),
 		title=_("Exchange Rate Required"),
 	)
 

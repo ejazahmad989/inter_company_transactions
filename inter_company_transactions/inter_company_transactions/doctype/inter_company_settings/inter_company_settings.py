@@ -12,14 +12,19 @@ from frappe.utils import cint, flt
 
 
 class InterCompanySettings(Document):
-	pass
+	@frappe.whitelist()
+	def get_enterprise_health_check(self):
+		return get_enterprise_health_check()
 
 
 def get_intercompany_settings():
 	"""Helper to fetch cached Inter Company Settings safely"""
 	try:
 		return frappe.get_cached_doc("Inter Company Settings")
-	except Exception:
+	except Exception as e:
+		if hasattr(frappe, "DoesNotExistError") and isinstance(e, frappe.DoesNotExistError):
+			return None
+		frappe.logger().debug(f"Could not load Inter Company Settings: {e!s}")
 		return None
 
 
@@ -77,25 +82,53 @@ def get_enterprise_health_check():
 	return health
 
 
+def _resolve_saved_remote_api_secret(site_url: str, api_key: str | None, api_secret: str | None) -> str | None:
+	"""If UI sends masked placeholder '*****', decrypt stored api_secret from saved Inter Company Settings."""
+	sec = str(api_secret).strip() if api_secret is not None else ""
+	if sec and set(sec) != {"*"}:
+		return api_secret
+	norm_url = str(site_url or "").strip().rstrip("/").lower()
+	try:
+		settings = frappe.get_cached_doc("Inter Company Settings")
+		for row in (getattr(settings, "remote_sites", None) or []):
+			row_url = str(getattr(row, "site_url", "") or "").strip().rstrip("/").lower()
+			row_key = str(getattr(row, "api_key", "") or "").strip()
+			if (norm_url and row_url == norm_url) or (api_key and row_key == str(api_key).strip()):
+				from inter_company_transactions.sync import _get_decrypted_secret
+				decrypted = _get_decrypted_secret(row, "api_secret")
+				if decrypted:
+					return decrypted
+	except Exception:
+		pass
+	return "" if set(sec) == {"*"} else api_secret
+
+
 @frappe.whitelist()
-def test_remote_site_connection(site_url: str, api_key: str, api_secret: str):
+def test_remote_site_connection(site_url: str, api_key: str, api_secret: str, verify_ssl: int | bool = 1):
 	"""
 	Tests REST API handshake with an external federated ERPNext instance.
 	Delegates to diagnose_remote_site_connectivity for deep diagnostic.
 	"""
-	frappe.only_for(["System Manager", "Accounts Manager"])
+	frappe.only_for("System Manager")
 	from inter_company_transactions.sync import diagnose_remote_site_connectivity
-	return diagnose_remote_site_connectivity(site_url, api_key, api_secret)
+	resolved_secret = _resolve_saved_remote_api_secret(site_url, api_key, api_secret)
+	return diagnose_remote_site_connectivity(site_url, api_key, resolved_secret, verify_ssl=verify_ssl)
 
 
 @frappe.whitelist()
-def diagnose_network_and_firewall(site_url: str, api_key: str | None = None, api_secret: str | None = None):
+def diagnose_network_and_firewall(
+	site_url: str,
+	api_key: str | None = None,
+	api_secret: str | None = None,
+	verify_ssl: int | bool = 1,
+):
 	"""
 	Runs full multi-layer socket, DNS, SSL, and firewall diagnostics.
 	"""
-	frappe.only_for(["System Manager", "Accounts Manager"])
+	frappe.only_for("System Manager")
 	from inter_company_transactions.sync import diagnose_remote_site_connectivity
-	return diagnose_remote_site_connectivity(site_url, api_key, api_secret)
+	resolved_secret = _resolve_saved_remote_api_secret(site_url, api_key, api_secret)
+	return diagnose_remote_site_connectivity(site_url, api_key, resolved_secret, verify_ssl=verify_ssl)
 
 
 @frappe.whitelist(allow_guest=False)

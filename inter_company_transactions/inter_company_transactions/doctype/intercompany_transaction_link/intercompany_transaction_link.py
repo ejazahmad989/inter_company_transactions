@@ -401,11 +401,13 @@ class IntercompanyTransactionLink(Document):
 
 @frappe.whitelist()
 def scan_linked_company_defaults(main_company: str, other_company: str):
+	frappe.has_permission("Intercompany Transaction Link", "read", throw=True)
 	return ict_api.scan_linked_company_defaults_impl(main_company, other_company)
 
 
 @frappe.whitelist()
 def get_company_currencies(companies: list | str | None = None):
+	frappe.has_permission("Company", "read", throw=True)
 	return ict_api.get_company_currencies_impl(companies=companies)
 
 
@@ -443,6 +445,7 @@ def check_intercompany_exchange_rate(
 	doc_currency: str | None = None,
 	conversion_rate: float | int | str | None = None,
 ):
+	frappe.has_permission("Company", "read", throw=True)
 	return ict_currency.check_intercompany_exchange_rate_impl(
 		source_company,
 		target_company,
@@ -454,6 +457,7 @@ def check_intercompany_exchange_rate(
 
 @frappe.whitelist()
 def check_stock_entry_same_currency(source_company: str, target_company: str):
+	frappe.has_permission("Company", "read", throw=True)
 	return ict_currency.check_stock_entry_same_currency_impl(source_company, target_company)
 
 
@@ -494,16 +498,19 @@ def bulk_create_linked_documents(doc_names: list | str, doctype: str):
 
 @frappe.whitelist()
 def reconcile_intercompany_accounts():
+	frappe.only_for(["System Manager", "Accounts Manager", "Accounts User"])
 	return ict_api.reconcile_intercompany_accounts_impl()
 
 
 @frappe.whitelist()
 def get_intercompany_dashboard_data(company: str):
+	frappe.only_for(["System Manager", "Accounts Manager", "Accounts User"])
 	return ict_api.get_intercompany_dashboard_data_impl(company)
 
 
 @frappe.whitelist()
 def download_user_guide_pdf():
+	frappe.has_permission("Intercompany Transaction Link", "read", throw=True)
 	return ict_api.download_user_guide_pdf_impl()
 
 
@@ -513,9 +520,18 @@ def get_party_target_company(
 	party_type: str | None = None,
 	current_company: str | None = None,
 ):
+	pt = (party_type or "").strip()
+	if pt in ("Customer", "Supplier"):
+		frappe.has_permission(pt, "read", throw=True)
+	elif not (frappe.has_permission("Customer", "read") or frappe.has_permission("Supplier", "read")):
+		frappe.has_permission("Customer", "read", throw=True)
 	return ict_api.get_party_target_company_impl(party_name, party_type=party_type, current_company=current_company)
 
 
 @frappe.whitelist()
 def get_intercompany_party_map(company: str | None = None):
+	if getattr(getattr(frappe, "session", None), "user", None) == "Guest":
+		frappe.throw(_("Authentication required."), exc=getattr(frappe, "PermissionError", Exception))
+	if not (frappe.has_permission("Intercompany Transaction Link", "read") or frappe.has_permission("Company", "read")):
+		frappe.has_permission("Intercompany Transaction Link", "read", throw=True)
 	return ict_validation.get_intercompany_party_map_impl(company=company)

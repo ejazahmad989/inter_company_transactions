@@ -7,15 +7,10 @@ import frappe
 def before_uninstall():
     """
     Executes before the app is uninstalled:
-    Runs full self-healing to repair expressions, restore Customer/Supplier/Item Add & Delete buttons,
-    wipe Tree custom fields, and leave the site in a pristine, standard ERPNext state.
+    Cleans up Custom Fields, Property Setters, Custom DocPerms, and navigation
+    records created by Inter Company Transactions.
     """
     print("Running before_uninstall for Inter Company Transactions...")
-    try:
-        from inter_company_transactions.diagnose_and_heal import run_full_healing
-        run_full_healing(verbose=True)
-    except Exception:
-        pass
 
     cleanup_custom_fields()
     cleanup_property_setters()
@@ -29,14 +24,9 @@ def before_uninstall():
 def after_uninstall():
     """
     Executes after the app is uninstalled:
-    Final cache clearing, expression repair and schema validation.
+    Clears Frappe metadata caches cleanly.
     """
     print("Running after_uninstall for Inter Company Transactions...")
-    try:
-        from inter_company_transactions.diagnose_and_heal import run_full_healing
-        run_full_healing(verbose=True)
-    except Exception:
-        pass
     frappe.clear_cache()
     print("Post-uninstall tasks completed. ERPNext site is clean.")
 

@@ -10,11 +10,13 @@ def after_install():
     print("Starting Inter Company Transactions app installation...")
 
     try:
-        # Run repair patch to fix any corrupted depends_on expressions and clean up trees/masters
-        from inter_company_transactions.patches.v1_5_repair_item_depends_on_and_clean_trees import execute as repair_patch
-        repair_patch()
+        # Sanitize strictly Inter Company Transactions custom fields without touching core app files
+        from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+            _sanitize_intercompany_stock_entry_custom_fields,
+        )
+        _sanitize_intercompany_stock_entry_custom_fields(force=True)
     except Exception as e:
-        print(f"Notice during repair patch execution: {e}")
+        print(f"Notice during custom field sanitization: {e}")
 
     try:
         # Create custom roles first

@@ -3540,6 +3540,849 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 			self.assertEqual(di_doc.link_to, "Inter Company")
 			self.assertEqual(di_doc.sidebar, "Inter Company")
 
+	def test_remote_site_password_decryption_and_mask_protection(self):
+		"""Verify get_remote_site_for_company decrypts Password fields and never forwards masked '*****'"""
+		from unittest.mock import patch
 
+		from inter_company_transactions.sync import _get_decrypted_secret, get_remote_site_for_company
 
+		class FakeRemoteRow(frappe._dict):
+			def get_password(self, fieldname, raise_exception=False):
+				return {"api_secret": "real-api-sec", "hmac_secret": "real-hmac-sec"}.get(fieldname)
 
+		fake_row = FakeRemoteRow(
+			company_name="Sister Co",
+			site_url="https://sister.example.com/",
+			api_key="key123",
+			api_secret="*****",
+			hmac_secret="*****",
+			is_active=1,
+		)
+		fake_settings = frappe._dict({"remote_sites": [fake_row]})
+
+		with patch.object(frappe, "get_cached_doc", return_value=fake_settings):
+			cfg = get_remote_site_for_company("Sister Co")
+			self.assertIsNotNone(cfg)
+			self.assertEqual(cfg["api_secret"], "real-api-sec")
+			self.assertEqual(cfg["hmac_secret"], "real-hmac-sec")
+
+		self.assertEqual(_get_decrypted_secret({"hmac_secret": "*****"}, "hmac_secret"), "")
+		self.assertEqual(_get_decrypted_secret({"hmac_secret": "plain-secret"}, "hmac_secret"), "plain-secret")
+
+	def test_strict_hmac_signature_enforcement_and_company_validation(self):
+		"""Verify missing/bad HMAC throws when secret configured and missing target_company never falls back"""
+		import hashlib
+		import hmac as _hmac
+		import json
+		from unittest.mock import patch
+
+		from inter_company_transactions.sync import cancel_remote_transaction, receive_remote_transaction
+
+		class SecretRow(dict):
+			def get_password(self, fieldname, raise_exception=False):
+				return "top-secret-hmac" if fieldname == "hmac_secret" else None
+
+		settings_with_hmac = frappe._dict({
+			"auto_submit_target_doc": 0,
+			"remote_sites": [
+				SecretRow(company_name="Remote Co", site_url="https://remote.example.com", is_active=1, hmac_secret="*****")
+			],
+		})
+		payload_str = json.dumps({
+			"source_doctype": "Sales Order",
+			"source_name": "SO-999",
+			"source_company": "Remote Co",
+			"target_company": "Missing Co",
+		})
+		valid_sig = _hmac.new(b"top-secret-hmac", payload_str.encode("utf-8"), hashlib.sha256).hexdigest()
+
+		# 1. Missing X-Intercompany-Signature throws
+		with patch.object(frappe, "get_cached_doc", return_value=settings_with_hmac), patch(
+			"inter_company_transactions.sync._get_request_header_safe", return_value=None
+		):
+			with self.assertRaises(Exception):
+				receive_remote_transaction(payload_str)
+			with self.assertRaises(Exception):
+				cancel_remote_transaction(payload_str)
+
+		# 2. Invalid X-Intercompany-Signature throws
+		with patch.object(frappe, "get_cached_doc", return_value=settings_with_hmac), patch(
+			"inter_company_transactions.sync._get_request_header_safe", return_value="0" * 64
+		):
+			with self.assertRaises(Exception):
+				receive_remote_transaction(payload_str)
+			with self.assertRaises(Exception):
+				cancel_remote_transaction(payload_str)
+
+		# 3. Valid signature reaches Company check and MUST throw when target_company is invalid (no Company[0] fallback)
+		with patch.object(frappe, "get_cached_doc", return_value=settings_with_hmac), patch(
+			"inter_company_transactions.sync._get_request_header_safe", return_value=valid_sig
+		), patch.object(
+			frappe.db, "exists", return_value=False
+		), patch.object(
+			frappe, "get_all", return_value=[frappe._dict({"name": "Wrong First Company"})]
+		):
+			with self.assertRaises(Exception):
+				receive_remote_transaction(payload_str)
+
+	def test_network_diagnostics_ssrf_and_ipv6_protection(self):
+		"""Verify SSRF IP blocking (IPv4 private/metadata + IPv6 ::1), scheme check, and System Manager RBAC"""
+		import socket
+		from unittest.mock import patch
+
+		from inter_company_transactions.sync import _is_blocked_ssrf_ip, diagnose_remote_site_connectivity
+
+		self.assertTrue(_is_blocked_ssrf_ip("127.0.0.1")[0])
+		self.assertTrue(_is_blocked_ssrf_ip("169.254.169.254")[0])
+		self.assertTrue(_is_blocked_ssrf_ip("10.10.0.1")[0])
+		self.assertTrue(_is_blocked_ssrf_ip("192.168.1.50")[0])
+		self.assertTrue(_is_blocked_ssrf_ip("::1")[0])
+		self.assertTrue(_is_blocked_ssrf_ip("::ffff:127.0.0.1")[0])
+		self.assertFalse(_is_blocked_ssrf_ip("93.184.216.34")[0])
+		self.assertFalse(_is_blocked_ssrf_ip("2606:2800:220:1:248:1893:25c8:1946")[0])
+
+		with patch.object(frappe, "only_for") as mock_only:
+			ftp_diag = diagnose_remote_site_connectivity("ftp://erp.example.com")
+			mock_only.assert_called_once_with("System Manager")
+			self.assertEqual(ftp_diag["overall_status"], "Failed")
+			self.assertIn("URL Format", [s["step"] for s in ftp_diag["steps"]])
+
+			with patch("socket.getaddrinfo", return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("169.254.169.254", 80))]):
+				ssrf_diag = diagnose_remote_site_connectivity("http://metadata.internal")
+				self.assertEqual(ssrf_diag["overall_status"], "Failed")
+				self.assertIn("DNS Resolution & SSRF Safety", [s["step"] for s in ssrf_diag["steps"]])
+
+			with patch("socket.getaddrinfo", return_value=[(socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("::1", 443, 0, 0))]):
+				v6_local_diag = diagnose_remote_site_connectivity("https://localhost")
+				self.assertEqual(v6_local_diag["overall_status"], "Failed")
+
+	def test_whitelisted_endpoint_permission_guards(self):
+		"""Verify whitelisted endpoints enforce Frappe permissions or role checks"""
+		from unittest.mock import patch
+
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+			check_intercompany_exchange_rate,
+			check_stock_entry_same_currency,
+			get_company_currencies,
+			get_intercompany_dashboard_data,
+			get_intercompany_party_map,
+			get_party_target_company,
+			reconcile_intercompany_accounts,
+			scan_linked_company_defaults,
+		)
+
+		with patch.object(frappe, "only_for", side_effect=PermissionError("denied")):
+			with self.assertRaises(PermissionError):
+				reconcile_intercompany_accounts()
+			with self.assertRaises(PermissionError):
+				get_intercompany_dashboard_data("Co A")
+
+		with patch.object(frappe, "has_permission", side_effect=PermissionError("no read")):
+			with self.assertRaises(PermissionError):
+				scan_linked_company_defaults("Co A", "Co B")
+			with self.assertRaises(PermissionError):
+				get_company_currencies(["Co A"])
+			with self.assertRaises(PermissionError):
+				check_intercompany_exchange_rate("Co A", "Co B")
+			with self.assertRaises(PermissionError):
+				check_stock_entry_same_currency("Co A", "Co B")
+			with self.assertRaises(PermissionError):
+				get_party_target_company("Cust A", "Customer", "Co A")
+
+		with patch.object(frappe, "session", frappe._dict({"user": "Guest"})):
+			with self.assertRaises(Exception):
+				get_intercompany_party_map()
+
+	def test_real_intercompany_balance_and_dashboard_queries(self):
+		"""Verify get_intercompany_balance and get_intercompany_dashboard_data query live tables without stubs"""
+		from unittest.mock import patch
+
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_api import (
+			get_intercompany_balance,
+			get_intercompany_dashboard_data_impl,
+		)
+
+		def mock_sql(query, params=None, as_dict=False):
+			q = str(query)
+			if "FROM `tabInter Company Document Reference`" in q and "COUNT(*)" in q:
+				return [[2 if "target_name IS NULL" in q else 5]]
+			if "FROM `tabInter Company Document Reference`" in q and "ORDER BY modified DESC" in q:
+				return [{"source_doctype": "Sales Order", "source_name": "SO-1"}]
+			if "FROM `tabIntercompany Linked Company`" in q:
+				return [frappe._dict({
+					"main_company": "Co A",
+					"company": "Co B",
+					"main_company_account": "TMP-B - A",
+					"other_company_account": "TMP-A - B",
+					"main_company_customer": "Cust B",
+					"main_company_supplier": None,
+					"other_company_customer": None,
+					"other_company_supplier": "Supp A",
+				})]
+			if "FROM `tabGL Entry`" in q:
+				comp = params["company"]
+				return [[1000.0 if comp == "Co A" else -1000.0]]
+			if "FROM `tabInter Company Error Log`" in q:
+				return [[1]]
+			if "FROM `tabSales Invoice`" in q:
+				return [[2500.0]]
+			return [[0]]
+
+		with patch.object(frappe.db, "table_exists", return_value=True), patch.object(
+			frappe.db, "has_column", return_value=True
+		), patch.object(frappe.db, "sql", side_effect=mock_sql):
+			bal = get_intercompany_balance("Co A", "Co B")
+			self.assertEqual(bal["transactions_count"], 5)
+			self.assertEqual(bal["company_a_balance"], 1000.0)
+			self.assertEqual(bal["company_b_balance"], -1000.0)
+			self.assertEqual(bal["net_variance"], 0.0)
+			self.assertTrue(bal["is_reconciled"])
+
+			dash = get_intercompany_dashboard_data_impl("Co A")
+			self.assertEqual(dash["pending_documents"], 3)
+			self.assertEqual(dash["monthly_volume"], 2500.0)
+			self.assertEqual(dash["outstanding_balances"], 1000.0)
+			self.assertEqual(len(dash["recent_transactions"]), 1)
+
+	def test_after_migrate_no_global_rewrite_and_validate_early_exit(self):
+		"""Verify after_migrate stays ICT-scoped and non-intercompany docs skip party-map queries on validate"""
+		from unittest.mock import patch
+
+		import inter_company_transactions.diagnose_and_heal as dh
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_validation import (
+			validate_intercompany_document,
+		)
+		from inter_company_transactions.patches.after_migrate import after_migrate
+
+		with patch("inter_company_transactions.patches.after_migrate.ensure_custom_fields"), patch(
+			"inter_company_transactions.patches.after_migrate.ensure_page_and_workspace"
+		), patch(
+			"inter_company_transactions.patches.after_migrate.ensure_ict_notification_settings_for_all_users"
+		), patch.object(
+			dh, "repair_database_text"
+		) as mock_global_repair, patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link._sanitize_intercompany_stock_entry_custom_fields"
+		) as mock_ict_sanitize, patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.backfill_sister_company_names"
+		):
+			after_migrate()
+			mock_global_repair.assert_not_called()
+			mock_ict_sanitize.assert_called_once_with(force=True)
+
+		se_non_ic = frappe._dict({
+			"doctype": "Stock Entry",
+			"name": "MAT-STE-LOCAL-1",
+			"company": "Co A",
+			"is_intercompany": 0,
+			"flags": frappe._dict(),
+		})
+		mr_non_ic = frappe._dict({
+			"doctype": "Material Request",
+			"name": "MAT-MR-LOCAL-1",
+			"company": "Co A",
+			"is_intercompany": 0,
+			"flags": frappe._dict(),
+		})
+		with patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_validation.get_intercompany_party_map_impl"
+		) as mock_pm:
+			validate_intercompany_document(se_non_ic)
+			validate_intercompany_document(mr_non_ic)
+			mock_pm.assert_not_called()
+
+	def test_netting_deduplication_currency_conversion_and_child_persistence(self):
+		"""Verify netting skips mirrored SI+PI 2x double-count, converts FX, resolves reverse links, and persists settlements"""
+		from unittest.mock import patch
+
+		from inter_company_transactions.inter_company_transactions.doctype.inter_company_netting_cycle.inter_company_netting_cycle import (
+			InterCompanyNettingCycle,
+			_compute_netting,
+		)
+
+		class FakeSettlementRow(frappe._dict):
+			def insert(self, ignore_permissions=False):
+				self.name = f"NET-SUM-{self.get('idx', 1)}"
+				return self
+
+			def db_set(self, vals, update_modified=False):
+				if isinstance(vals, dict):
+					self.update(vals)
+
+		class FakeNettingDoc:
+			def __init__(self):
+				self.doctype = "Inter Company Netting Cycle"
+				self.name = "NET-CYCLE-2026-00001"
+				self.docstatus = 1
+				self.settlement_date = "2026-11-23"
+				self.participating_companies = [
+					frappe._dict({"company": "Main Co"}),
+					frappe._dict({"company": "Sub Co"}),
+				]
+				self.invoices = []
+				self.net_settlements = []
+				self.status = "Draft"
+				self.total_gross_payables = 0.0
+				self.total_gross_receivables = 0.0
+				self.total_net_settled = 0.0
+
+			def check_permission(self, ptype=None):
+				return True
+
+			def append(self, tbl, row):
+				obj = FakeSettlementRow(row) if tbl == "net_settlements" else frappe._dict(row)
+				getattr(self, tbl).append(obj)
+				return obj
+
+			def db_set(self, field, val=None, update_modified=False):
+				if isinstance(field, dict):
+					for k, v in field.items():
+						setattr(self, k, v)
+				else:
+					setattr(self, field, val)
+
+		doc = FakeNettingDoc()
+
+		def mock_get_all(dt, filters=None, fields=None, **kw):
+			if dt == "Intercompany Linked Company":
+				return [frappe._dict({
+					"parent": "IC-LINK-1",
+					"company": "Sub Co",
+					"main_company_customer": "Cust Sub",
+					"main_company_supplier": "Supp Sub",
+					"other_company_customer": "Cust Main",
+					"other_company_supplier": "Supp Main",
+				})]
+			if dt == "Sales Invoice":
+				return [frappe._dict({
+					"name": "SINV-MAIN-001",
+					"company": "Main Co",
+					"customer": "Cust Sub",
+					"outstanding_amount": 100.0,
+					"currency": "USD",
+				})]
+			if dt == "Purchase Invoice":
+				return [
+					# Mirrored counterpart of SINV-MAIN-001 -> MUST be deduplicated!
+					frappe._dict({
+						"name": "PINV-SUB-001",
+						"company": "Sub Co",
+						"supplier": "Supp Main",
+						"outstanding_amount": 28000.0,
+						"currency": "PKR",
+						"intercompany_linked_doc_doctype": "Sales Invoice",
+						"intercompany_linked_doc_name": "SINV-MAIN-001",
+					}),
+				]
+			if dt == "Inter Company Document Reference":
+				return [frappe._dict({
+					"source_doctype": "Sales Invoice",
+					"source_name": "SINV-MAIN-001",
+					"target_doctype": "Purchase Invoice",
+					"target_name": "PINV-SUB-001",
+				})]
+			return []
+
+		# Main Co is PKR, SINV-MAIN-001 is USD 100 @ 280 PKR/USD = PKR 28,000
+		with patch.object(frappe.db, "table_exists", return_value=True), patch.object(
+			frappe.db, "has_column", return_value=True
+		), patch.object(
+			frappe, "get_all", side_effect=mock_get_all
+		), patch.object(
+			frappe, "get_value", return_value="Main Co"
+		), patch.object(
+			frappe, "get_cached_value", side_effect=lambda dt, name, fn=None: "PKR" if dt == "Company" else None
+		), patch.object(
+			frappe, "msgprint"
+		), patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_currency.get_intercompany_exchange_rate",
+			side_effect=lambda f, t, d=None, **kw: 280.0 if (f, t) == ("USD", "PKR") else 1.0,
+		):
+			InterCompanyNettingCycle.fetch_open_invoices(doc)
+
+		# Mirrored Purchase Invoice excluded -> 1 unique obligation instead of 2
+		self.assertEqual(len(doc.invoices), 1)
+		self.assertEqual(doc.invoices[0].invoice_name, "SINV-MAIN-001")
+		self.assertEqual(doc.total_gross_receivables, 28000.0)
+		self.assertEqual(doc.total_gross_payables, 28000.0)
+		self.assertEqual(doc.total_net_settled, 28000.0)
+		self.assertEqual(doc.net_settlements[0].paying_company, "Sub Co")
+		self.assertEqual(doc.net_settlements[0].receiving_company, "Main Co")
+
+		# 1b. Direct _compute_netting with manual USD + PKR rows converts cleanly into cycle currency (PKR)
+		manual_cycle = FakeNettingDoc()
+		manual_cycle.invoices = [
+			frappe._dict({"company": "Main Co", "partner_company": "Sub Co", "invoice_type": "Sales Invoice", "invoice_name": "SINV-MAN-1", "outstanding_amount": 10.0, "currency": "USD"}),
+		]
+		with patch.object(frappe.db, "table_exists", return_value=False), patch.object(
+			frappe.db, "has_column", return_value=False
+		), patch.object(
+			frappe, "get_cached_value", return_value="PKR"
+		), patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_currency.get_intercompany_exchange_rate",
+			return_value=280.0,
+		):
+			_compute_netting(manual_cycle)
+		self.assertEqual(manual_cycle.total_net_settled, 2800.0)
+
+		# Now test on_submit persists settlement_entry via insert + db_set and resolves reverse Sub Co -> Main Co link
+		created_jes = []
+
+		class FakeJE:
+			def __init__(self):
+				self.doctype = "Journal Entry"
+				self.name = "ACC-JV-NET-001"
+				self.accounts = []
+				self.flags = frappe._dict()
+				self.docstatus = 0
+
+			def append(self, tbl, row):
+				self.accounts.append(frappe._dict(row))
+
+			def insert(self, **kw):
+				created_jes.append(self)
+				return self
+
+			def submit(self):
+				self.docstatus = 1
+
+			def cancel(self):
+				self.docstatus = 2
+
+		def mock_get_val(dt, flt_or_name, fieldname=None, as_dict=False):
+			if dt == "Intercompany Transaction Link":
+				if isinstance(flt_or_name, dict) and flt_or_name.get("main_company") == "Main Co":
+					return "IC-LINK-1"
+				return None
+			if dt == "Intercompany Linked Company":
+				return frappe._dict({
+					"other_company_account": "TMP-MAIN - SUB",
+					"other_company_supplier": "Supp Main",
+				})
+			if dt == "Company" and fieldname == "default_payable_account":
+				return "Creditors - SUB"
+			return None
+
+		with patch.object(frappe.db, "table_exists", return_value=True), patch.object(
+			frappe.db, "delete"
+		) as mock_del, patch.object(
+			frappe.db, "exists", return_value=False
+		), patch.object(
+			frappe.db, "has_column", return_value=False
+		), patch.object(
+			frappe, "get_value", side_effect=mock_get_val
+		), patch.object(
+			frappe, "get_cached_value", return_value="PKR"
+		), patch.object(
+			frappe.db, "get_value", return_value="PKR"
+		), patch.object(
+			frappe, "new_doc", return_value=FakeJE()
+		), patch.object(
+			frappe, "msgprint"
+		), patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_currency.get_intercompany_exchange_rate",
+			side_effect=lambda f, t, d=None, **kw: 280.0 if (f, t) == ("USD", "PKR") else 1.0,
+		):
+			# Also pass duplicated mirrored pair directly into doc.invoices before submit -> _compute_netting skips duplicate!
+			doc.append("invoices", {
+				"company": "Sub Co",
+				"partner_company": "Main Co",
+				"invoice_type": "Purchase Invoice",
+				"invoice_name": "PINV-SUB-001",
+				"outstanding_amount": 28000.0,
+				"currency": "PKR",
+				"settled_amount": 28000.0,
+			})
+			with patch.object(frappe, "get_all", side_effect=mock_get_all):
+				InterCompanyNettingCycle.on_submit(doc)
+
+		mock_del.assert_called_once()
+		self.assertEqual(len(created_jes), 1)
+		self.assertEqual(created_jes[0].company, "Sub Co")
+		self.assertEqual(created_jes[0].accounts[0].party, "Supp Main")
+		self.assertEqual(created_jes[0].accounts[1].account, "TMP-MAIN - SUB")
+		self.assertEqual(doc.net_settlements[0].name, "NET-SUM-1")
+		self.assertEqual(doc.net_settlements[0].settlement_entry, "ACC-JV-NET-001")
+		self.assertEqual(doc.net_settlements[0].status, "Settled")
+
+		# Verify on_cancel cancels saved settlement_entry
+		with patch.object(frappe.db, "exists", return_value=True), patch.object(
+			frappe, "get_doc", return_value=created_jes[0]
+		):
+			InterCompanyNettingCycle.on_cancel(doc)
+		self.assertEqual(created_jes[0].docstatus, 2)
+		self.assertEqual(doc.status, "Cancelled")
+
+	def test_elimination_run_no_bank_cash_no_fake_15pct_and_posting_date(self):
+		"""Verify Elimination Run filters by posting_date, has 0 fabricated 15% margin, and never uses Bank/Cash accounts"""
+		from unittest.mock import patch
+
+		from inter_company_transactions.inter_company_transactions.doctype.inter_company_elimination_run.inter_company_elimination_run import (
+			InterCompanyEliminationRun,
+		)
+
+		elim_doc = frappe._dict({
+			"doctype": "Inter Company Elimination Run",
+			"name": "ELIM-2026-00001",
+			"title": "Nov Consolidation",
+			"consolidation_company": "Holding Co",
+			"from_date": "2026-11-01",
+			"to_date": "2026-11-30",
+			"posting_date": "2026-11-30",
+			"elimination_type": "All (Full Consolidation)",
+			"unrealized_inventory_profit": 0.0,
+			"db_set": lambda vals, **kw: elim_doc.update(vals) if isinstance(vals, dict) else elim_doc.__setitem__(vals, kw.get("val")),
+		})
+
+		def fix_db_set(k, v=None, **kw):
+			if isinstance(k, dict):
+				elim_doc.update(k)
+			else:
+				elim_doc[k] = v
+
+		elim_doc.db_set = fix_db_set
+
+		seen_filters = []
+
+		def mock_get_all(dt, filters=None, or_filters=None, fields=None, **kw):
+			seen_filters.append((dt, filters))
+			if dt == "Inter Company Document Reference":
+				return [frappe._dict({
+					"source_doctype": "Sales Invoice",
+					"source_name": "SINV-IC-1",
+					"target_doctype": "Purchase Invoice",
+					"target_name": "PINV-IC-1",
+				})]
+			if dt == "Sales Invoice":
+				return [frappe._dict({
+					"name": "SINV-IC-1",
+					"company": "Sub A",
+					"currency": "PKR",
+					"grand_total": 10000.0,
+					"outstanding_amount": 4000.0,
+				})]
+			if dt == "Purchase Invoice":
+				return [frappe._dict({
+					"name": "PINV-IC-1",
+					"company": "Sub B",
+					"currency": "PKR",
+					"outstanding_amount": 4000.0,
+				})]
+			return []
+
+		created_elim_jes = []
+
+		class FakeElimJE:
+			def __init__(self):
+				self.doctype = "Journal Entry"
+				self.name = "ACC-JV-ELIM-001"
+				self.accounts = []
+				self.flags = frappe._dict()
+				self.docstatus = 0
+
+			def append(self, tbl, row):
+				self.accounts.append(frappe._dict(row))
+
+			def get(self, k, d=None):
+				return getattr(self, k, d)
+
+			def insert(self, **kw):
+				created_elim_jes.append(self)
+				return self
+
+			def submit(self):
+				self.docstatus = 1
+
+		def mock_db_get_val(dt, filters, fieldname=None, **kw):
+			if dt == "Company":
+				if fieldname in ("default_bank_account", "default_cash_account"):
+					raise AssertionError(f"Elimination Run must NEVER query Company.{fieldname}")
+				if fieldname == "default_income_account":
+					return "Sales - HC"
+				if fieldname == "default_expense_account":
+					return "COGS - HC"
+				if fieldname == "default_inventory_account":
+					return "Stock - HC"
+			if dt == "Account":
+				if filters.get("root_type") == "Asset":
+					return "Intercompany Elimination Asset - HC"
+				if filters.get("root_type") == "Liability":
+					return "Intercompany Elimination Liability - HC"
+			return None
+
+		with patch.object(frappe.db, "table_exists", return_value=True), patch.object(
+			frappe.db, "has_column", return_value=True
+		), patch.object(
+			frappe, "get_all", side_effect=mock_get_all
+		), patch.object(
+			frappe, "get_cached_value", return_value="PKR"
+		), patch.object(
+			frappe.db, "get_value", side_effect=mock_db_get_val
+		), patch.object(
+			frappe, "new_doc", return_value=FakeElimJE()
+		), patch.object(
+			frappe, "msgprint"
+		):
+			InterCompanyEliminationRun.on_submit(elim_doc)
+
+		# 1. Filtered by posting_date, never Inter Company Document Reference.creation
+		si_filters = [f for dt, f in seen_filters if dt == "Sales Invoice"][0]
+		self.assertIn("posting_date", si_filters)
+		ref_filters = [f for dt, f in seen_filters if dt == "Inter Company Document Reference"][0]
+		self.assertNotIn("creation", ref_filters)
+
+		# 2. No fake 15% unrealized profit
+		self.assertEqual(elim_doc.unrealized_inventory_profit, 0.0)
+		self.assertEqual(elim_doc.total_revenue_eliminated, 10000.0)
+		self.assertEqual(elim_doc.total_receivables_eliminated, 4000.0)
+
+		# 3. JE lines use non-cash Elimination Asset/Liability accounts, never Bank/Cash
+		je_accounts = [r.account for r in created_elim_jes[0].accounts]
+		self.assertEqual(
+			je_accounts,
+			["Sales - HC", "COGS - HC", "Intercompany Elimination Liability - HC", "Intercompany Elimination Asset - HC"],
+		)
+
+	def test_settings_js_and_masked_api_secret_resolution(self):
+		"""Verify Settings JS uses full dotted method paths and masked secrets resolve stored passwords"""
+		from pathlib import Path
+		from unittest.mock import patch
+
+		from inter_company_transactions.inter_company_transactions.doctype.inter_company_settings.inter_company_settings import (
+			_resolve_saved_remote_api_secret,
+		)
+
+		js_path = (
+			Path(__file__).resolve().parents[1]
+			/ "inter_company_settings"
+			/ "inter_company_settings.js"
+		)
+		js_src = js_path.read_text(encoding="utf-8")
+		self.assertIn(
+			"inter_company_transactions.inter_company_transactions.doctype.inter_company_settings.inter_company_settings.get_enterprise_health_check",
+			js_src,
+		)
+		self.assertIn(
+			"inter_company_transactions.inter_company_transactions.doctype.inter_company_settings.inter_company_settings.test_remote_site_connection",
+			js_src,
+		)
+		self.assertNotIn("method: 'get_enterprise_health_check'", js_src)
+		self.assertNotIn("method: 'test_remote_site_connection'", js_src)
+
+		class SavedRow(frappe._dict):
+			def get_password(self, fieldname, raise_exception=False):
+				return "decrypted-real-secret" if fieldname == "api_secret" else None
+
+		fake_settings = frappe._dict({
+			"remote_sites": [SavedRow(site_url="https://remote.example.com/", api_key="k1", api_secret="*****")]
+		})
+		with patch.object(frappe, "get_cached_doc", return_value=fake_settings):
+			self.assertEqual(
+				_resolve_saved_remote_api_secret("https://remote.example.com", "k1", "*****"),
+				"decrypted-real-secret",
+			)
+			self.assertEqual(
+				_resolve_saved_remote_api_secret("https://remote.example.com", "k1", "explicit-pass"),
+				"explicit-pass",
+			)
+
+	def test_async_enqueue_after_commit_prevalidation_and_core_ic_guard(self):
+		"""Verify enqueue_after_commit=True, ERPNext core IC guard, and ValidationError surface on sync"""
+		from unittest.mock import patch
+
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_lifecycle import (
+			create_linked_documents,
+		)
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_validation import (
+			auto_detect_intercompany_party,
+		)
+
+		# 1. Core ERPNext inter_company_invoice_reference must skip ICT mirror & auto-detect
+		core_si = frappe._dict({
+			"doctype": "Sales Invoice",
+			"name": "SINV-CORE-IC-1",
+			"company": "Co A",
+			"is_intercompany": 1,
+			"intercompany_target_company": "Co B",
+			"inter_company_invoice_reference": "PINV-CORE-IC-1",
+		})
+		with patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_lifecycle.find_applicable_mappings"
+		) as mock_find, patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_validation.get_intercompany_party_map_impl"
+		) as mock_pm:
+			create_linked_documents(core_si)
+			auto_detect_intercompany_party(core_si)
+			mock_find.assert_not_called()
+			mock_pm.assert_not_called()
+
+		# 2. Async execution passes enqueue_after_commit=True
+		src_so = frappe._dict({
+			"doctype": "Sales Order",
+			"name": "SO-ASYNC-1",
+			"company": "Co A",
+			"is_intercompany": 1,
+			"intercompany_target_company": "Co B",
+		})
+		with patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link._get_intercompany_settings",
+			return_value={"enabled": 1, "execution_mode": "Asynchronous (Background Job)"},
+		), patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_lifecycle.validate_intercompany_cross_currency_rate"
+		), patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_lifecycle.find_applicable_mappings",
+			return_value=[],
+		), patch.object(
+			frappe, "enqueue"
+		) as mock_enqueue, patch.object(
+			frappe, "msgprint"
+		), patch.object(
+			frappe.flags, "in_test", False
+		), patch.object(
+			frappe.flags, "ict_in_background", False, create=True
+		):
+			create_linked_documents(src_so)
+			mock_enqueue.assert_called_once()
+			self.assertTrue(mock_enqueue.call_args.kwargs.get("enqueue_after_commit"))
+
+		# 3. Synchronous ValidationError propagates instead of failing silently
+		sync_mappings = [{
+			"mapping": frappe._dict({"main_company": "Co A"}),
+			"linked_company": frappe._dict({"company": "Co B"}),
+			"company": "Co B",
+			"target_doctype": "Purchase Order",
+			"direction": "main_to_other",
+		}]
+		with patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link._get_intercompany_settings",
+			return_value={"enabled": 1, "execution_mode": "Synchronous"},
+		), patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_lifecycle.validate_intercompany_cross_currency_rate"
+		), patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_lifecycle.find_applicable_mappings",
+			return_value=sync_mappings,
+		), patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_lifecycle.validate_required_parties",
+			side_effect=frappe.ValidationError("Other Company Supplier is required"),
+		), patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_lifecycle._log_local_mirror_error"
+		) as mock_err_log, patch.object(
+			frappe, "log_error"
+		), patch.object(
+			frappe.flags, "ict_in_background", False, create=True
+		):
+			with self.assertRaises(frappe.ValidationError):
+				create_linked_documents(src_so)
+			mock_err_log.assert_called_once()
+
+	def test_payment_entry_populates_references_and_matrix_filters_posting_date(self):
+		"""Verify create_payment_entry maps counterpart invoices into references and matrix filters by posting_date"""
+		from unittest.mock import patch
+
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_accounting_builders import (
+			create_payment_entry,
+		)
+		from inter_company_transactions.inter_company_transactions.report.inter_company_transaction_matrix.inter_company_transaction_matrix import (
+			execute as matrix_execute,
+		)
+
+		class FakePEDoc(frappe._dict):
+			def append(self, tbl, row):
+				self.setdefault(tbl, []).append(frappe._dict(row))
+
+			def get(self, key, default=None):
+				return super().get(key, default)
+
+		src_pe = frappe._dict({
+			"doctype": "Payment Entry",
+			"name": "ACC-PAY-SRC-1",
+			"company": "Co A",
+			"payment_type": "Receive",
+			"posting_date": "2026-11-23",
+			"paid_amount": 500.0,
+			"received_amount": 500.0,
+			"paid_from_account_currency": "PKR",
+			"paid_to_account_currency": "PKR",
+			"references": [
+				frappe._dict({
+					"reference_doctype": "Sales Invoice",
+					"reference_name": "SINV-A-1",
+					"allocated_amount": 500.0,
+				})
+			],
+		})
+		mapping = frappe._dict({"main_company": "Co A"})
+		linked_co = frappe._dict({
+			"company": "Co B",
+			"other_company_account": "TMP-A - B",
+			"other_company_supplier": "Supp Co A",
+			"other_company_customer": "Cust Co A",
+		})
+
+		def mock_pe_get_val(dt, flt_or_name, fieldname=None, as_dict=False):
+			if dt == "Company":
+				if fieldname == "default_currency":
+					return "PKR"
+				if fieldname == "default_payable_account":
+					return "Creditors - B"
+			if dt == "Account":
+				return "Bank" if fieldname == "account_type" else "PKR"
+			if dt == "Inter Company Document Reference":
+				if isinstance(flt_or_name, dict) and flt_or_name.get("source_name") == "SINV-A-1":
+					return frappe._dict({"target_doctype": "Purchase Invoice", "target_name": "PINV-B-1"})
+				return None
+			if dt == "Purchase Invoice":
+				return frappe._dict({
+					"docstatus": 1,
+					"outstanding_amount": 500.0,
+					"grand_total": 500.0,
+					"currency": "PKR",
+				})
+			if dt == "Sales Invoice":
+				return "PKR"
+			if dt == "Supplier":
+				return "Supp Co A"
+			return None
+
+		fake_pe = FakePEDoc({"doctype": "Payment Entry", "references": [], "flags": frappe._dict()})
+		with patch.object(frappe, "new_doc", return_value=fake_pe), patch.object(
+			frappe.db, "table_exists", return_value=True
+		), patch.object(
+			frappe.db, "exists", return_value=True
+		), patch.object(
+			frappe.db, "get_value", side_effect=mock_pe_get_val
+		):
+			pe = create_payment_entry(src_pe, mapping, linked_co, "main_to_other")
+			self.assertEqual(len(pe.references), 1)
+			self.assertEqual(pe.references[0].reference_doctype, "Purchase Invoice")
+			self.assertEqual(pe.references[0].reference_name, "PINV-B-1")
+			self.assertEqual(pe.references[0].allocated_amount, 500.0)
+
+		# Matrix report must filter on document posting_date (Jan) rather than ref creation (Feb)
+		schema_cols = {"Sales Invoice": {"name", "grand_total", "posting_date"}, "Purchase Invoice": {"name", "grand_total", "posting_date"}}
+		refs = [
+			frappe._dict({
+				"name": "REF-BACKDATED",
+				"source_doctype": "Sales Invoice",
+				"source_name": "SINV-JAN",
+				"source_company": "A",
+				"target_doctype": "Purchase Invoice",
+				"target_name": "PINV-JAN",
+				"target_company": "B",
+				"creation": "2026-02-10 10:00:00",
+			})
+		]
+		docs = {
+			("Sales Invoice", "SINV-JAN"): {"name": "SINV-JAN", "grand_total": 100.0, "posting_date": "2026-01-15"},
+			("Purchase Invoice", "PINV-JAN"): {"name": "PINV-JAN", "grand_total": 100.0, "posting_date": "2026-01-15"},
+		}
+		with patch.object(frappe, "get_all", return_value=refs), patch.object(
+			frappe.db, "exists", side_effect=lambda dt, n=None, **k: (dt, n) in docs
+		), patch.object(
+			frappe.db, "has_column", side_effect=lambda dt, col: col in schema_cols.get(dt, set())
+		), patch.object(
+			frappe.db, "get_value", side_effect=lambda dt, n, fields, as_dict=False: frappe._dict(docs[(dt, n)])
+		):
+			_c, jan_rows, _m, _ch, _s = matrix_execute({"from_date": "2026-01-01", "to_date": "2026-01-31"})
+			_c2, feb_rows, _m2, _ch2, _s2 = matrix_execute({"from_date": "2026-02-01", "to_date": "2026-02-28"})
+			self.assertEqual(len(jan_rows), 1)
+			self.assertEqual(len(feb_rows), 0)

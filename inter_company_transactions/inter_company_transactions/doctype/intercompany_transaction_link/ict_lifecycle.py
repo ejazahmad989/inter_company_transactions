@@ -74,6 +74,15 @@ def create_document_reference(source_doc, target_doc):
 		frappe.log_error(f"Error creating document reference: {e!s}", "Inter Company Transaction Error")
 
 
+def _has_erpnext_core_intercompany_ref(doc):
+	"""Return True if standard ERPNext core inter-company reference fields already link this document."""
+	return bool(
+		doc.get("inter_company_invoice_reference")
+		or doc.get("inter_company_order_reference")
+		or doc.get("inter_company_reference")
+	)
+
+
 def create_linked_documents(doc, method=None):
 	"""Create corresponding documents in all linked companies (Local & Remote Federated)."""
 	if not hasattr(doc, "doctype") or not doc.get("company"):
@@ -85,6 +94,9 @@ def create_linked_documents(doc, method=None):
 	if doc.get("intercompany_linked_doc_doctype") or doc.get("intercompany_linked_doc_name"):
 		return
 
+	if _has_erpnext_core_intercompany_ref(doc):
+		return
+
 	settings_fn = _facade_fn("_get_intercompany_settings", _get_intercompany_settings)
 	settings = settings_fn()
 	if not cint(settings.get("enabled", 1)):
@@ -92,11 +104,23 @@ def create_linked_documents(doc, method=None):
 
 	validate_intercompany_cross_currency_rate(doc)
 
+	target_company_hint = (doc.get("intercompany_target_company") or "").strip()
+
 	if (
 		settings.get("execution_mode") == "Asynchronous (Background Job)"
 		and not getattr(frappe.flags, "in_test", False)
 		and not getattr(frappe.flags, "ict_in_background", False)
 	):
+		# Pre-validate required parties & item mappings synchronously before committing background job
+		for m in (find_applicable_mappings(doc) or []):
+			m_comp = m.get("company")
+			if not m_comp or m_comp == doc.company:
+				continue
+			if target_company_hint and m_comp != target_company_hint:
+				continue
+			validate_required_parties(doc, m)
+			validate_intercompany_items(doc, m)
+
 		try:
 			frappe.enqueue(
 				f"{_FACADE_MODULE}._execute_linked_documents",
@@ -104,6 +128,7 @@ def create_linked_documents(doc, method=None):
 				doc_name=doc.name,
 				queue="default",
 				now=False,
+				enqueue_after_commit=True,
 			)
 			frappe.msgprint(
 				_("Queued inter-company mirroring for {0} {1} in background.").format(doc.doctype, doc.name),
@@ -112,8 +137,6 @@ def create_linked_documents(doc, method=None):
 			return
 		except Exception:
 			pass
-
-	target_company_hint = (doc.get("intercompany_target_company") or "").strip()
 	if target_company_hint:
 		try:
 			from inter_company_transactions.sync import (
@@ -248,6 +271,8 @@ def create_linked_documents(doc, method=None):
 				"Inter Company Transaction Error",
 			)
 			_log_local_mirror_error(doc, target_comp, target_dt, e)
+			if isinstance(e, frappe.ValidationError) and not getattr(frappe.flags, "ict_in_background", False):
+				raise
 			indicator = "red" if cint(settings.get("notify_on_sync_failure", 1)) else "orange"
 			frappe.msgprint(
 				_("Notice for linked company {0}: {1}").format(target_comp or "", str(e)),
@@ -596,21 +621,16 @@ def cancel_linked_documents(doc, method=None):
 	for ld in all_related_docs:
 		if ld.get("is_remote") and ld.get("remote_site_url"):
 			try:
-				from inter_company_transactions.sync import get_remote_site_for_company
+				from inter_company_transactions.sync import (
+					get_remote_site_for_company,
+					push_cancellation_to_remote_site,
+				)
 
 				remote_site = get_remote_site_for_company(ld.get("company"))
-				if remote_site:
-					endpoint = f"{remote_site['site_url']}/api/method/inter_company_transactions.sync.cancel_remote_transaction"
-					c_payload = json.dumps({"source_doctype": doc.doctype, "source_name": doc.name}).encode("utf-8")
-					c_headers = {
-						"Content-Type": "application/json",
-						"Authorization": f"token {remote_site['api_key']}:{remote_site['api_secret']}",
-					}
-					c_req = urllib.request.Request(endpoint, data=c_payload, headers=c_headers, method="POST")
-					with urllib.request.urlopen(c_req, timeout=10):
-						frappe.msgprint(
-							_("Notified remote instance ({0}) to cancel mirrored transaction.").format(remote_site["site_url"])
-						)
+				if remote_site and push_cancellation_to_remote_site(doc, remote_site):
+					frappe.msgprint(
+						_("Notified remote instance ({0}) to cancel mirrored transaction.").format(remote_site["site_url"])
+					)
 			except Exception as ex:
 				frappe.logger().error(f"Failed to cancel remote document on {ld.get('remote_site_url')}: {ex!s}")
 
@@ -757,6 +777,9 @@ def find_applicable_mappings(doc):
 		return []
 
 	if doc.get("intercompany_linked_doc_name") or doc.get("intercompany_linked_doc_doctype"):
+		return []
+
+	if _has_erpnext_core_intercompany_ref(doc):
 		return []
 
 	mappings = []

@@ -165,17 +165,17 @@ def get_data(filters):
 	column_cache = {}
 	for r in refs:
 		created_date = getdate(r.creation)
-		if filters.get("from_date") and created_date < getdate(filters.from_date):
-			continue
-		if filters.get("to_date") and created_date > getdate(filters.to_date):
-			continue
-
 		source_amount, posting_date = _get_doc_summary(
 			r.source_doctype, r.source_name, column_cache, default_date=created_date
 		)
-		target_amount, _unused = _get_doc_summary(
+		target_amount, target_posting_date = _get_doc_summary(
 			r.target_doctype, r.target_name, column_cache, default_date=created_date
 		)
+		effective_date = posting_date or target_posting_date or created_date
+		if filters.get("from_date") and getdate(effective_date) < getdate(filters.from_date):
+			continue
+		if filters.get("to_date") and getdate(effective_date) > getdate(filters.to_date):
+			continue
 
 		variance = round(abs(source_amount - target_amount), 2)
 		status = "Synchronized"

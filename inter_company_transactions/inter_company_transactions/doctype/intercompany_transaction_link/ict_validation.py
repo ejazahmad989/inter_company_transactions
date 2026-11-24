@@ -422,7 +422,11 @@ def validate_locked_mirrored_fields(doc, previous=None):
 
 def validate_intercompany_document(doc, method=None):
 	"""Unified validate doc_event across all 14 supported intercompany DocTypes."""
-	if getattr(doc, "doctype", None) == "Stock Entry":
+	if getattr(doc, "doctype", None) == "Stock Entry" and (
+		cint(doc.get("is_intercompany"))
+		or doc.get("intercompany_target_company")
+		or doc.get("intercompany_linked_doc_name")
+	):
 		sanitize_intercompany_stock_entry(doc, method)
 
 	if doc.flags.get("ict_system_sync"):
@@ -444,6 +448,22 @@ def validate_intercompany_document(doc, method=None):
 			validate_intercompany_cross_currency_rate(doc)
 
 
+def _doc_has_candidate_intercompany_party(doc):
+	"""Quick in-memory check whether a document carries any Customer/Supplier party worth resolving."""
+	dt = getattr(doc, "doctype", None)
+	if dt == "Quotation":
+		return bool((doc.get("party_name") if doc.get("quotation_to") == "Customer" else None) or doc.get("customer"))
+	if dt in ("Sales Order", "Sales Invoice", "Delivery Note"):
+		return bool(doc.get("customer"))
+	if dt in ("Purchase Order", "Purchase Invoice", "Purchase Receipt", "Supplier Quotation"):
+		return bool(doc.get("supplier"))
+	if dt == "Payment Entry":
+		return bool(doc.get("party") and (doc.get("party_type") or "").lower() in ("customer", "supplier", ""))
+	if dt == "Journal Entry":
+		return any(bool(row.get("party")) for row in (doc.get("accounts") or []))
+	return False
+
+
 def auto_detect_intercompany_party(doc, method=None):
 	"""Auto-detect intercompany parties and enforce intercompany_target_company cleanly on validate."""
 	if not hasattr(doc, "doctype") or not doc.get("company"):
@@ -452,7 +472,28 @@ def auto_detect_intercompany_party(doc, method=None):
 	if doc.get("intercompany_linked_doc_name") or doc.get("intercompany_linked_doc_doctype"):
 		return
 
+	if (
+		doc.get("inter_company_invoice_reference")
+		or doc.get("inter_company_order_reference")
+		or doc.get("inter_company_reference")
+	):
+		return
+
 	company = doc.company
+
+	# Fast path: documents without any candidate Customer/Supplier party (e.g. Stock Entry, Material Request,
+	# RFQ, LCV, internal JEs) never trigger party-map DB queries.
+	if not _doc_has_candidate_intercompany_party(doc):
+		existing_target = (doc.get("intercompany_target_company") or "").strip()
+		if not existing_target or existing_target == company:
+			doc.is_intercompany = 0
+			doc.intercompany_target_company = ""
+			if doc.doctype == "Journal Entry":
+				for row in doc.get("accounts") or []:
+					if hasattr(row, "intercompany_target_company") or (hasattr(row, "as_dict") and "intercompany_target_company" in row.as_dict()):
+						row.intercompany_target_company = ""
+		return
+
 	party_map_fn = _facade_fn("get_intercompany_party_map", get_intercompany_party_map_impl)
 	party_map = party_map_fn(company)
 	target_company = None

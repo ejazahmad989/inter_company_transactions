@@ -6,7 +6,7 @@ from pathlib import Path
 
 import frappe
 from frappe import _
-from frappe.utils import cint
+from frappe.utils import add_days, cint, flt, nowdate
 
 from .ict_lifecycle import (
 	_clear_mirrored_link_markers,
@@ -557,42 +557,317 @@ def bulk_create_linked_documents_impl(doc_names, doctype):
 	return results
 
 
-def get_intercompany_balance(company_a, company_b):
-	transactions = frappe.db.sql(
+def _get_pair_ledger_accounts_and_parties(company_a, company_b):
+	"""Return configured clearing accounts and intercompany parties for (company_a, company_b)."""
+	accounts_a, accounts_b = set(), set()
+	parties_a, parties_b = set(), set()
+
+	if not (
+		hasattr(frappe, "db")
+		and frappe.db
+		and frappe.db.table_exists("Intercompany Transaction Link")
+		and frappe.db.table_exists("Intercompany Linked Company")
+	):
+		return accounts_a, accounts_b, parties_a, parties_b
+
+	rows = frappe.db.sql(
 		"""
 		SELECT
-			source_doctype, source_name, source_company,
-			target_doctype, target_name, target_company,
-			modified
-		FROM `tabInter Company Document Reference`
-		WHERE (source_company = %s AND target_company = %s)
-		   OR (source_company = %s AND target_company = %s)
+			ilt.main_company,
+			lc.company,
+			lc.main_company_account,
+			lc.other_company_account,
+			lc.main_company_customer,
+			lc.main_company_supplier,
+			lc.other_company_customer,
+			lc.other_company_supplier
+		FROM `tabIntercompany Linked Company` lc
+		JOIN `tabIntercompany Transaction Link` ilt ON ilt.name = lc.parent
+		WHERE (ilt.enabled IS NULL OR ilt.enabled != 0)
+		  AND (
+		      (ilt.main_company = %s AND lc.company = %s)
+		      OR (ilt.main_company = %s AND lc.company = %s)
+		  )
 		""",
 		(company_a, company_b, company_b, company_a),
 		as_dict=True,
 	)
-	return {"transactions_count": len(transactions)}
+	for r in rows or []:
+		if r.main_company == company_a:
+			if r.main_company_account:
+				accounts_a.add(r.main_company_account)
+			if r.other_company_account:
+				accounts_b.add(r.other_company_account)
+			for p in (r.main_company_customer, r.main_company_supplier):
+				if p:
+					parties_a.add(p)
+			for p in (r.other_company_customer, r.other_company_supplier):
+				if p:
+					parties_b.add(p)
+		else:
+			if r.other_company_account:
+				accounts_a.add(r.other_company_account)
+			if r.main_company_account:
+				accounts_b.add(r.main_company_account)
+			for p in (r.other_company_customer, r.other_company_supplier):
+				if p:
+					parties_a.add(p)
+			for p in (r.main_company_customer, r.main_company_supplier):
+				if p:
+					parties_b.add(p)
+
+	return accounts_a, accounts_b, parties_a, parties_b
+
+
+def _query_company_intercompany_gl_balance(company, accounts, parties):
+	"""Compute net GL balance (debit - credit) across a company's intercompany accounts and parties."""
+	if not (hasattr(frappe, "db") and frappe.db and frappe.db.table_exists("GL Entry")):
+		return 0.0
+	if not accounts and not parties:
+		return 0.0
+
+	if accounts and parties:
+		res = frappe.db.sql(
+			"""
+			SELECT COALESCE(SUM(debit - credit), 0)
+			FROM `tabGL Entry`
+			WHERE company = %(company)s
+			  AND is_cancelled = 0
+			  AND (account IN %(accounts)s OR party IN %(parties)s)
+			""",
+			{"company": company, "accounts": tuple(accounts), "parties": tuple(parties)},
+		)
+	elif accounts:
+		res = frappe.db.sql(
+			"""
+			SELECT COALESCE(SUM(debit - credit), 0)
+			FROM `tabGL Entry`
+			WHERE company = %(company)s
+			  AND is_cancelled = 0
+			  AND account IN %(accounts)s
+			""",
+			{"company": company, "accounts": tuple(accounts)},
+		)
+	else:
+		res = frappe.db.sql(
+			"""
+			SELECT COALESCE(SUM(debit - credit), 0)
+			FROM `tabGL Entry`
+			WHERE company = %(company)s
+			  AND is_cancelled = 0
+			  AND party IN %(parties)s
+			""",
+			{"company": company, "parties": tuple(parties)},
+		)
+	return flt(res[0][0] if res and res[0] else 0.0, 2)
+
+
+def get_intercompany_balance(company_a, company_b):
+	"""Calculate intercompany document count and net GL ledger balance between two companies."""
+	tx_count = 0
+	if hasattr(frappe, "db") and frappe.db and frappe.db.table_exists("Inter Company Document Reference"):
+		res = frappe.db.sql(
+			"""
+			SELECT COUNT(*)
+			FROM `tabInter Company Document Reference`
+			WHERE (source_company = %s AND target_company = %s)
+			   OR (source_company = %s AND target_company = %s)
+			""",
+			(company_a, company_b, company_b, company_a),
+		)
+		tx_count = cint(res[0][0] if res and res[0] else 0)
+
+	accounts_a, accounts_b, parties_a, parties_b = _get_pair_ledger_accounts_and_parties(company_a, company_b)
+	bal_a = _query_company_intercompany_gl_balance(company_a, accounts_a, parties_a)
+	bal_b = _query_company_intercompany_gl_balance(company_b, accounts_b, parties_b)
+	net_variance = flt(bal_a + bal_b, 2)
+
+	return {
+		"company_a": company_a,
+		"company_b": company_b,
+		"transactions_count": tx_count,
+		"company_a_balance": bal_a,
+		"company_b_balance": bal_b,
+		"net_variance": net_variance,
+		"is_reconciled": abs(net_variance) < 0.01,
+	}
 
 
 def reconcile_intercompany_accounts_impl():
-	companies = frappe.get_all("Company", pluck="name")
-	reconciliation_data = []
-	for company_a in companies:
-		for company_b in companies:
-			if company_a != company_b:
-				balance_data = get_intercompany_balance(company_a, company_b)
-				if balance_data:
-					reconciliation_data.append(balance_data)
-	return reconciliation_data
+	"""Reconcile intercompany clearing and party GL balances across linked company pairs."""
+	seen_pairs = set()
+	ordered_pairs = []
+
+	if (
+		hasattr(frappe, "db")
+		and frappe.db
+		and frappe.db.table_exists("Intercompany Transaction Link")
+		and frappe.db.table_exists("Intercompany Linked Company")
+	):
+		rows = frappe.db.sql(
+			"""
+			SELECT ilt.main_company, lc.company
+			FROM `tabIntercompany Linked Company` lc
+			JOIN `tabIntercompany Transaction Link` ilt ON ilt.name = lc.parent
+			WHERE (ilt.enabled IS NULL OR ilt.enabled != 0)
+			  AND ilt.main_company IS NOT NULL AND ilt.main_company != ''
+			  AND lc.company IS NOT NULL AND lc.company != ''
+			""",
+			as_dict=True,
+		)
+		for r in rows or []:
+			if r.main_company != r.company:
+				pair_key = tuple(sorted((r.main_company, r.company)))
+				if pair_key not in seen_pairs:
+					seen_pairs.add(pair_key)
+					ordered_pairs.append(pair_key)
+
+	if not ordered_pairs and hasattr(frappe, "get_all"):
+		companies = frappe.get_all("Company", pluck="name") or []
+		for idx, company_a in enumerate(companies):
+			for company_b in companies[idx + 1:]:
+				if company_a != company_b:
+					pair_key = tuple(sorted((company_a, company_b)))
+					if pair_key not in seen_pairs:
+						seen_pairs.add(pair_key)
+						ordered_pairs.append(pair_key)
+
+	return [get_intercompany_balance(company_a, company_b) for company_a, company_b in ordered_pairs]
 
 
 def get_intercompany_dashboard_data_impl(company):
-	return {
+	"""Return live intercompany metrics and recent synced documents for the requested company."""
+	result = {
+		"company": company,
 		"pending_documents": 0,
-		"monthly_volume": 0,
-		"outstanding_balances": 0,
+		"monthly_volume": 0.0,
+		"outstanding_balances": 0.0,
 		"recent_transactions": [],
 	}
+	if not company or not (hasattr(frappe, "db") and frappe.db):
+		return result
+
+	if frappe.db.table_exists("Inter Company Error Log"):
+		err_res = frappe.db.sql(
+			"""
+			SELECT COUNT(*)
+			FROM `tabInter Company Error Log`
+			WHERE status IN ('Failed', 'Pending Retry')
+			  AND (source_company = %s OR target_company = %s)
+			""",
+			(company, company),
+		)
+		result["pending_documents"] += cint(err_res[0][0] if err_res and err_res[0] else 0)
+
+	if frappe.db.table_exists("Inter Company Document Reference"):
+		pending_ref_res = frappe.db.sql(
+			"""
+			SELECT COUNT(*)
+			FROM `tabInter Company Document Reference`
+			WHERE (source_company = %s OR target_company = %s)
+			  AND (target_name IS NULL OR target_name = '')
+			""",
+			(company, company),
+		)
+		result["pending_documents"] += cint(pending_ref_res[0][0] if pending_ref_res and pending_ref_res[0] else 0)
+
+		result["recent_transactions"] = frappe.db.sql(
+			"""
+			SELECT
+				name, source_doctype, source_name, source_company,
+				target_doctype, target_name, target_company, modified
+			FROM `tabInter Company Document Reference`
+			WHERE source_company = %s OR target_company = %s
+			ORDER BY modified DESC
+			LIMIT 10
+			""",
+			(company, company),
+			as_dict=True,
+		) or []
+
+	since_date = add_days(nowdate(), -30)
+	volume_queries = (
+		(
+			"Sales Invoice",
+			"grand_total",
+			"posting_date",
+			"SELECT COALESCE(SUM(`grand_total`), 0) FROM `tabSales Invoice` WHERE company = %s AND docstatus = 1 AND is_intercompany = 1 AND `posting_date` >= %s",
+		),
+		(
+			"Purchase Invoice",
+			"grand_total",
+			"posting_date",
+			"SELECT COALESCE(SUM(`grand_total`), 0) FROM `tabPurchase Invoice` WHERE company = %s AND docstatus = 1 AND is_intercompany = 1 AND `posting_date` >= %s",
+		),
+		(
+			"Sales Order",
+			"grand_total",
+			"transaction_date",
+			"SELECT COALESCE(SUM(`grand_total`), 0) FROM `tabSales Order` WHERE company = %s AND docstatus = 1 AND is_intercompany = 1 AND `transaction_date` >= %s",
+		),
+		(
+			"Purchase Order",
+			"grand_total",
+			"transaction_date",
+			"SELECT COALESCE(SUM(`grand_total`), 0) FROM `tabPurchase Order` WHERE company = %s AND docstatus = 1 AND is_intercompany = 1 AND `transaction_date` >= %s",
+		),
+		(
+			"Payment Entry",
+			"paid_amount",
+			"posting_date",
+			"SELECT COALESCE(SUM(`paid_amount`), 0) FROM `tabPayment Entry` WHERE company = %s AND docstatus = 1 AND is_intercompany = 1 AND `posting_date` >= %s",
+		),
+		(
+			"Journal Entry",
+			"total_debit",
+			"posting_date",
+			"SELECT COALESCE(SUM(`total_debit`), 0) FROM `tabJournal Entry` WHERE company = %s AND docstatus = 1 AND is_intercompany = 1 AND `posting_date` >= %s",
+		),
+	)
+	monthly_volume = 0.0
+	for dt, amount_col, date_col, query_sql in volume_queries:
+		if (
+			frappe.db.table_exists(dt)
+			and frappe.db.has_column(dt, "is_intercompany")
+			and frappe.db.has_column(dt, amount_col)
+			and frappe.db.has_column(dt, date_col)
+		):
+			vol_res = frappe.db.sql(query_sql, (company, since_date))
+			monthly_volume += flt(vol_res[0][0] if vol_res and vol_res[0] else 0.0)
+	result["monthly_volume"] = flt(monthly_volume, 2)
+
+	if frappe.db.table_exists("Intercompany Transaction Link") and frappe.db.table_exists("Intercompany Linked Company"):
+		all_accts, all_parties = set(), set()
+		link_rows = frappe.db.sql(
+			"""
+			SELECT ilt.main_company, lc.company,
+				lc.main_company_account, lc.other_company_account,
+				lc.main_company_customer, lc.main_company_supplier,
+				lc.other_company_customer, lc.other_company_supplier
+			FROM `tabIntercompany Linked Company` lc
+			JOIN `tabIntercompany Transaction Link` ilt ON ilt.name = lc.parent
+			WHERE (ilt.enabled IS NULL OR ilt.enabled != 0)
+			  AND (ilt.main_company = %s OR lc.company = %s)
+			""",
+			(company, company),
+			as_dict=True,
+		)
+		for lr in link_rows or []:
+			if lr.main_company == company:
+				if lr.main_company_account:
+					all_accts.add(lr.main_company_account)
+				for p in (lr.main_company_customer, lr.main_company_supplier):
+					if p:
+						all_parties.add(p)
+			if lr.company == company:
+				if lr.other_company_account:
+					all_accts.add(lr.other_company_account)
+				for p in (lr.other_company_customer, lr.other_company_supplier):
+					if p:
+						all_parties.add(p)
+		result["outstanding_balances"] = _query_company_intercompany_gl_balance(company, all_accts, all_parties)
+
+	return result
 
 
 def download_user_guide_pdf_impl():

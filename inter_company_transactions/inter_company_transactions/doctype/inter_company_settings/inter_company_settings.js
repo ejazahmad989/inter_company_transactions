@@ -11,8 +11,7 @@ frappe.ui.form.on('Inter Company Settings', {
 		// Run Health Check
 		frm.add_custom_button(__('Run Health Audit'), function() {
 			frappe.call({
-				method: 'get_enterprise_health_check',
-				doc: frm.doc,
+				method: 'inter_company_transactions.inter_company_transactions.doctype.inter_company_settings.inter_company_settings.get_enterprise_health_check',
 				freeze: true,
 				freeze_message: __('Auditing intercompany configuration and health...'),
 				callback: function(r) {
@@ -52,11 +51,12 @@ frappe.ui.form.on('Inter Company Settings', {
 				}
 				let site = frm.doc.remote_sites[0];
 				frappe.call({
-					method: 'test_remote_site_connection',
+					method: 'inter_company_transactions.inter_company_transactions.doctype.inter_company_settings.inter_company_settings.test_remote_site_connection',
 					args: {
 						site_url: site.site_url,
 						api_key: site.api_key,
-						api_secret: site.api_secret
+						api_secret: site.api_secret,
+						verify_ssl: site.verify_ssl != null ? site.verify_ssl : 1
 					},
 					freeze: true,
 					freeze_message: __('Testing multi-layer connection to remote ERPNext site...'),

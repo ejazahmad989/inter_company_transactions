@@ -7,20 +7,140 @@ from frappe.model.document import Document
 from frappe.utils import flt, nowdate
 
 
+def _get_cycle_currency(doc):
+	"""Resolve a single common reporting/settlement currency for the netting cycle."""
+	for row in (getattr(doc, "participating_companies", None) or []):
+		comp = row.get("company") if isinstance(row, dict) else getattr(row, "company", None)
+		if comp and hasattr(frappe, "db") and frappe.db:
+			ccy = frappe.get_cached_value("Company", comp, "default_currency")
+			if ccy:
+				return ccy
+	for inv in (getattr(doc, "invoices", None) or []):
+		ccy = inv.get("currency") if isinstance(inv, dict) else getattr(inv, "currency", None)
+		if ccy:
+			return ccy
+	return None
+
+
+def _get_mirrored_invoice_link_set(invoices):
+	"""Return set of (invoice_type, invoice_name) rows that are already represented by a counterpart in invoices."""
+	skip_keys = set()
+	if not invoices or not (hasattr(frappe, "db") and frappe.db):
+		return skip_keys
+
+	si_names = {
+		inv.get("invoice_name")
+		for inv in invoices
+		if inv.get("invoice_type") == "Sales Invoice" and inv.get("invoice_name")
+	}
+	pi_names = {
+		inv.get("invoice_name")
+		for inv in invoices
+		if inv.get("invoice_type") == "Purchase Invoice" and inv.get("invoice_name")
+	}
+	if not (si_names and pi_names):
+		return skip_keys
+
+	if frappe.db.table_exists("Inter Company Document Reference"):
+		refs = frappe.get_all(
+			"Inter Company Document Reference",
+			filters={
+				"source_doctype": ["in", ["Sales Invoice", "Purchase Invoice"]],
+				"target_doctype": ["in", ["Sales Invoice", "Purchase Invoice"]],
+			},
+			fields=["source_doctype", "source_name", "target_doctype", "target_name"],
+		)
+		for ref in refs:
+			if (
+				ref.source_doctype == "Sales Invoice"
+				and ref.target_doctype == "Purchase Invoice"
+				and ref.source_name in si_names
+				and ref.target_name in pi_names
+			):
+				skip_keys.add(("Purchase Invoice", ref.target_name))
+			elif (
+				ref.source_doctype == "Purchase Invoice"
+				and ref.target_doctype == "Sales Invoice"
+				and ref.source_name in pi_names
+				and ref.target_name in si_names
+			):
+				skip_keys.add(("Purchase Invoice", ref.source_name))
+
+	if frappe.db.has_column("Purchase Invoice", "intercompany_linked_doc_name"):
+		pi_links = frappe.get_all(
+			"Purchase Invoice",
+			filters={"name": ["in", list(pi_names)]},
+			fields=["name", "intercompany_linked_doc_doctype", "intercompany_linked_doc_name"],
+		)
+		for pi in pi_links:
+			if pi.get("intercompany_linked_doc_doctype") == "Sales Invoice" and pi.get("intercompany_linked_doc_name") in si_names:
+				skip_keys.add(("Purchase Invoice", pi.name))
+
+	if frappe.db.has_column("Sales Invoice", "intercompany_linked_doc_name"):
+		si_links = frappe.get_all(
+			"Sales Invoice",
+			filters={"name": ["in", list(si_names)]},
+			fields=["name", "intercompany_linked_doc_doctype", "intercompany_linked_doc_name"],
+		)
+		for si in si_links:
+			if si.get("intercompany_linked_doc_doctype") == "Purchase Invoice" and si.get("intercompany_linked_doc_name") in pi_names:
+				skip_keys.add(("Purchase Invoice", si.get("intercompany_linked_doc_name")))
+
+	return skip_keys
+
+
+def _convert_cycle_amount(amount, from_currency, to_currency, tx_date):
+	"""Convert invoice amount into cycle currency cleanly, requiring FX rate if currencies differ."""
+	amt = flt(amount)
+	if not amt or not from_currency or not to_currency or from_currency == to_currency:
+		return amt
+
+	from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_currency import (
+		get_intercompany_exchange_rate,
+	)
+
+	rate = get_intercompany_exchange_rate(from_currency, to_currency, tx_date, raise_if_missing=True)
+	return round(amt * flt(rate), 2)
+
+
 def _compute_netting(doc):
 	"""Compute multilateral netting positions and settlements for an InterCompanyNettingCycle document."""
+	from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_currency import (
+		get_intercompany_exchange_rate,
+	)
+
 	company_stats = {}
 	for row in doc.participating_companies:
 		company_stats[row.company] = {
 			"gross_payables": 0.0,
 			"gross_receivables": 0.0,
-			"net_balance": 0.0
+			"net_balance": 0.0,
 		}
+
+	cycle_currency = _get_cycle_currency(doc)
+	settlement_date = getattr(doc, "settlement_date", None) or nowdate()
 
 	has_invoices = bool(doc.invoices)
 	if has_invoices:
+		mirrored_skip_keys = _get_mirrored_invoice_link_set(doc.invoices)
+		seen_invoices = set()
 		for inv in (doc.invoices or []):
-			amt = flt(inv.settled_amount or inv.outstanding_amount)
+			inv_key = (inv.invoice_type, inv.invoice_name)
+			if inv.invoice_name:
+				if inv_key in seen_invoices or inv_key in mirrored_skip_keys:
+					continue
+				seen_invoices.add(inv_key)
+
+			raw_amt = flt(getattr(inv, "settled_amount", None) or getattr(inv, "outstanding_amount", None) or (inv.get("settled_amount") if isinstance(inv, dict) else 0) or (inv.get("outstanding_amount") if isinstance(inv, dict) else 0))
+			inv_currency = getattr(inv, "currency", None) or (inv.get("currency") if isinstance(inv, dict) else None)
+			if not inv_currency and inv.company and hasattr(frappe, "db") and frappe.db:
+				inv_currency = frappe.get_cached_value("Company", inv.company, "default_currency")
+			if inv_currency and cycle_currency and inv_currency != cycle_currency:
+				rate = get_intercompany_exchange_rate(inv_currency, cycle_currency, settlement_date, raise_if_missing=True)
+				amt = round(raw_amt * flt(rate), 2)
+			else:
+				amt = raw_amt
+
 			if inv.invoice_type == "Sales Invoice":
 				if inv.company in company_stats:
 					company_stats[inv.company]["gross_receivables"] += amt
@@ -50,9 +170,9 @@ def _compute_netting(doc):
 
 	for row in doc.participating_companies:
 		stats = company_stats.get(row.company, {})
-		row.gross_payables = stats.get("gross_payables", 0.0)
-		row.gross_receivables = stats.get("gross_receivables", 0.0)
-		row.net_balance = row.gross_receivables - row.gross_payables
+		row.gross_payables = round(stats.get("gross_payables", 0.0), 2)
+		row.gross_receivables = round(stats.get("gross_receivables", 0.0), 2)
+		row.net_balance = round(row.gross_receivables - row.gross_payables, 2)
 		total_payables += row.gross_payables
 		total_receivables += row.gross_receivables
 
@@ -63,8 +183,8 @@ def _compute_netting(doc):
 		else:
 			row.settlement_position = "Balanced"
 
-	doc.total_gross_payables = total_payables
-	doc.total_gross_receivables = total_receivables
+	doc.total_gross_payables = round(total_payables, 2)
+	doc.total_gross_receivables = round(total_receivables, 2)
 
 	# Multilateral Settlement Solver (Greedy Knapsack Matching)
 	debtors = []  # owes money: net_balance < 0
@@ -87,13 +207,17 @@ def _compute_netting(doc):
 
 		settle_amt = min(debtor["amount"], creditor["amount"])
 		if settle_amt > 0.01:
-			company_currency = frappe.get_cached_value("Company", debtor["company"], "default_currency")
+			settle_currency = cycle_currency or (
+				frappe.get_cached_value("Company", debtor["company"], "default_currency")
+				if hasattr(frappe, "db") and frappe.db
+				else None
+			)
 			doc.append("net_settlements", {
 				"paying_company": debtor["company"],
 				"receiving_company": creditor["company"],
 				"amount": round(settle_amt, 2),
-				"currency": company_currency,
-				"status": "Pending"
+				"currency": settle_currency,
+				"status": "Pending",
 			})
 			total_net += settle_amt
 			debtor["amount"] -= settle_amt
@@ -108,6 +232,45 @@ def _compute_netting(doc):
 	doc.status = "Calculated"
 
 
+def _resolve_netting_clearing_and_supplier(doc, payer, receiver):
+	"""Symmetrically resolve payer's clearing account and supplier representing receiver."""
+	clearing_account_payer = None
+	receiver_supplier = None
+
+	for row in (getattr(doc, "participating_companies", None) or []):
+		if getattr(row, "company", None) == payer and getattr(row, "clearing_account", None):
+			clearing_account_payer = row.clearing_account
+			break
+
+	if hasattr(frappe, "db") and frappe.db:
+		parent_link = frappe.get_value("Intercompany Transaction Link", {"main_company": payer}, "name")
+		if parent_link:
+			row_data = frappe.get_value(
+				"Intercompany Linked Company",
+				{"parent": parent_link, "company": receiver},
+				["main_company_account", "main_company_supplier"],
+				as_dict=True,
+			)
+			if row_data:
+				clearing_account_payer = clearing_account_payer or row_data.get("main_company_account")
+				receiver_supplier = row_data.get("main_company_supplier")
+
+		if not receiver_supplier or not clearing_account_payer:
+			rev_parent = frappe.get_value("Intercompany Transaction Link", {"main_company": receiver}, "name")
+			if rev_parent:
+				rev_row = frappe.get_value(
+					"Intercompany Linked Company",
+					{"parent": rev_parent, "company": payer},
+					["other_company_account", "other_company_supplier"],
+					as_dict=True,
+				)
+				if rev_row:
+					clearing_account_payer = clearing_account_payer or rev_row.get("other_company_account")
+					receiver_supplier = receiver_supplier or rev_row.get("other_company_supplier")
+
+	return clearing_account_payer, receiver_supplier
+
+
 class InterCompanyNettingCycle(Document):
 	def validate(self):
 		if not self.participating_companies:
@@ -116,8 +279,8 @@ class InterCompanyNettingCycle(Document):
 	@frappe.whitelist()
 	def fetch_open_invoices(self):
 		"""
-		Fetches all outstanding intercompany Sales and Purchase Invoices
-		between the participating entities.
+		Fetches all outstanding unique intercompany obligations between participating entities,
+		deduplicating mirrored Sales Invoice / Purchase Invoice pairs so liabilities are never double-counted.
 		"""
 		self.check_permission("write")
 		companies = [row.company for row in self.participating_companies if row.company]
@@ -126,11 +289,17 @@ class InterCompanyNettingCycle(Document):
 
 		self.invoices = []
 
-		# Get linked company relationships
 		links = frappe.get_all(
 			"Intercompany Linked Company",
 			filters={"company": ["in", companies]},
-			fields=["parent", "company", "main_company_customer", "main_company_supplier", "other_company_customer", "other_company_supplier"]
+			fields=[
+				"parent",
+				"company",
+				"main_company_customer",
+				"main_company_supplier",
+				"other_company_customer",
+				"other_company_supplier",
+			],
 		)
 
 		company_pairs = {}
@@ -141,22 +310,28 @@ class InterCompanyNettingCycle(Document):
 					"customer_in_other": link.other_company_customer,
 					"supplier_in_other": link.other_company_supplier,
 					"customer_in_main": link.main_company_customer,
-					"supplier_in_main": link.main_company_supplier
+					"supplier_in_main": link.main_company_supplier,
 				}
 
-		# Fetch open Sales Invoices
+		si_fields = ["name", "company", "customer", "outstanding_amount", "currency"]
+		if frappe.db.has_column("Sales Invoice", "intercompany_linked_doc_doctype"):
+			si_fields.extend(["intercompany_linked_doc_doctype", "intercompany_linked_doc_name"])
+
 		sales_invoices = frappe.get_all(
 			"Sales Invoice",
 			filters={
 				"company": ["in", companies],
 				"docstatus": 1,
-				"outstanding_amount": [">", 0]
+				"outstanding_amount": [">", 0],
 			},
-			fields=["name", "company", "customer", "outstanding_amount", "currency"]
+			fields=si_fields,
 		)
 
+		fetched_si_names = set()
+		mirrored_pi_names = set()
+		matched_pairs = set()
+
 		for inv in sales_invoices:
-			# Check which sister company this customer represents
 			for (main_co, other_co), mapping in company_pairs.items():
 				partner = None
 				if inv.company == main_co and inv.customer == mapping["customer_in_main"]:
@@ -165,6 +340,16 @@ class InterCompanyNettingCycle(Document):
 					partner = main_co
 
 				if partner and partner in companies:
+					pair_key = ("Sales Invoice", inv.name, partner)
+					if pair_key in matched_pairs:
+						continue
+					matched_pairs.add(pair_key)
+					fetched_si_names.add(inv.name)
+					if (
+						inv.get("intercompany_linked_doc_doctype") == "Purchase Invoice"
+						and inv.get("intercompany_linked_doc_name")
+					):
+						mirrored_pi_names.add(inv.get("intercompany_linked_doc_name"))
 					self.append("invoices", {
 						"company": inv.company,
 						"partner_company": partner,
@@ -172,21 +357,47 @@ class InterCompanyNettingCycle(Document):
 						"invoice_name": inv.name,
 						"outstanding_amount": inv.outstanding_amount,
 						"currency": inv.currency,
-						"settled_amount": inv.outstanding_amount
+						"settled_amount": inv.outstanding_amount,
 					})
 
-		# Fetch open Purchase Invoices
+		if fetched_si_names and frappe.db.table_exists("Inter Company Document Reference"):
+			doc_refs = frappe.get_all(
+				"Inter Company Document Reference",
+				filters={
+					"source_doctype": ["in", ["Sales Invoice", "Purchase Invoice"]],
+					"target_doctype": ["in", ["Sales Invoice", "Purchase Invoice"]],
+				},
+				fields=["source_doctype", "source_name", "target_doctype", "target_name"],
+			)
+			for ref in doc_refs:
+				if ref.source_doctype == "Sales Invoice" and ref.source_name in fetched_si_names and ref.target_doctype == "Purchase Invoice":
+					mirrored_pi_names.add(ref.target_name)
+				elif ref.target_doctype == "Sales Invoice" and ref.target_name in fetched_si_names and ref.source_doctype == "Purchase Invoice":
+					mirrored_pi_names.add(ref.source_name)
+
+		pi_fields = ["name", "company", "supplier", "outstanding_amount", "currency"]
+		if frappe.db.has_column("Purchase Invoice", "intercompany_linked_doc_doctype"):
+			pi_fields.extend(["intercompany_linked_doc_doctype", "intercompany_linked_doc_name"])
+
 		purchase_invoices = frappe.get_all(
 			"Purchase Invoice",
 			filters={
 				"company": ["in", companies],
 				"docstatus": 1,
-				"outstanding_amount": [">", 0]
+				"outstanding_amount": [">", 0],
 			},
-			fields=["name", "company", "supplier", "outstanding_amount", "currency"]
+			fields=pi_fields,
 		)
 
 		for inv in purchase_invoices:
+			if inv.name in mirrored_pi_names:
+				continue
+			if (
+				inv.get("intercompany_linked_doc_doctype") == "Sales Invoice"
+				and inv.get("intercompany_linked_doc_name") in fetched_si_names
+			):
+				continue
+
 			for (main_co, other_co), mapping in company_pairs.items():
 				partner = None
 				if inv.company == main_co and inv.supplier == mapping["supplier_in_main"]:
@@ -195,6 +406,10 @@ class InterCompanyNettingCycle(Document):
 					partner = main_co
 
 				if partner and partner in companies:
+					pair_key = ("Purchase Invoice", inv.name, partner)
+					if pair_key in matched_pairs:
+						continue
+					matched_pairs.add(pair_key)
 					self.append("invoices", {
 						"company": inv.company,
 						"partner_company": partner,
@@ -202,7 +417,7 @@ class InterCompanyNettingCycle(Document):
 						"invoice_name": inv.name,
 						"outstanding_amount": inv.outstanding_amount,
 						"currency": inv.currency,
-						"settled_amount": inv.outstanding_amount
+						"settled_amount": inv.outstanding_amount,
 					})
 
 		_compute_netting(self)
@@ -222,8 +437,11 @@ class InterCompanyNettingCycle(Document):
 		"""
 		On Submission:
 		Creates the clearing Journal Entries between the net settlement entities
-		and persists status and settlement_entry references cleanly to DB.
+		and persists child net_settlements rows, settlement_entry links, and status cleanly to DB.
 		"""
+		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_accounting_builders import (
+			_build_je_row,
+		)
 		from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
 			get_or_create_intercompany_clearing_account,
 		)
@@ -237,13 +455,51 @@ class InterCompanyNettingCycle(Document):
 			"total_net_settled": flt(self.total_net_settled),
 		}, update_modified=False)
 
-		for settlement in self.net_settlements:
+		for pc in (self.participating_companies or []):
+			if pc.get("name") and hasattr(pc, "db_set"):
+				pc.db_set({
+					"gross_payables": flt(pc.gross_payables),
+					"gross_receivables": flt(pc.gross_receivables),
+					"net_balance": flt(pc.net_balance),
+					"settlement_position": pc.settlement_position,
+				}, update_modified=False)
+
+		is_real_doc = (
+			not isinstance(self, dict)
+			and getattr(self, "name", None)
+			and hasattr(frappe, "db")
+			and frappe.db
+			and frappe.db.table_exists("Inter Company Netting Summary")
+		)
+		if is_real_doc:
+			frappe.db.delete(
+				"Inter Company Netting Summary",
+				{"parent": self.name, "parenttype": self.doctype, "parentfield": "net_settlements"},
+			)
+
+		for idx, settlement in enumerate(self.net_settlements, start=1):
 			payer = settlement.paying_company
 			receiver = settlement.receiving_company
-			amt = flt(settlement.amount)
+			raw_amt = flt(settlement.amount)
 
-			if amt <= 0.01:
+			if is_real_doc and not settlement.get("name") and hasattr(settlement, "insert"):
+				settlement.parent = self.name
+				settlement.parenttype = self.doctype
+				settlement.parentfield = "net_settlements"
+				settlement.idx = idx
+				settlement.docstatus = self.docstatus
+				settlement.insert(ignore_permissions=True)
+
+			if raw_amt <= 0.01:
 				continue
+
+			payer_currency = (
+				frappe.get_cached_value("Company", payer, "default_currency")
+				if hasattr(frappe, "db") and frappe.db
+				else None
+			)
+			settlement_ccy = getattr(settlement, "currency", None) or payer_currency
+			base_amt = _convert_cycle_amount(raw_amt, settlement_ccy, payer_currency, date)
 
 			# Create intercompany clearing entry
 			je = frappe.new_doc("Journal Entry")
@@ -252,20 +508,7 @@ class InterCompanyNettingCycle(Document):
 			je.posting_date = date
 			je.user_remark = f"Multilateral Netting Settlement for Cycle {self.name}: Paid to {receiver}"
 
-			clearing_account_payer = None
-			receiver_supplier = None
-			parent_link = frappe.get_value("Intercompany Transaction Link", {"main_company": payer}, "name")
-			if parent_link:
-				row_data = frappe.get_value(
-					"Intercompany Linked Company",
-					{"parent": parent_link, "company": receiver},
-					["main_company_account", "main_company_supplier"],
-					as_dict=True,
-				)
-				if row_data:
-					clearing_account_payer = row_data.get("main_company_account")
-					receiver_supplier = row_data.get("main_company_supplier")
-
+			clearing_account_payer, receiver_supplier = _resolve_netting_clearing_and_supplier(self, payer, receiver)
 			if not clearing_account_payer:
 				clearing_account_payer = get_or_create_intercompany_clearing_account(payer, receiver)
 
@@ -276,33 +519,33 @@ class InterCompanyNettingCycle(Document):
 			)
 
 			if payable_acct and receiver_supplier:
-				debit_row = {
-					"account": payable_acct,
-					"party_type": "Supplier",
-					"party": receiver_supplier,
-					"debit_in_account_currency": amt,
-					"credit_in_account_currency": 0,
-				}
+				debit_row = _build_je_row(
+					payable_acct,
+					"debit",
+					base_amt,
+					payer_currency,
+					tx_date=date,
+					party_type="Supplier",
+					party=receiver_supplier,
+				)
 			elif bank_or_cash_acct:
-				debit_row = {
-					"account": bank_or_cash_acct,
-					"debit_in_account_currency": amt,
-					"credit_in_account_currency": 0,
-				}
+				debit_row = _build_je_row(bank_or_cash_acct, "debit", base_amt, payer_currency, tx_date=date)
 			else:
-				debit_row = {
-					"account": payable_acct or clearing_account_payer,
-					"debit_in_account_currency": amt,
-					"credit_in_account_currency": 0,
-				}
+				debit_row = _build_je_row(payable_acct or clearing_account_payer, "debit", base_amt, payer_currency, tx_date=date)
 
 			if clearing_account_payer and debit_row.get("account"):
+				credit_row = _build_je_row(clearing_account_payer, "credit", base_amt, payer_currency, tx_date=date)
+				if (
+					payer_currency
+					and (
+						debit_row.get("account_currency") != payer_currency
+						or credit_row.get("account_currency") != payer_currency
+					)
+				):
+					je.multi_currency = 1
+
 				je.append("accounts", debit_row)
-				je.append("accounts", {
-					"account": clearing_account_payer,
-					"debit_in_account_currency": 0,
-					"credit_in_account_currency": amt,
-				})
+				je.append("accounts", credit_row)
 				je.flags.ignore_permissions = True
 				je.flags.ignore_mandatory = True
 				je.insert(ignore_permissions=True)
@@ -320,10 +563,11 @@ class InterCompanyNettingCycle(Document):
 					frappe.log_error(f"Netting settlement JE {je.name} kept as draft: {e!s}", "Inter Company Netting")
 					settlement.status = "Pending"
 				settlement.settlement_entry = je.name
-				settlement.db_set({
-					"status": settlement.status,
-					"settlement_entry": je.name,
-				}, update_modified=False)
+				if hasattr(settlement, "db_set"):
+					settlement.db_set({
+						"status": settlement.status,
+						"settlement_entry": je.name,
+					}, update_modified=False)
 
 		self.status = "Settled"
 		self.db_set("status", "Settled", update_modified=False)

@@ -12,19 +12,14 @@ def after_migrate():
     # Ensure ICT Notification Setting exists for active users
     ensure_ict_notification_settings_for_all_users()
 
-    # Heal any corrupted depends_on or Python condition expressions in MariaDB
+    # Sanitize strictly Inter Company Transactions custom fields on Stock Entry
     try:
-        from inter_company_transactions.diagnose_and_heal import repair_database_text
         from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
             _sanitize_intercompany_stock_entry_custom_fields,
         )
-        def _migration_log(msg):
-            if "WARNING:" in str(msg):
-                print(msg)
-        repair_database_text(_migration_log)
         _sanitize_intercompany_stock_entry_custom_fields(force=True)
     except Exception as e:
-        frappe.log_error(f"Error repairing database expressions: {e!s}", "ICT After Migrate")
+        frappe.log_error(f"Error sanitizing ICT custom fields: {e!s}", "ICT After Migrate")
 
     # Ensure sister company names and titles are populated for all links
     try:
