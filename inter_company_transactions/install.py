@@ -415,16 +415,10 @@ def create_sample_data():
         print(f"Notice during sample data initialization: {e!s}")
 
 def create_page_and_workspace():
-    """Ensure Inter-Company Control Console page and Inter Company workspace exist via JSON reload."""
+    """Ensure Inter-Company Control Console page, Workspace, and v16 Desktop Icon/Sidebar exist."""
     try:
-        if not frappe.db.exists("Page", "inter-company-console"):
-            frappe.reload_doc("inter_company_transactions", "page", "inter_company_console")
-            print("Synced Page: inter-company-console")
-
-        if not frappe.db.exists("Workspace", "Inter Company"):
-            frappe.reload_doc("inter_company_transactions", "workspace", "inter_company")
-            print("Synced Workspace: Inter Company")
-
+        from inter_company_transactions.patches.after_migrate import ensure_page_and_workspace
+        ensure_page_and_workspace()
     except Exception as e:
         print(f"Notice syncing page or workspace: {e!s}")
 

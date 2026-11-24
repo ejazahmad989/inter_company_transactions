@@ -13,3 +13,12 @@ def boot_session(bootinfo):
             pass
     except Exception as e:
         frappe.log_error(f"Error in boot session: {e!s}", "Boot Session")
+
+
+def has_app_permission():
+    """Allow all authenticated Desk users (non-Guest) to see Inter Company on the Apps Screen."""
+    try:
+        user = getattr(getattr(frappe, "session", None), "user", None)
+        return bool(user and user != "Guest")
+    except Exception:
+        return True

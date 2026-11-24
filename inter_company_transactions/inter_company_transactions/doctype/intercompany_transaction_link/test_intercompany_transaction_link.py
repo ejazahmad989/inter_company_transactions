@@ -3428,6 +3428,118 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 			self.assertAlmostEqual(rem_po.conversion_rate, 1.0 / 275.0, places=6)
 			self.assertAlmostEqual(rem_po.items[0].rate, 2750.0, places=2)
 
+	def test_v16_apps_screen_desktop_icon_and_workspace_sidebar(self):
+		"""Verify add_to_apps_screen hook and v16 Desktop Icon + Workspace Sidebar creation without affecting v15"""
+		from unittest.mock import patch
+
+		import inter_company_transactions.hooks as ict_hooks
+		from inter_company_transactions.boot import has_app_permission
+		from inter_company_transactions.patches.after_migrate import ensure_v16_desktop_icon_and_sidebar
+
+		apps_entry = ict_hooks.add_to_apps_screen[0]
+		self.assertEqual(apps_entry["name"], "inter_company_transactions")
+		self.assertEqual(apps_entry["title"], "Inter Company")
+		self.assertIn("inter-company", apps_entry["route"])
+		self.assertTrue(has_app_permission())
+
+		# v15 mode: neither Workspace Sidebar nor v16 Desktop Icon fields exist -> clean no-op
+		v15_di_meta = frappe._dict(has_field=lambda f: f in ("module_name", "label"), get_field=lambda f: None)
+		with patch.object(frappe.db, "exists", side_effect=lambda dt, name=None, **kw: dt == "DocType" and name == "Desktop Icon"), patch.object(
+			frappe, "get_meta", return_value=v15_di_meta
+		):
+			self.assertFalse(ensure_v16_desktop_icon_and_sidebar())
+
+		# v16 mode: creates Workspace Sidebar + Desktop Icon linking to it
+		store = {}
+
+		class FakeNavDoc(dict):
+			def __init__(self, dt):
+				super().__init__(doctype=dt, items=[], flags=frappe._dict())
+				self._new = True
+
+			def __getattr__(self, k):
+				return self[k] if k in self else None
+
+			def __setattr__(self, k, v):
+				self[k] = v
+
+			def is_new(self):
+				return self._new
+
+			def append(self, table, row):
+				self.setdefault(table, []).append(frappe._dict(row))
+
+			def set(self, key, val):
+				self[key] = val
+
+			def insert(self, ignore_permissions=False):
+				self._new = False
+				self["name"] = self.get("name") or self.get("label") or self.get("title")
+				store[(self["doctype"], self["name"])] = self
+				return self
+
+			def save(self, ignore_permissions=False):
+				store[(self["doctype"], self["name"])] = self
+				return self
+
+		def fake_exists(dt, name=None, **kw):
+			if dt == "DocType":
+				return name in (
+					"Workspace Sidebar",
+					"Workspace Sidebar Item",
+					"Desktop Icon",
+					"Intercompany Transaction Link",
+					"Inter Company Settings",
+				)
+			if dt == "Workspace":
+				return name == "Inter Company"
+			if dt == "Page":
+				return name == "inter-company-console"
+			if dt == "Workspace Sidebar":
+				return (dt, name) in store
+			if dt == "Desktop Icon":
+				return (dt, name) in store
+			return False
+
+		def fake_meta(dt):
+			if dt == "Workspace Sidebar":
+				fields = {"app", "header_icon", "module", "standard", "is_standard"}
+				return frappe._dict(has_field=lambda f: f in fields, get_field=lambda f: None)
+			if dt == "Workspace Sidebar Item":
+				fields = {"type", "icon", "link_type", "link_to", "label"}
+				return frappe._dict(
+					has_field=lambda f: f in fields,
+					get_field=lambda f: frappe._dict(options="Workspace\nPage\nDocType\nReport") if f == "link_type" else None,
+				)
+			if dt == "Desktop Icon":
+				fields = {"link_type", "link_to", "app", "icon_type", "sidebar", "logo_url", "icon", "standard", "hidden"}
+				def _gf(f):
+					if f == "link_type":
+						return frappe._dict(options="Workspace Sidebar\nWorkspace\nPage\nExternal")
+					if f == "icon_type":
+						return frappe._dict(options="Link\nFolder\nApp")
+					return None
+				return frappe._dict(has_field=lambda f: f in fields, get_field=_gf)
+			return frappe._dict(has_field=lambda f: False, get_field=lambda f: None)
+
+		with patch.object(frappe.db, "exists", side_effect=fake_exists), patch.object(
+			frappe, "get_meta", side_effect=fake_meta
+		), patch.object(
+			frappe, "get_all", return_value=[]
+		), patch.object(
+			frappe, "new_doc", side_effect=lambda dt: FakeNavDoc(dt)
+		):
+			changed = ensure_v16_desktop_icon_and_sidebar()
+			self.assertTrue(changed)
+			self.assertIn(("Workspace Sidebar", "Inter Company"), store)
+			self.assertIn(("Desktop Icon", "Inter Company"), store)
+			sidebar_doc = store[("Workspace Sidebar", "Inter Company")]
+			self.assertGreaterEqual(len(sidebar_doc["items"]), 4)
+			di_doc = store[("Desktop Icon", "Inter Company")]
+			self.assertEqual(di_doc.link_type, "Workspace Sidebar")
+			self.assertEqual(di_doc.link_to, "Inter Company")
+			self.assertEqual(di_doc.sidebar, "Inter Company")
+
 
 
 

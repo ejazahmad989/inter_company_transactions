@@ -12,6 +12,22 @@ app_home = "inter_company_transactions"
 
 required_apps = ["erpnext"]
 
+try:
+    import frappe as _frappe
+    _FRAPPE_MAJOR = int(str(getattr(_frappe, "__version__", "15") or "15").split(".")[0])
+except Exception:
+    _FRAPPE_MAJOR = 15
+
+add_to_apps_screen = [
+    {
+        "name": "inter_company_transactions",
+        "logo": "/assets/inter_company_transactions/images/inter_company_icon_512.png",
+        "title": "Inter Company",
+        "route": "/desk/inter-company" if _FRAPPE_MAJOR >= 16 else "/app/inter-company",
+        "has_permission": "inter_company_transactions.boot.has_app_permission",
+    }
+]
+
 # Assets includes
 app_include_css = "/assets/inter_company_transactions/css/inter_company_transactions.css"
 app_include_js = [

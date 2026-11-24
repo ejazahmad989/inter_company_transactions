@@ -23,6 +23,8 @@ def execute():
                     frappe.delete_doc("Workspace", ws_name, ignore_permissions=True, force=True)
 
         frappe.reload_doc("inter_company_transactions", "workspace", "inter_company", force=True)
+        from inter_company_transactions.patches.after_migrate import ensure_v16_desktop_icon_and_sidebar
+        ensure_v16_desktop_icon_and_sidebar()
         frappe.clear_cache()
     except Exception as e:
         frappe.log_error(f"Error syncing Inter Company workspace: {e!s}", "ICT Workspace Sync")

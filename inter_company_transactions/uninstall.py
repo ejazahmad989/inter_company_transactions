@@ -20,6 +20,7 @@ def before_uninstall():
     cleanup_custom_fields()
     cleanup_property_setters()
     cleanup_custom_docperms()
+    cleanup_v16_navigation()
 
     frappe.clear_cache()
     print("Pre-uninstall cleanup for Inter Company Transactions completed successfully.")
@@ -123,6 +124,27 @@ def cleanup_custom_docperms():
         frappe.db.delete("Custom DocPerm", {"parent": ["in", ict_doctypes]})
     except Exception as e:
         print(f"Notice during custom docperms cleanup: {e}")
+
+
+def cleanup_v16_navigation():
+    """Remove v16 Desktop Icon and Workspace Sidebar records owned by inter_company_transactions."""
+    if not (hasattr(frappe, "db") and frappe.db):
+        return
+    try:
+        if frappe.db.table_exists("Desktop Icon"):
+            meta = frappe.get_meta("Desktop Icon")
+            if meta and meta.has_field("app"):
+                frappe.db.delete("Desktop Icon", {"app": "inter_company_transactions"})
+            if frappe.db.exists("Desktop Icon", "Inter Company"):
+                frappe.db.delete("Desktop Icon", {"name": "Inter Company"})
+        if frappe.db.table_exists("Workspace Sidebar"):
+            meta = frappe.get_meta("Workspace Sidebar")
+            if meta and meta.has_field("app"):
+                frappe.db.delete("Workspace Sidebar", {"app": "inter_company_transactions"})
+            if frappe.db.exists("Workspace Sidebar", "Inter Company"):
+                frappe.db.delete("Workspace Sidebar", {"name": "Inter Company"})
+    except Exception as e:
+        print(f"Notice during v16 navigation cleanup: {e}")
 
 
 def repair_all_depends_on_expressions():
