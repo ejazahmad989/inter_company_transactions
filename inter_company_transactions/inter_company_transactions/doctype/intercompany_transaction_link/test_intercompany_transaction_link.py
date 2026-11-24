@@ -4223,26 +4223,33 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 			"is_intercompany": 1,
 			"intercompany_target_company": "Co B",
 		})
-		with patch(
-			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link._get_intercompany_settings",
-			return_value={"enabled": 1, "execution_mode": "Asynchronous (Background Job)"},
-		), patch(
-			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_lifecycle.validate_intercompany_cross_currency_rate"
-		), patch(
-			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_lifecycle.find_applicable_mappings",
-			return_value=[],
-		), patch.object(
-			frappe, "enqueue"
-		) as mock_enqueue, patch.object(
-			frappe, "msgprint"
-		), patch.object(
-			frappe.flags, "in_test", False
-		), patch.object(
-			frappe.flags, "ict_in_background", False, create=True
-		):
-			create_linked_documents(src_so)
-			mock_enqueue.assert_called_once()
-			self.assertTrue(mock_enqueue.call_args.kwargs.get("enqueue_after_commit"))
+		orig_in_test = getattr(frappe.flags, "in_test", False)
+		orig_in_bg = frappe.flags.get("ict_in_background")
+		try:
+			frappe.flags.in_test = False
+			frappe.flags.ict_in_background = False
+			with patch(
+				"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link._get_intercompany_settings",
+				return_value={"enabled": 1, "execution_mode": "Asynchronous (Background Job)"},
+			), patch(
+				"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_lifecycle.validate_intercompany_cross_currency_rate"
+			), patch(
+				"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_lifecycle.find_applicable_mappings",
+				return_value=[],
+			), patch.object(
+				frappe, "enqueue"
+			) as mock_enqueue, patch.object(
+				frappe, "msgprint"
+			):
+				create_linked_documents(src_so)
+				mock_enqueue.assert_called_once()
+				self.assertTrue(mock_enqueue.call_args.kwargs.get("enqueue_after_commit"))
+		finally:
+			frappe.flags.in_test = orig_in_test
+			if orig_in_bg is None:
+				frappe.flags.pop("ict_in_background", None)
+			else:
+				frappe.flags.ict_in_background = orig_in_bg
 
 		# 3. Synchronous ValidationError propagates instead of failing silently
 		sync_mappings = [{
@@ -4252,27 +4259,33 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 			"target_doctype": "Purchase Order",
 			"direction": "main_to_other",
 		}]
-		with patch(
-			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link._get_intercompany_settings",
-			return_value={"enabled": 1, "execution_mode": "Synchronous"},
-		), patch(
-			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_lifecycle.validate_intercompany_cross_currency_rate"
-		), patch(
-			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_lifecycle.find_applicable_mappings",
-			return_value=sync_mappings,
-		), patch(
-			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_lifecycle.validate_required_parties",
-			side_effect=frappe.ValidationError("Other Company Supplier is required"),
-		), patch(
-			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_lifecycle._log_local_mirror_error"
-		) as mock_err_log, patch.object(
-			frappe, "log_error"
-		), patch.object(
-			frappe.flags, "ict_in_background", False, create=True
-		):
-			with self.assertRaises(frappe.ValidationError):
-				create_linked_documents(src_so)
-			mock_err_log.assert_called_once()
+		orig_in_bg = frappe.flags.get("ict_in_background")
+		try:
+			frappe.flags.ict_in_background = False
+			with patch(
+				"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link._get_intercompany_settings",
+				return_value={"enabled": 1, "execution_mode": "Synchronous"},
+			), patch(
+				"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_lifecycle.validate_intercompany_cross_currency_rate"
+			), patch(
+				"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_lifecycle.find_applicable_mappings",
+				return_value=sync_mappings,
+			), patch(
+				"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_lifecycle.validate_required_parties",
+				side_effect=frappe.ValidationError("Other Company Supplier is required"),
+			), patch(
+				"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.ict_lifecycle._log_local_mirror_error"
+			) as mock_err_log, patch.object(
+				frappe, "log_error"
+			):
+				with self.assertRaises(frappe.ValidationError):
+					create_linked_documents(src_so)
+				mock_err_log.assert_called_once()
+		finally:
+			if orig_in_bg is None:
+				frappe.flags.pop("ict_in_background", None)
+			else:
+				frappe.flags.ict_in_background = orig_in_bg
 
 	def test_payment_entry_populates_references_and_matrix_filters_posting_date(self):
 		"""Verify create_payment_entry maps counterpart invoices into references and matrix filters by posting_date"""
