@@ -49,7 +49,7 @@ frappe.query_reports["Inter Company Transaction Matrix"] = {
 			} else if (data.status === "Pending Mirror") {
 				value = `<span class="indicator-pill orange">${value}</span>`;
 			}
-		} else if (column.fieldname === "variance" && Math.abs(data.variance) > 0.05) {
+		} else if (column.fieldname === "variance" && data.status === "Variance") {
 			value = `<span style="color: red; font-weight: bold;">${value}</span>`;
 		}
 		return value;

@@ -93,10 +93,18 @@ def get_columns():
 	]
 
 
-def _get_doc_summary(doctype, name, column_cache, default_date=None):
-	"""Safely fetch amount and date for any DocType without querying non-existent SQL columns."""
+def _get_doc_summary(doctype, name, column_cache, default_date=None, company=None):
+	"""Safely fetch amount, currency, base amount, rate, and date for any DocType without querying non-existent columns."""
+	empty = {
+		"amount": 0.0,
+		"base_amount": 0.0,
+		"currency": None,
+		"company_currency": None,
+		"posting_date": default_date,
+		"doc_fx_map": {},
+	}
 	if not doctype or not name or not frappe.db.exists(doctype, name):
-		return 0.0, default_date
+		return empty
 
 	amt_candidates = (
 		"grand_total",
@@ -107,23 +115,43 @@ def _get_doc_summary(doctype, name, column_cache, default_date=None):
 		"total_credit",
 		"total_taxes_and_charges",
 	)
+	base_candidates = (
+		"base_grand_total",
+		"base_total_amount",
+		"base_paid_amount",
+	)
+	meta_candidates = (
+		"company",
+		"currency",
+		"paid_from_account_currency",
+		"conversion_rate",
+		"source_exchange_rate",
+	)
 	date_candidates = ("posting_date", "transaction_date")
 
 	if doctype not in column_cache:
 		amt_cols = [c for c in amt_candidates if frappe.db.has_column(doctype, c)]
+		base_cols = [c for c in base_candidates if frappe.db.has_column(doctype, c)]
+		extra_cols = [c for c in meta_candidates if frappe.db.has_column(doctype, c)]
 		date_cols = [c for c in date_candidates if frappe.db.has_column(doctype, c)]
-		column_cache[doctype] = (amt_cols, date_cols)
+		column_cache[doctype] = (amt_cols, base_cols, extra_cols, date_cols)
 
-	amt_cols, date_cols = column_cache[doctype]
-	fields = ["name", *amt_cols, *date_cols]
+	amt_cols, base_cols, extra_cols, date_cols = column_cache[doctype]
+	fields = ["name", *amt_cols, *base_cols, *extra_cols, *date_cols]
 	doc = frappe.db.get_value(doctype, name, fields, as_dict=True)
 	if not doc:
-		return 0.0, default_date
+		return empty
 
 	amount = 0.0
 	for col in amt_cols:
 		if doc.get(col) is not None:
 			amount = flt(doc.get(col))
+			break
+
+	base_amount = 0.0
+	for col in base_cols:
+		if doc.get(col) is not None:
+			base_amount = flt(doc.get(col))
 			break
 
 	tx_date = default_date
@@ -132,10 +160,42 @@ def _get_doc_summary(doctype, name, column_cache, default_date=None):
 			tx_date = doc.get(col)
 			break
 
-	return amount, tx_date
+	currency = doc.get("currency") or doc.get("paid_from_account_currency")
+	company_currency = None
+	if (currency or doctype in ("Journal Entry", "Stock Entry", "Landed Cost Voucher")) and company and extra_cols:
+		company_currency = frappe.db.get_value("Company", company, "default_currency")
+		if not currency:
+			currency = company_currency
+
+	if base_amount <= 0 and currency and company_currency and currency == company_currency and amount > 0:
+		base_amount = amount
+
+	doc_fx_map = {}
+	conv_rate = flt(doc.get("conversion_rate")) or flt(doc.get("source_exchange_rate"))
+	if currency and company_currency and currency != company_currency:
+		rate = conv_rate if conv_rate > 0 else ((base_amount / amount) if (base_amount > 0 and amount > 0) else 0.0)
+		if rate > 0:
+			doc_fx_map[(currency, company_currency)] = rate
+			doc_fx_map[(company_currency, currency)] = 1.0 / rate
+
+	return {
+		"amount": amount,
+		"base_amount": base_amount,
+		"currency": currency,
+		"company_currency": company_currency,
+		"posting_date": tx_date,
+		"doc_fx_map": doc_fx_map,
+	}
 
 
 def get_data(filters):
+	from inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link import (
+		get_intercompany_exchange_rate,
+	)
+	from inter_company_transactions.inter_company_transactions.report.inter_company_balance_reconciliation.inter_company_balance_reconciliation import (
+		_resolve_doc_pair_conversion,
+	)
+
 	data = []
 	cond = {}
 	if filters.get("source_company"):
@@ -165,23 +225,35 @@ def get_data(filters):
 	column_cache = {}
 	for r in refs:
 		created_date = getdate(r.creation)
-		source_amount, posting_date = _get_doc_summary(
-			r.source_doctype, r.source_name, column_cache, default_date=created_date
+		src_info = _get_doc_summary(
+			r.source_doctype, r.source_name, column_cache, default_date=created_date, company=r.source_company
 		)
-		target_amount, target_posting_date = _get_doc_summary(
-			r.target_doctype, r.target_name, column_cache, default_date=created_date
+		tgt_info = _get_doc_summary(
+			r.target_doctype, r.target_name, column_cache, default_date=created_date, company=r.target_company
 		)
+		source_amount, posting_date = src_info["amount"], src_info["posting_date"]
+		target_amount, target_posting_date = tgt_info["amount"], tgt_info["posting_date"]
 		effective_date = posting_date or target_posting_date or created_date
 		if filters.get("from_date") and getdate(effective_date) < getdate(filters.from_date):
 			continue
 		if filters.get("to_date") and getdate(effective_date) > getdate(filters.to_date):
 			continue
 
-		variance = round(abs(source_amount - target_amount), 2)
+		cur_a, cur_b = src_info.get("currency"), tgt_info.get("currency")
+		if cur_a and cur_b and cur_a != cur_b:
+			converted_b, fx_used = _resolve_doc_pair_conversion(
+				src_info, tgt_info, effective_date, get_intercompany_exchange_rate
+			)
+			variance = round(abs(source_amount - converted_b), 2)
+			tolerance = max(0.05, flt(0.0055 * max(1.0, flt(fx_used)), 2))
+		else:
+			variance = round(abs(source_amount - target_amount), 2)
+			tolerance = 0.05
+
 		status = "Synchronized"
 		if not r.target_name:
 			status = "Pending Mirror"
-		elif variance > 0.05:
+		elif variance > tolerance:
 			status = "Variance"
 
 		if filters.get("status") and filters.status != "All" and status != filters.status:

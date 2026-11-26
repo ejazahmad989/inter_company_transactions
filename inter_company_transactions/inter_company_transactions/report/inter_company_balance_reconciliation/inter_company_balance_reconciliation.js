@@ -48,7 +48,7 @@ frappe.query_reports["Inter Company Balance Reconciliation"] = {
 			} else if (data.status === "Missing in Target") {
 				value = `<span class="indicator-pill orange">${value}</span>`;
 			}
-		} else if (column.fieldname === "difference" && Math.abs(data.difference) > 0.05) {
+		} else if (column.fieldname === "difference" && data.status !== "Matched" && Math.abs(data.difference) > (data.tolerance || 0.05)) {
 			value = `<span style="color: red; font-weight: bold;">${value}</span>`;
 		}
 		return value;

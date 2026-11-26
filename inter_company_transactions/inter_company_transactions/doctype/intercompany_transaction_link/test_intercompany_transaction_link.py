@@ -4646,3 +4646,171 @@ class TestIntercompanyTransactionLink(unittest.TestCase):
 			sq = create_supplier_quotation(rfq, mapping, linked_co, "main_to_other", settings=settings)
 			self.assertEqual(sq.items[0].rate, 450.0)
 
+	def test_balance_reconciliation_and_matrix_custom_fx_and_reporting_summary(self):
+		"""Verify cross-currency reconciliation uses doc base amounts/rates, rounding tolerance, and Company A reporting currency"""
+		from unittest.mock import patch
+
+		from inter_company_transactions.inter_company_transactions.report.inter_company_balance_reconciliation.inter_company_balance_reconciliation import (
+			execute as recon_execute,
+		)
+		from inter_company_transactions.inter_company_transactions.report.inter_company_transaction_matrix.inter_company_transaction_matrix import (
+			execute as matrix_execute,
+		)
+
+		refs = [
+			frappe._dict({
+				"name": "REF-SO-PO",
+				"source_doctype": "Sales Order",
+				"source_name": "SAL-ORD-2026-00003",
+				"source_company": "AYP GROUP",
+				"target_doctype": "Purchase Order",
+				"target_name": "PUR-ORD-2026-00003",
+				"target_company": "John Company",
+				"creation": "2026-11-26 10:00:00",
+			}),
+			frappe._dict({
+				"name": "REF-JV-ROUND",
+				"source_doctype": "Journal Entry",
+				"source_name": "ACC-JV-2026-00007",
+				"source_company": "AYP GROUP",
+				"target_doctype": "Journal Entry",
+				"target_name": "ACC-JV-2026-00006",
+				"target_company": "John Company",
+				"creation": "2026-11-26 10:01:00",
+			}),
+			frappe._dict({
+				"name": "REF-JV-EXACT",
+				"source_doctype": "Journal Entry",
+				"source_name": "ACC-JV-2026-00004",
+				"source_company": "AYP GROUP",
+				"target_doctype": "Journal Entry",
+				"target_name": "ACC-JV-2026-00005",
+				"target_company": "John Company",
+				"creation": "2026-11-26 10:02:00",
+			}),
+		]
+
+		docs = {
+			("Sales Order", "SAL-ORD-2026-00003"): {
+				"docstatus": 1,
+				"company": "AYP GROUP",
+				"currency": "USD",
+				"grand_total": 84.0,
+				"base_grand_total": 21000.0,
+				"conversion_rate": 250.0,
+				"transaction_date": "2026-11-26",
+			},
+			("Purchase Order", "PUR-ORD-2026-00003"): {
+				"docstatus": 1,
+				"company": "John Company",
+				"currency": "PKR",
+				"grand_total": 21000.0,
+				"base_grand_total": 84.0,
+				"conversion_rate": 0.004,
+				"transaction_date": "2026-11-26",
+			},
+			("Journal Entry", "ACC-JV-2026-00007"): {
+				"docstatus": 1,
+				"company": "AYP GROUP",
+				"total_debit": 35000.0,
+				"total_credit": 35000.0,
+				"posting_date": "2026-11-26",
+			},
+			("Journal Entry", "ACC-JV-2026-00006"): {
+				"docstatus": 1,
+				"company": "John Company",
+				"total_debit": 127.27,
+				"total_credit": 127.27,
+				"posting_date": "2026-11-26",
+			},
+			("Journal Entry", "ACC-JV-2026-00004"): {
+				"docstatus": 1,
+				"company": "AYP GROUP",
+				"total_debit": 27500.0,
+				"total_credit": 27500.0,
+				"posting_date": "2026-11-26",
+			},
+			("Journal Entry", "ACC-JV-2026-00005"): {
+				"docstatus": 1,
+				"company": "John Company",
+				"total_debit": 100.0,
+				"total_credit": 100.0,
+				"posting_date": "2026-11-26",
+			},
+		}
+
+		class FakeMeta:
+			def __init__(self, dt):
+				self.fields = {
+					"Sales Order": {"docstatus", "company", "currency", "grand_total", "base_grand_total", "conversion_rate", "transaction_date"},
+					"Purchase Order": {"docstatus", "company", "currency", "grand_total", "base_grand_total", "conversion_rate", "transaction_date"},
+					"Journal Entry": {"docstatus", "company", "total_debit", "total_credit", "posting_date"},
+				}[dt]
+
+			def has_field(self, fn):
+				return fn in self.fields
+
+		def fake_get_all(dt, filters=None, fields=None, order_by=None, limit=None):
+			if dt == "Inter Company Document Reference":
+				return refs
+			return []
+
+		def fake_get_val(dt, name, fields=None, as_dict=False):
+			if dt == "Company":
+				return "PKR" if name == "AYP GROUP" else "USD"
+			return frappe._dict(docs[(dt, name)])
+
+		def fake_fx(from_ccy, to_ccy, tx_date=None):
+			if from_ccy == "USD" and to_ccy == "PKR":
+				return 275.0
+			if from_ccy == "PKR" and to_ccy == "USD":
+				return 1.0 / 275.0
+			return 1.0
+
+		with patch.object(frappe, "get_all", side_effect=fake_get_all), patch.object(
+			frappe, "get_meta", side_effect=lambda dt: FakeMeta(dt)
+		), patch.object(
+			frappe.db, "exists", side_effect=lambda dt, name=None, **kw: (dt, name) in docs
+		), patch.object(
+			frappe.db, "table_exists", return_value=True
+		), patch.object(
+			frappe.db, "has_column", side_effect=lambda dt, col: col in FakeMeta(dt).fields
+		), patch.object(
+			frappe.db, "get_value", side_effect=fake_get_val
+		), patch(
+			"inter_company_transactions.inter_company_transactions.doctype.intercompany_transaction_link.intercompany_transaction_link.get_intercompany_exchange_rate",
+			side_effect=fake_fx,
+		):
+			_cols, rows, _msg, _chart, summary = recon_execute({
+				"company_a": "AYP GROUP",
+				"company_b": "John Company",
+				"from_date": "2026-10-26",
+				"to_date": "2026-11-26",
+			})
+
+			self.assertEqual(len(rows), 3)
+			# Custom rate 250 / 0.004 ($84 == Rs 21,000) matches at 0.00 variance despite 275 system FX
+			self.assertEqual(rows[0]["difference"], 0.0)
+			self.assertEqual(rows[0]["status"], "Matched")
+			# 2-decimal FX rounding on $127.27 vs Rs 35,000 at 275 (0.75 PKR) is within rounding tolerance
+			self.assertEqual(rows[1]["status"], "Matched")
+			# Exact $100 vs Rs 27,500 matches
+			self.assertEqual(rows[2]["difference"], 0.0)
+			self.assertEqual(rows[2]["status"], "Matched")
+
+			# Summary cards all use Company A reporting currency (PKR) without mixing USD + PKR
+			self.assertEqual(summary[0]["currency"], "PKR")
+			self.assertEqual(summary[0]["value"], 83500.0)
+			self.assertEqual(summary[1]["currency"], "PKR")
+			self.assertEqual(summary[1]["value"], 83499.25)
+			self.assertEqual(summary[2]["value"], 0.75)
+			self.assertEqual(summary[2]["indicator"], "Green")
+			self.assertEqual(summary[3]["value"], "3 / 3")
+
+			# Transaction Matrix also synchronizes the custom-rate SO/PO pair
+			_mc, mrows, _mm, _mch, _ms = matrix_execute({"status": "All"})
+			self.assertEqual(mrows[0]["variance"], 0.0)
+			self.assertEqual(mrows[0]["status"], "Synchronized")
+			self.assertEqual(mrows[1]["status"], "Synchronized")
+
+
